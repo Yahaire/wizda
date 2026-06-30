@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "dev:web-client",
+      "path": "/",
+      "label": "npm: dev:web-client",
+      "detail": "Start Next.js dev server",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*next dev.*",
+          "endsPattern": "^.*ready.*started server.*|^.*Ready in.*"
+        }
+      }
+    },
+    {
+      "label": "Terminate Next.js Dev Server",
+      "type": "process",
+      "command": "${command:workbench.action.tasks.terminate}",
+      "args": ["npm: dev:web-client"],
+      "problemMatcher": []
+    }
+  ]
+}

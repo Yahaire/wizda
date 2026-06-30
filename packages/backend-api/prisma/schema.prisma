@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Models go here once the gacha-rate data shape is settled. The scraper in
+// prisma/seed-from-html parses the source HTML and writes into these tables.
+//
+// Rough idea of what's coming (delete/replace freely):
+//
+// model Item {
+//   id        String   @id @default(cuid())
+//   name      String
+//   updatedAt DateTime @updatedAt
+//   rates     GachaRate[]
+// }
+//
+// model GachaRate {
+//   id        String   @id @default(cuid())
+//   itemId    String
+//   rate      Float
+//   pool      String
+//   updatedAt DateTime @updatedAt
+//   item      Item     @relation(fields: [itemId], references: [id])
+// }

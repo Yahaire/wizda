@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Core Settings - neutral for any environment
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    // Output Settings - crucial for a shared library
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,           // Emits .d.ts files for TypeScript
+    "declarationMap": true,        // Adds source maps for declarations
+
+    // Keep these for compatibility
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

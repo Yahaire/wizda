@@ -1,0 +1,28 @@
+{
+    "name": "wizda",
+    "description": "Wizardry Variants Daphne assistant — works out how much junk (loot boxes) you need to farm to guarantee a specific item",
+    "private": true,
+    "workspaces": [
+        "packages/*"
+    ],
+    "scripts": {
+        "dev": "npm run dev:db && concurrently \"npm run dev:api\" \"npm run dev:web-client\"",
+        "dev:back": "npm run dev:db && npm run dev:api",
+        "dev:backend-api": "cd packages/backend-api && npm run dev",
+        "dev:api": "npm run dev:backend-api",
+        "dev:web-client": "cd packages/web-client && npm run dev",
+        "dev:db": "docker compose up -d db",
+        "db:setup": "npx prisma migrate deploy && node scripts/seed-with-maintenance.mjs",
+        "db:seed:maintenance": "node scripts/seed-with-maintenance.mjs",
+        "build": "npm run build:shared && npx prisma generate && npm run build:backend-api && npm run build:web-client",
+        "build:shared": "cd packages/shared && npm run build",
+        "build:backend-api": "cd packages/backend-api && npm run build",
+        "build:web-client": "cd packages/web-client && npm run build"
+    },
+    "devDependencies": {
+        "@types/node": "^25.0.5",
+        "concurrently": "^7.6.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3"
+    }
+}

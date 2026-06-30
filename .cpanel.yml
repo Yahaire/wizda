@@ -1,0 +1,15 @@
+---
+deployment:
+  tasks:
+    - npm install
+    # Building via cPanel's git deploy is not supported because the deploy
+    # environment cannot allocate WebAssembly memory, which both Prisma CLI
+    # (prisma generate) and Next.js (SWC compiler) require.
+    #
+    # Possible future solutions:
+    #   1. Build locally, commit artifacts (.next/, dist/), and only restart here
+    #   2. Set up a CI/CD pipeline (e.g. GitHub Actions) to build and rsync to the server
+    #
+    # For now, deploy manually via SSH after pulling:
+    #   npm run build
+    #   pm2 restart all

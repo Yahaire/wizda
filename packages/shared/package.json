@@ -1,0 +1,15 @@
+{
+    "name": "@wizda/shared",
+    "description": "Shared models and tools for project",
+    "version": "0.1.0",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0"
+    }
+}
