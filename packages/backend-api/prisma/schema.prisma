@@ -7,23 +7,216 @@ datasource db {
   provider = "postgresql"
 }
 
-// Models go here once the gacha-rate data shape is settled. The scraper in
-// prisma/seed-from-html parses the source HTML and writes into these tables.
+// ---------------------------------------------------------------------------
+// Stats & blessings (static reference data)
 //
-// Rough idea of what's coming (delete/replace freely):
+// Two seeded lookup tables. Single source of truth for the values + copy lives
+// in packages/shared (src/domain/stats.ts); the seed reads from there so the
+// enum, descriptions, and catalog never drift between DB and app.
+// ---------------------------------------------------------------------------
+
+/// The ten raw stats a piece of gear can carry. Used as the stable, readable
+/// primary key of `Stat` and the foreign key on `Blessing`.
+enum StatKind {
+  ATK
+  MAG
+  DIV
+  ACC
+  EVA
+  RES
+  DEF
+  MDEF
+  ASPD
+  SUR
+}
+
+/// Raw stats — static reference data (10 rows). The human-facing description
+/// lives here once per stat, so the flat and % blessings that derive from a
+/// stat share a single description.
+model Stat {
+  kind        StatKind @id
+  name        String
+  description String
+
+  blessings Blessing[]
+}
+
+/// The concrete stats that can roll as a blessing on gear: a base stat plus a
+/// flat-or-percent variant. Static catalog (19 rows: 9 flat+% pairs, plus SUR
+/// which is flat-only). The additional-blessings drop-rate scraper will attach
+/// rates to these rows.
+model Blessing {
+  /// Readable code, e.g. "ATK", "ATK_PER", "SUR".
+  code      String   @id
+  statKind  StatKind
+  isPercent Boolean
+
+  stat      Stat                        @relation(fields: [statKind], references: [kind])
+  dropRates EquipmentBlessingDropRate[]
+
+  @@unique([statKind, isPercent])
+}
+
+// ---------------------------------------------------------------------------
+// Gear taxonomy (static reference data)
 //
-// model Item {
-//   id        String   @id @default(cuid())
-//   name      String
-//   updatedAt DateTime @updatedAt
-//   rates     GachaRate[]
-// }
-//
-// model GachaRate {
-//   id        String   @id @default(cuid())
-//   itemId    String
-//   rate      Float
-//   pool      String
-//   updatedAt DateTime @updatedAt
-//   item      Item     @relation(fields: [itemId], references: [id])
-// }
+// Two seeded lookup tables: the 7 broad gear types, and the equipment
+// categories within each. Single source of truth + copy lives in
+// packages/shared (src/domain/gear.ts); the seed reads from there.
+// ---------------------------------------------------------------------------
+
+/// The 7 broad gear types. Stable set; used as the readable PK of `GearType`
+/// and the FK on `EquipmentCategory`.
+enum GearTypeKind {
+  WEAPON
+  SHIELD
+  HELMET
+  GLOVES
+  CHEST_ARMOR
+  BOOTS
+  ACCESSORY
+}
+
+/// Broad gear types — static reference data (7 rows).
+model GearType {
+  kind GearTypeKind @id
+  name String
+
+  categories EquipmentCategory[]
+}
+
+/// Equipment categories within a gear type, e.g. "Two-Handed Axe". Static, but
+/// grows as the game adds gear types, so it's a table (not an enum) with a
+/// readable `code` PK that items / drop rows FK to. Extra attributes for looser
+/// queries (e.g. one/two-handed, weight class) can be added as columns later.
+model EquipmentCategory {
+  /// Readable code, e.g. "TWO_HANDED_AXE".
+  code     String       @id
+  name     String
+  gearType GearTypeKind
+
+  type GearType @relation(fields: [gearType], references: [kind])
+
+  @@index([gearType])
+}
+
+// ---------------------------------------------------------------------------
+// Scraped data — the main entities extracted from the drop-rate HTML.
+// The junk<->equipment drop rates (groups, quality/grade distributions) are
+// modelled as M2M join tables next.
+// ---------------------------------------------------------------------------
+
+/// Gear tier — the base strength band tied to a material. Declared ascending so
+/// enum order = strength rank. Grows rarely (a migration when the game adds a
+/// tier). Nullable on `Equipment` when it can't be derived from the item name.
+enum GearTier {
+  BRONZE
+  STEEL
+  EBONSTEEL
+  SILVER
+}
+
+/// A single piece of gear, as it appears in the drop tables. Deduplicated by
+/// `name` (the same item recurs across junks and groups — see docs/domain.md).
+/// `tier`, `maxDropQuality` and `maxDropGrade` are enrichment, hence nullable:
+/// the core "how much junk?" calc doesn't require them.
+model Equipment {
+  id   String    @id @default(cuid())
+  name String    @unique
+  tier GearTier?
+
+  /// Highest quality (★1–5) this equipment is known to drop at; null if unknown.
+  /// Denormalised summary of the per-pool quality distributions.
+  maxDropQuality Int?
+  /// Highest grade (1–5) this equipment is known to drop at; null if unknown.
+  /// Denormalised summary of the per-pool grade distributions.
+  maxDropGrade   Int?
+
+  dropRates     EquipmentDropRate[]
+  blessingRates EquipmentBlessingDropRate[]
+}
+
+/// A specific loot pool ("junk"), e.g. "Beginning Junk". Deduplicated by name.
+model Junk {
+  id   String @id @default(cuid())
+  name String @unique
+
+  dropRates EquipmentDropRate[]
+}
+
+/// The general (blessing-agnostic) drop rates from "Drop Rates by Junk": one row
+/// per equipment line within one junk's group — a flat translation of a single
+/// HTML table row. Rebuilt from scratch on every weekly scrape, so it has NO
+/// unique constraint and no natural key: a given (junk, equipment) may recur
+/// across groups, and the seed TRUNCATEs this table before reinserting (so
+/// idempotency comes from wiping, not upserting).
+///
+/// All rates are stored as fractions in [0, 1]; a "-" in the source becomes 0.
+model EquipmentDropRate {
+  id String @id @default(cuid())
+
+  junkId      String
+  equipmentId String
+
+  /// P(group): the group's overall drop rate. Repeats across every row of the
+  /// same group (denormalised).
+  groupDropRate Float
+  /// P(equipment | group): this equipment's drop rate within its group.
+  dropRate      Float
+
+  /// Source group label. Not used by the calc; kept for provenance and
+  /// data-quality checks (group-rate and within-group-rate sums).
+  groupNumber Int?
+
+  /// P(quality | equipment), ★1–★5.
+  quality1Rate Float
+  quality2Rate Float
+  quality3Rate Float
+  quality4Rate Float
+  quality5Rate Float
+
+  /// P(grade | equipment), grades 1–5 (White…Red).
+  grade1Rate Float
+  grade2Rate Float
+  grade3Rate Float
+  grade4Rate Float
+  grade5Rate Float
+
+  junk      Junk      @relation(fields: [junkId], references: [id])
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
+  @@index([junkId])
+  @@index([equipmentId])
+}
+
+/// The additional-blessings drop rates from "Drop Rates Related to Additional
+/// Blessings": for a given equipment and blessing slot, the probability that
+/// each blessing lands in that slot. Long/normalized — one row per
+/// (equipment, slot, blessing) — and only nonzero rates are stored (a "-" in
+/// the source is simply an absent row). Per (equipment, slot) the stored rates
+/// sum to 1. Rebuilt from scratch on the weekly scrape (TRUNCATE + reinsert).
+///
+/// NOTE: additional blessings on one piece do not stack, so across a piece's
+/// active slots (their count = the piece's grade) the draws are without
+/// replacement — joint "blessing A and blessing B" queries must account for
+/// that. See docs/domain.md.
+model EquipmentBlessingDropRate {
+  id String @id @default(cuid())
+
+  equipmentId  String
+  /// Blessing slot, 1–4. Slots fill top-to-bottom; a piece's active slot count
+  /// equals its grade (White 0 … Red 4).
+  slot         Int
+  blessingCode String
+
+  /// P(this blessing lands in this slot | equipment). Fraction in [0, 1].
+  rate Float
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+  blessing  Blessing  @relation(fields: [blessingCode], references: [code])
+
+  // Unique index doubles as the (equipmentId, slot, …) lookup index; a separate
+  // blessingCode index serves reverse lookups ("who rolls blessing X?").
+  @@unique([equipmentId, slot, blessingCode])
+  @@index([blessingCode])
+}

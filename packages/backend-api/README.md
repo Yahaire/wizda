@@ -19,9 +19,16 @@ For seeding, see root README → *Updating data*.
 ## Data source
 
 This project seeds its data by scraping gacha-rate HTML pages, e.g.
-<https://wizardry.info/daphne/gacha_rates/en/alternations.html>.
+<https://wizardry.info/daphne/gacha_rates/en/alternations.html>. There are **two
+distinct source tables** — *Drop Rates by Junk* (item + quality + grade) and
+*Drop Rates Related to Additional Blessings* (which blessing per slot). Their
+structure, and the domain model they map to, is documented in
+[`docs/domain.md`](../../docs/domain.md).
 
 The scraper skeleton lives in `prisma/seed-from-html/`. It loads the HTML
 (remote URL or a local copy), parses it with [cheerio](https://cheerio.js.org/),
-and is where the DB write will be wired up once the schema has models. The
-source location is configured via `GACHA_RATES_SOURCE_URL` in the root `.env`.
+and is where the DB write is wired up. The source location is configured via
+`GACHA_RATES_SOURCE_URL` in the root `.env`.
+
+Both drop-rate tables are rebuilt from scratch on each scrape (truncate +
+reinsert), so a weekly re-seed simply recompiles the latest rates.
