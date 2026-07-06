@@ -22,9 +22,9 @@ This project is a monorepo, with the following packages:
 
 #### Requirements
 - Docker Desktop (must be running)
-- A source of gacha-rate HTML — either reachable online or a local copy. See
-  `GACHA_RATES_SOURCE_URL` in `.env.example` (e.g.
-  `https://wizardry.info/daphne/gacha_rates/en/alternations.html`)
+- A source of drop-rate HTML — either reachable online or a local copy. See
+  `JUNK_DROP_RATES_SOURCE_URL` in `.env.example` (e.g.
+  `https://wizardry.info/daphne/gacha_rates/en/equipments.html`)
 
 #### Steps
 1. Copy `.env.example` to `.env` in the root dir and fill in the variables

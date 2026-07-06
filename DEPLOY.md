@@ -71,7 +71,7 @@ Create a `.env` file in the repo root on the server (e.g. `~/repos/wizda/.env`):
 DATABASE_URL="postgresql://<username>_wizda_user:yourpassword@localhost:5432/<username>_wizda"
 WEB_CLIENT_URL="https://<app>.<domain>"
 API_URL="https://api.<app>.<domain>"
-GACHA_RATES_SOURCE_URL="https://wizardry.info/daphne/gacha_rates/en/alternations.html"
+JUNK_DROP_RATES_SOURCE_URL="https://wizardry.info/daphne/gacha_rates/en/equipments.html"
 ```
 
 ### D. cPanel Git Version Control

@@ -141,6 +141,14 @@ model Junk {
   id   String @id @default(cuid())
   name String @unique
 
+  /// True when the source page listed more than one drop-rate table under this
+  /// junk's name in the same scrape (observed in practice — e.g. likely tied to
+  /// an in-game milestone, like ascending a dungeon, that changes a pool's
+  /// contents). Only the latest-listed table is stored; the discarded version
+  /// may still be accurate for players who haven't reached that milestone. This
+  /// is a caveat flag for the frontend to surface, not a data-quality problem.
+  hasMultiplePools Boolean @default(false)
+
   dropRates EquipmentDropRate[]
 }
 

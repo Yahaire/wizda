@@ -25,10 +25,12 @@ distinct source tables** — *Drop Rates by Junk* (item + quality + grade) and
 structure, and the domain model they map to, is documented in
 [`docs/domain.md`](../../docs/domain.md).
 
-The scraper skeleton lives in `prisma/seed-from-html/`. It loads the HTML
-(remote URL or a local copy), parses it with [cheerio](https://cheerio.js.org/),
-and is where the DB write is wired up. The source location is configured via
-`GACHA_RATES_SOURCE_URL` in the root `.env`.
+The scrapers live in `prisma/seed-from-html/`. Each loads its HTML (remote URL
+or a local copy) via a shared `loadHtml()` helper and parses it with
+[cheerio](https://cheerio.js.org/). The "Drop Rates by Junk" seed is
+implemented (`dropRatesByJunk.parser.ts` / `.seed.ts`), configured via
+`JUNK_DROP_RATES_SOURCE_URL` in the root `.env`; the blessings seed is not yet
+implemented (`EQUIPMENT_BLESSING_DROP_RATES_SOURCE_URL` is reserved for it).
 
 Both drop-rate tables are rebuilt from scratch on each scrape (truncate +
 reinsert), so a weekly re-seed simply recompiles the latest rates.
