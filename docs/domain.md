@@ -126,8 +126,17 @@ e.g. 99%, and consider exposing it).
 
 ## "Drop Rates Related to Additional Blessings" structure
 
-Source (2). A **single** `<table>` — not one per junk. The additional-blessing
-odds are a property of the *equipment*, independent of which junk dropped it.
+Source (2). A **single logical table** holds all the blessing-rate data (not
+one per junk) — but the *page itself* is not single-table. It also contains
+an unrelated "Alteration Stone" mechanic (rerolling an existing blessing's
+magnitude): an `<h2>Example</h2>` table, plus two more `<h1>` sections
+("...When Using Lesser Full Alteration Stones" / "...Full Alteration
+Stones") with several tables each. 14 `<table>`s total on the real page; only
+the one under `<h1>Additional Blessing Drop Rates by Equipment</h1>` matters
+here. The parser locates it by header shape (`Equipment`, `Additional
+Blessing Slots`, then the 19 blessing columns), not by heading text or
+position, and requires exactly one match. The additional-blessing odds are a
+property of the *equipment*, independent of which junk dropped it.
 
 - **Rows** are `(equipment, slot)`: each equipment spans 4 rows via `rowspan`,
   one per **blessing slot** (`1`–`4`). Slots fill top-to-bottom on the equipment
@@ -184,3 +193,20 @@ in the higher, harder-to-reach slots (e.g. *Bronze Dagger* slot 1 is ~92% flat,
   in multiple junk types and multiple groups — item identity is not unique to a
   junk. Deduplicate items; the (junk, group, item) triple is what carries the
   rate.
+- **Column order in the blessings table is not natural stat order**: the 10
+  "fixed" columns list SUR before ASPD (`ATK … MDEF, SUR, ASPD`), unlike the
+  "percentage" columns and unlike `STATS`' declared order. Derive each
+  column's blessing code from its header text, don't assume a fixed position.
+- **Equipment identity is shared** between "Drop Rates by Junk" and this
+  table via `Equipment.name` (both seeds upsert by name, whichever runs
+  first creates the row). Some equipment appears in the blessings table with
+  no matching junk drop rows at all — not a bug, just equipment obtainable
+  only via other means not yet scraped (Remains/Bonus Equipment). Treat "no 
+  `EquipmentDropRate` rows for this equipment" as "no known
+  junk source," not as impossible/zero, when building the guarantee calc.
+- Like the junk page, the same equipment's 4-row block could in principle be
+  listed twice (the junk page's `hasMultiplePools` phenomenon) — the parser
+  defensively keeps the later occurrence and warns if so, but as of the
+  260704 sample this has never actually been observed here, so no analogous
+  `Equipment` schema flag has been added. Add one if a real scrape ever shows
+  otherwise.

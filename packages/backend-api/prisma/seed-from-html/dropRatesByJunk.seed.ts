@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from '@local-prisma/generated/client';
 
 import { FiveTierRates } from './dropRatesByJunk.models';
 import { ParseDropRatesByJunkResult } from './dropRatesByJunk.parser';
+import { upsertNamesGetIds } from './seedUtils';
 
 /** Highest 1-based tier index (★ or grade) with a nonzero rate, or undefined if all zero. */
 function highestNonZeroTier(rates: FiveTierRates): number | undefined {
@@ -12,27 +13,6 @@ function highestNonZeroTier(rates: FiveTierRates): number | undefined {
     }
   });
   return highest;
-}
-
-/** Upserts rows identified by `name` in bulk: one findMany, then one createMany for whatever's missing. */
-async function upsertNamesGetIds(
-  names: string[],
-  findExisting: (names: string[]) => Promise<{ id: string; name: string }[]>,
-  createMissing: (names: string[]) => Promise<unknown>,
-): Promise<Map<string, string>> {
-  const existing = await findExisting(names);
-  const idByName = new Map(existing.map((row) => [row.name, row.id]));
-
-  const missingNames = names.filter((name) => !idByName.has(name));
-  if (missingNames.length > 0) {
-    await createMissing(missingNames);
-    const created = await findExisting(missingNames);
-    for (const row of created) {
-      idByName.set(row.name, row.id);
-    }
-  }
-
-  return idByName;
 }
 
 /**

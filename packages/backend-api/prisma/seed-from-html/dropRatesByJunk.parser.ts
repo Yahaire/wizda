@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 
 import { FiveTierRates, ParsedJunkDropRow } from './dropRatesByJunk.models';
+import { isCloseToOne, parsePercent } from './rateParsing';
 
 const EXPECTED_HEADER_ROW_1 = [
   'Group Number',
@@ -17,17 +18,6 @@ const EXPECTED_HEADER_ROW_2 = ['★1', '★2', '★3', '★4', '★5', '1', '2',
 const GROUP_START_CELL_COUNT = 14;
 /** Row that continues the current group: equipment + item rate + 5 quality + 5 grade. */
 const GROUP_CONTINUATION_CELL_COUNT = 12;
-
-/** Fraction sums are allowed to drift this much from 1 before we warn (source rounding). */
-const SUM_TOLERANCE = 0.005;
-
-function parsePercent(text: string): number {
-  const trimmed = text.trim();
-  if (trimmed === '-') {
-    return 0;
-  }
-  return parseFloat(trimmed.replace('%', '')) / 100;
-}
 
 function getHeaderRowTexts($: cheerio.CheerioAPI, table: Element, rowIndex: number): string[] {
   return $(table)
@@ -107,10 +97,6 @@ function parseJunkTable($: cheerio.CheerioAPI, table: Element, junkName: string)
     });
 
   return rows;
-}
-
-function isCloseToOne(sum: number): boolean {
-  return Math.abs(sum - 1) <= SUM_TOLERANCE;
 }
 
 /**
