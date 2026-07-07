@@ -10,6 +10,10 @@ This project is a monorepo, with the following packages:
 - `packages/backend-api`: API to handle interactions with DB (and the scraper that seeds it)
 - `packages/web-client`: Web interface for project
 
+How the packages fit together — and why the core calculation lives in a pure
+`shared` module rather than in the DB — is documented in
+[`docs/architecture.md`](./docs/architecture.md).
+
 ## Dev requirements
 
 - Node 22.x (recommended to use nvm / nvm for Windows)
@@ -83,6 +87,21 @@ In root dir:
 - Run `npm run dev` to run all packages in dev mode
 - For only the backend-api: `npm run dev:backend-api`
 - For only the web-client: `npm run dev:web-client`
+
+## Testing
+
+Unit tests run with [vitest](https://vitest.dev/). Run the whole suite from the
+**root dir**:
+
+- `npm test` — run all tests once
+- `npm run test:watch` — re-run on change while developing
+
+Tests live next to the code they cover — e.g. the drop-rate "how much junk?"
+calculation in `packages/shared/src/domain/dropRateMath.test.ts` (the math itself
+is documented in [`docs/calculation.md`](./docs/calculation.md)).
+
+> Run test commands from the root, not from inside a package — this repo has no
+> per-package `test` script, and vitest is configured once at the root.
 
 ## Deployment
 

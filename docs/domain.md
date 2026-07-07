@@ -124,6 +124,10 @@ e.g. for 99% confidence use `confidence = 0.99`. Keep the product-facing word
 "guarantee" but implement it as a confidence threshold (pick a sensible default,
 e.g. 99%, and consider exposing it).
 
+The full "how much junk?" calculation — how the per-junk match probability is
+assembled from a query, how junks are combined and ranked, and the planned
+(deferred) blessing extension — is written up in **`docs/calculation.md`**.
+
 ## "Drop Rates Related to Additional Blessings" structure
 
 Source (2). A **single logical table** holds all the blessing-rate data (not

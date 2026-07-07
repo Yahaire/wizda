@@ -16,6 +16,20 @@ npx prisma migrate dev --name <description>
 
 For seeding, see root README → *Updating data*.
 
+## Testing
+
+The core "how much junk to guarantee item X?" calculation is pure, Prisma-free
+math kept in `packages/shared`
+([`dropRateMath.ts`](../shared/src/domain/dropRateMath.ts), documented in
+[`docs/calculation.md`](../../docs/calculation.md)) so it can be unit-tested
+without a DB. Its tests sit alongside it and run with
+[vitest](https://vitest.dev/) from the **monorepo root**:
+
+```bash
+npm test            # run the whole suite once
+npm run test:watch  # re-run on change
+```
+
 ## Data source
 
 This project seeds its data by scraping gacha-rate HTML pages, e.g.
