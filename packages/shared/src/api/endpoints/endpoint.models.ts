@@ -8,5 +8,5 @@ export interface MaintenanceResponse {
   message: string,
 }
 
-// Domain response/request models go here as the API takes shape, e.g. the
-// "how much junk to guarantee item X" calculation result.
+// Generic infra models live here. Domain response/request models live in
+// sibling files, e.g. the guarantee endpoints in ./junkToGuarantee.models.ts.

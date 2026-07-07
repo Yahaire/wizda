@@ -4,7 +4,10 @@ import { existsSync } from 'fs';
 import path from 'path';
 
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
-import { MaintenanceResponse, RequestErrorInfo } from '@shared/api/endpoints/endpoint.models';
+import { MaintenanceResponse } from '@shared/api/endpoints/endpoint.models';
+
+import { sendErrorResponse } from '@app/http';
+import { junkToGuaranteeRouter } from '@app/routes/junkToGuarantee';
 
 // Load root .env file — path differs between dev (src/) and prod (dist/backend-api/src/)
 dotenv.config({ path: [
@@ -14,6 +17,7 @@ dotenv.config({ path: [
 
 const app = express();
 app.set('trust proxy', 'loopback');
+app.use(express.json());
 const port = process.env.PORT ?? 3001;
 
 const maintenanceFlagPaths = [
@@ -34,42 +38,25 @@ app.use((_req, res, next) => {
   next();
 });
 
-// TODO: wire up Prisma once the schema has models and the client is generated
-// (`npx prisma generate`). See packages/backend-api/prisma/seed-from-html for
-// the same setup pattern.
-//
-//   import { PrismaClient } from '@local-prisma/generated/client';
-//   import { PrismaPg } from '@prisma/adapter-pg';
-//   import { Pool } from 'pg';
-//
-//   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-//   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
-
-function sendErrorResponse(
-  res: express.Response,
-  statusCode: HttpStatusCode,
-  errorCode: string,
-  message: string,
-) {
-  const errorInfo: RequestErrorInfo = {
-    errorCode,
-    message,
-  };
-  res.status(statusCode).json(errorInfo);
-}
-
 app.get('/', (_req, res) => {
   res.json({ message: 'API is running' });
 });
 
-// Placeholder for the core endpoint: given a target item, return how much junk
-// must be farmed to guarantee it. Implement once the data layer exists.
-app.get('/junk-to-guarantee/:itemId', (req, res) => {
+app.use('/junk-to-guarantee', junkToGuaranteeRouter);
+
+// Catch-all error handler for anything thrown/rejected in a route.
+app.use((
+  err: unknown,
+  _req: express.Request,
+  res: express.Response,
+  _next: express.NextFunction,
+) => {
+  console.error('[api] unhandled error:', err);
   sendErrorResponse(
     res,
-    HttpStatusCode.NOT_FOUND,
-    ErrorCode.INVALID_QUERY,
-    `Not implemented yet (item: ${req.params.itemId}).`,
+    HttpStatusCode.INTERNAL_SERVER_ERROR,
+    ErrorCode.INTERNAL_ERROR,
+    'Something went wrong.',
   );
 });
 
