@@ -8,6 +8,7 @@ import { MaintenanceResponse } from '@shared/api/endpoints/endpoint.models';
 
 import { sendErrorResponse } from '@app/http';
 import { junkToGuaranteeRouter } from '@app/routes/junkToGuarantee';
+import { listsRouter } from '@app/routes/lists';
 
 // Load root .env file — path differs between dev (src/) and prod (dist/backend-api/src/)
 dotenv.config({ path: [
@@ -43,6 +44,7 @@ app.get('/', (_req, res) => {
 });
 
 app.use('/junk-to-guarantee', junkToGuaranteeRouter);
+app.use(listsRouter);
 
 // Catch-all error handler for anything thrown/rejected in a route.
 app.use((
