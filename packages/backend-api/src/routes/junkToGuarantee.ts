@@ -7,6 +7,7 @@ import { sendErrorResponse } from '@app/http';
 import { getPrisma } from '@app/prisma';
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
 import {
+    BLESSING_ESTIMATE_NOTE,
     CertaintyCurvePoint,
     CertaintyCurveResult,
     DEFAULT_CERTAINTY,
@@ -14,8 +15,13 @@ import {
     JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
 import {
-    DropRateRow, junksNeededForConfidence, matchProbabilityForJunk, MatchQuery
+    blessingPresenceByGrade,
+    DropRateRow,
+    junksNeededForConfidence,
+    matchProbabilityForJunk,
+    MatchQuery,
 } from '@shared/domain/dropRateMath';
+import { BLESSINGS } from '@shared/domain/stats';
 
 /** A quality/grade level: an integer star/grade in 1–5. */
 const levelSchema = z.number().int().min(1).max(5);
@@ -25,7 +31,18 @@ const filterShape = {
   equipment: z.array(z.string().min(1)).optional(),
   quality: z.array(levelSchema).optional(),
   grade: z.array(levelSchema).optional(),
+  blessings: z.array(z.string().min(1)).optional(),
 };
+
+/** Valid blessing codes, from the shared catalog — the public key for the AND filter. */
+const validBlessingCodes = new Set(BLESSINGS.map((blessing) => blessing.code));
+
+/**
+ * A grade-presence vector that excludes an equipment at every grade. Used as the
+ * fallback for an equipment with no seeded blessing data when blessings are
+ * required: without evidence it can roll them, we can't claim it as a source.
+ */
+const NO_BLESSING_PRESENCE: readonly number[] = [0, 0, 0, 0, 0];
 
 const junkToGuaranteeSchema = z.object({
   certainty: z.number().gt(0).lt(1).optional(),
@@ -55,6 +72,7 @@ export function toMatchQuery(
 /** Prisma `select` for the fields the calc needs from a drop-rate row + its junk. */
 export const dropRateRowSelect = {
   junkId: true,
+  equipmentId: true,
   groupDropRate: true,
   dropRate: true,
   quality1Rate: true,
@@ -74,8 +92,16 @@ export const dropRateRowSelect = {
  * Prisma's generated types, so it can never drift from the `select` above. */
 type DropRateRowWithJunk = Prisma.EquipmentDropRateGetPayload<{ select: typeof dropRateRowSelect }>;
 
-/** Flatten a Prisma drop-rate row into the pure-math {@link DropRateRow} shape. */
-export function toDropRateRow(row: DropRateRowWithJunk): DropRateRow {
+/**
+ * Flatten a Prisma drop-rate row into the pure-math {@link DropRateRow} shape.
+ * `gradePresence` (the row equipment's per-grade blessing-presence vector) is
+ * attached only for blessing queries — omitted otherwise (respects
+ * exactOptionalPropertyTypes), leaving the exact no-blessing path untouched.
+ */
+export function toDropRateRow(
+  row: DropRateRowWithJunk,
+  gradePresence?: readonly number[],
+): DropRateRow {
   return {
     groupDropRate: row.groupDropRate,
     dropRate: row.dropRate,
@@ -93,6 +119,7 @@ export function toDropRateRow(row: DropRateRowWithJunk): DropRateRow {
       row.grade4Rate,
       row.grade5Rate,
     ],
+    ...(gradePresence ? { gradePresence } : {}),
   };
 }
 
@@ -132,6 +159,85 @@ async function resolveEquipmentIds(
   return found.map((row) => row.id);
 }
 
+/**
+ * Validate the required-blessing codes against the shared catalog, failing loud
+ * (400) on any unknown code — like equipment names, these come from a select, so
+ * an unknown code means a stale client. Returns the de-duped codes ([] when no
+ * blessing filter was given), or `null` after sending the error response.
+ */
+function resolveBlessingCodes(
+  res: express.Response,
+  blessings: string[] | undefined,
+): string[] | null {
+  if (!blessings || blessings.length === 0) {
+    return [];
+  }
+
+  const codes = [...new Set(blessings)];
+  const unknown = codes.filter((code) => !validBlessingCodes.has(code));
+  if (unknown.length > 0) {
+    sendErrorResponse(
+      res,
+      HttpStatusCode.BAD_REQUEST,
+      ErrorCode.UNKNOWN_BLESSING,
+      `Unknown blessing code(s): ${unknown.join(', ')}`,
+    );
+    return null;
+  }
+
+  return codes;
+}
+
+/**
+ * For each given equipment, the per-grade probability that all `requiredCodes`
+ * blessings are present ({@link blessingPresenceByGrade}). Fetches the
+ * equipment's per-slot blessing marginals in one query and reduces them to a
+ * length-5 vector per equipment. Presence is equipment-only (junk-independent),
+ * so it's computed once here and shared across every drop row of that equipment.
+ */
+async function buildGradePresenceByEquipment(
+  equipmentIds: readonly string[],
+  requiredCodes: readonly string[],
+): Promise<Map<string, number[]>> {
+  const blessingRows = await getPrisma().equipmentBlessingDropRate.findMany({
+    where: { equipmentId: { in: [...equipmentIds] } },
+    select: {
+      equipmentId: true,
+      slot: true,
+      blessingCode: true,
+      rate: true,
+    },
+  });
+
+  // Group into per-equipment slot marginals: slots[slot - 1] maps code → rate.
+  const slotsByEquipment = new Map<string, Map<string, number>[]>();
+  for (const row of blessingRows) {
+    let slots = slotsByEquipment.get(row.equipmentId);
+    if (!slots) {
+      slots = [];
+      slotsByEquipment.set(row.equipmentId, slots);
+    }
+    const slotIndex = row.slot - 1;
+    let marginal = slots[slotIndex];
+    if (!marginal) {
+      marginal = new Map();
+      slots[slotIndex] = marginal;
+    }
+    marginal.set(row.blessingCode, row.rate);
+  }
+
+  const presenceByEquipment = new Map<string, number[]>();
+  for (const [equipmentId, slots] of slotsByEquipment) {
+    // Densify: a slot with no rows becomes an empty marginal so indices align.
+    const dense = Array.from(
+      { length: slots.length },
+      (_unused, index) => slots[index] ?? new Map<string, number>(),
+    );
+    presenceByEquipment.set(equipmentId, blessingPresenceByGrade(dense, [...requiredCodes]));
+  }
+  return presenceByEquipment;
+}
+
 async function handleJunkToGuarantee(
   req: express.Request,
   res: express.Response,
@@ -147,17 +253,32 @@ async function handleJunkToGuarantee(
     return;
   }
 
-  const { certainty = DEFAULT_CERTAINTY, equipment, quality, grade } = parsed.data;
+  const { certainty = DEFAULT_CERTAINTY, equipment, quality, grade, blessings } = parsed.data;
 
   const equipmentIds = await resolveEquipmentIds(res, equipment);
   if (equipmentIds === null) {
     return; // response already sent
   }
 
+  const blessingCodes = resolveBlessingCodes(res, blessings);
+  if (blessingCodes === null) {
+    return; // response already sent
+  }
+  const hasBlessings = blessingCodes.length > 0;
+
   const rows = await getPrisma().equipmentDropRate.findMany({
     ...(equipmentIds ? { where: { equipmentId: { in: equipmentIds } } } : {}),
     select: dropRateRowSelect,
   });
+
+  // Blessing presence is per-equipment; compute it once for the equipment that
+  // actually appear in these rows, then share it across their rows below.
+  const presenceByEquipment = hasBlessings
+    ? await buildGradePresenceByEquipment(
+        [...new Set(rows.map((row) => row.equipmentId))],
+        blessingCodes,
+      )
+    : null;
 
   // Group rows by junk (id is internal; only the name is exposed).
   interface JunkAggregate {
@@ -176,7 +297,10 @@ async function handleJunkToGuarantee(
       };
       byJunk.set(row.junkId, aggregate);
     }
-    aggregate.rows.push(toDropRateRow(row));
+    const gradePresence = presenceByEquipment
+      ? (presenceByEquipment.get(row.equipmentId) ?? NO_BLESSING_PRESENCE)
+      : undefined;
+    aggregate.rows.push(toDropRateRow(row, gradePresence));
   }
 
   const matchQuery = toMatchQuery({ quality, grade });
@@ -199,6 +323,7 @@ async function handleJunkToGuarantee(
 
   const body: JunkToGuaranteeResult = {
     certainty,
+    ...(hasBlessings ? { estimated: true, estimatedNote: BLESSING_ESTIMATE_NOTE } : {}),
     results,
   };
   res.status(HttpStatusCode.OK).json(body);
@@ -219,7 +344,7 @@ async function handleCertaintyCurve(
     return;
   }
 
-  const { junkName, certainties, equipment, quality, grade } = parsed.data;
+  const { junkName, certainties, equipment, quality, grade, blessings } = parsed.data;
 
   // The junk is addressed by name — a missing one is a 404 (unlike the equipment
   // filter's 400, this is the single target resource, not a filter value).
@@ -242,6 +367,12 @@ async function handleCertaintyCurve(
     return; // response already sent
   }
 
+  const blessingCodes = resolveBlessingCodes(res, blessings);
+  if (blessingCodes === null) {
+    return; // response already sent
+  }
+  const hasBlessings = blessingCodes.length > 0;
+
   const rows = await getPrisma().equipmentDropRate.findMany({
     where: {
       junkId: junk.id,
@@ -250,8 +381,22 @@ async function handleCertaintyCurve(
     select: dropRateRowSelect,
   });
 
+  const presenceByEquipment = hasBlessings
+    ? await buildGradePresenceByEquipment(
+        [...new Set(rows.map((row) => row.equipmentId))],
+        blessingCodes,
+      )
+    : null;
+
+  const mathRows = rows.map((row) => toDropRateRow(
+    row,
+    presenceByEquipment
+      ? (presenceByEquipment.get(row.equipmentId) ?? NO_BLESSING_PRESENCE)
+      : undefined,
+  ));
+
   const matchQuery = toMatchQuery({ quality, grade });
-  const probabilityPerJunk = matchProbabilityForJunk(rows.map(toDropRateRow), matchQuery);
+  const probabilityPerJunk = matchProbabilityForJunk(mathRows, matchQuery);
 
   const points: CertaintyCurvePoint[] = certainties.map((certainty) => ({
     certainty,
@@ -261,6 +406,7 @@ async function handleCertaintyCurve(
   const body: CertaintyCurveResult = {
     junkName: junk.name,
     probabilityPerJunk,
+    ...(hasBlessings ? { estimated: true, estimatedNote: BLESSING_ESTIMATE_NOTE } : {}),
     points,
   };
   res.status(HttpStatusCode.OK).json(body);

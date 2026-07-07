@@ -25,11 +25,23 @@ export interface GuaranteeFilters {
   quality?: number[],
   /** Accepted grade levels, 1–5 (White…Red). Omitted/empty = any grade. */
   grade?: number[],
+  /**
+   * Required blessings, by **code** (e.g. "ATK", "ATK_PER", "SUR"), from the
+   * shared `BLESSINGS` catalog. Unlike the other axes this is an **AND set** —
+   * the item must carry *every* listed blessing at once. The codes are the
+   * stable public key (like equipment/junk names); an unknown code is a 400.
+   *
+   * Because a piece's active blessing slots equal `grade − 1` and blessings
+   * don't stack, this couples to `grade`: a combo needs a grade with enough
+   * slots to hold it. The odds are a documented modelling estimate — responses
+   * to blessing queries set {@link JunkToGuaranteeResult.estimated}. See
+   * `docs/calculation.md`. Omitted/empty = no blessing requirement.
+   */
+  blessings?: string[],
 
   // Reserved — not yet implemented (no seed / deferred, see docs/calculation.md):
   //   tier?: GearTier[]        (OR)  — needs the tier seed
   //   category?: string[]      (OR)  — needs the category mapping
-  //   blessings?: string[]     (AND) — needs the without-replacement joint
 }
 
 /** Body of `POST /junk-to-guarantee`. */
@@ -57,10 +69,27 @@ export interface JunkGuaranteeEntry {
   junkNeeded: number,
 }
 
+/**
+ * Short human-readable caveat that accompanies {@link estimated} results. A
+ * shared constant so the backend and any UI use identical wording.
+ */
+export const BLESSING_ESTIMATE_NOTE = (
+  'Blessing odds are estimated from per-slot rates (the source gives no joint '
+  + 'probabilities), so junk counts for blessing queries are approximate.'
+);
+
 /** Response of `POST /junk-to-guarantee`. */
 export interface JunkToGuaranteeResult {
   /** The effective certainty used. */
   certainty: number,
+  /**
+   * True when the query required blessings, so the numbers rely on the
+   * documented blessing-joint estimate (see {@link GuaranteeFilters.blessings}).
+   * Absent/false for pure equipment/quality/grade queries, which are exact.
+   */
+  estimated?: boolean,
+  /** Present with {@link BLESSING_ESTIMATE_NOTE} whenever {@link estimated}. */
+  estimatedNote?: string,
   /**
    * Matching junks, sorted ascending by {@link JunkGuaranteeEntry.junkNeeded}
    * (fewest to farm first). Junks that can never yield the target (P ≤ 0) are
@@ -92,6 +121,10 @@ export interface CertaintyCurveResult {
   junkName: string,
   /** P(match | one junk of this type); 0 if the target is impossible here. */
   probabilityPerJunk: number,
+  /** True when the query required blessings — see {@link JunkToGuaranteeResult.estimated}. */
+  estimated?: boolean,
+  /** Present with {@link BLESSING_ESTIMATE_NOTE} whenever {@link estimated}. */
+  estimatedNote?: string,
   /** One entry per requested certainty, in the requested order. */
   points: CertaintyCurvePoint[],
 }

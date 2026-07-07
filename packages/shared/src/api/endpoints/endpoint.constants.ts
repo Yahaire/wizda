@@ -14,6 +14,8 @@ export enum ErrorCode {
   UNKNOWN_EQUIPMENT = 'UNKNOWN_EQUIPMENT',
   /** The requested junk name doesn't exist */
   UNKNOWN_JUNK = 'UNKNOWN_JUNK',
+  /** One or more requested blessing codes don't exist */
+  UNKNOWN_BLESSING = 'UNKNOWN_BLESSING',
   /** An unexpected server-side error */
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }

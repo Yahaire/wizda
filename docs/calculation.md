@@ -103,14 +103,13 @@ A subtlety to keep straight before blessings are added: the **grade number** is
 This has no effect on the current quality/grade calc, but the blessing extension
 below depends on it.
 
-## Blessings (deferred — planned approach, not yet implemented)
+## Blessings (implemented)
 
-Blessing (AND) filtering is intentionally **not built yet**; the data
-(`EquipmentBlessingDropRate`, per-(equipment, slot) marginal odds) is seeded and
-waiting. When added, a query naming a blessing set `B` (all must be present)
-changes the grade factor from a plain `P(grade ∈ G)` into a grade-coupled sum,
-because the number of active slots — and thus whether `B` can even fit — depends
-on the grade:
+Blessing (AND) filtering is built. A query naming a blessing set `B` (all must
+be present, by **code** — `"ATK"`, `"ATK_PER"`, `"SUR"`, from the shared
+`BLESSINGS` catalog) turns the plain grade factor `P(grade ∈ G)` into a
+grade-coupled sum, because the number of active slots — and thus whether `B` can
+even fit — depends on the grade:
 
 ```
 grade factor(equipment) =
@@ -119,18 +118,21 @@ grade factor(equipment) =
     where G' = { g ∈ G : (g − 1) ≥ |B| }   // enough active slots to hold B
 ```
 
-Quality stays an independent factor; only grade couples to blessings.
+Quality stays an independent factor; only grade couples to blessings. In code
+this is a per-grade **presence vector** (`blessingPresenceByGrade`) multiplied
+into each grade's mass (`gradeFactorForRow` in `dropRateMath.ts`): grades with
+too few slots get presence 0, so the `G'` restriction is automatic and the
+no-blessing path (`B` empty ⇒ presence 1 everywhere) is unchanged.
 
 `P(B all present | grade g)` is **not** a product of per-slot odds, because
 "Additional Blessings ... do not stack" — across the `g − 1` active slots the
 blessings are drawn **without replacement** (no piece gets the same blessing
 twice; see `docs/domain.md`). The source gives only the per-slot *marginal*
-distributions, so the joint needs a model.
+distributions, so the joint uses a model.
 
-**Proposed model:** independent per-slot draws **conditioned on all-distinct**,
-renormalised. Concretely, enumerate injective assignments of the active slots to
-distinct blessings, weight each by the product of its per-slot marginals, and
-compute
+**The model:** independent per-slot draws **conditioned on all-distinct**,
+renormalised. Enumerate injective assignments of the active slots to distinct
+blessings, weight each by the product of its per-slot marginals, and compute
 
 ```
 P(B all present | grade g) =
@@ -139,11 +141,23 @@ P(B all present | grade g) =
 ```
 
 This is exactly computable — with ≤ 4 active slots over 19 blessings the
-denominator has at most `19·18·17·16 ≈ 93k` terms, trivial to sum per equipment.
-It's an *assumption* about the generative process (it reproduces the marginals
-only approximately), so when implemented it must be validated against the sample
-data the same way the rest of the formula is (see the Monte-Carlo cross-check in
-the tests).
+denominator has at most `19·18·17·16 ≈ 93k` terms (usually far fewer, since only
+nonzero marginals are stored), trivial to sum per equipment.
+
+It is an *assumption* about the generative process: it reproduces the input
+marginals only approximately and can't be checked against the game's true joint
+(the source doesn't publish one). The tests therefore validate that we compute
+*this model* exactly — a Monte-Carlo rejection sampler of the same
+without-replacement process matches the analytic presence — **not** that the
+model equals reality. To keep that honest to users, any query with blessings
+marks its response `estimated: true` (with a short note); pure
+equipment/quality/grade queries stay exact and unflagged.
+
+**Missing blessing data:** an equipment with drop rows but no seeded
+`EquipmentBlessingDropRate` rows (a data gap) gets an all-zero presence when
+blessings are required — we won't claim it as a source for a blessing we have no
+evidence it can roll — so it's omitted from blessing queries rather than treated
+as a wildcard.
 
 ## Validation
 

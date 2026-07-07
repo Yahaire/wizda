@@ -40,6 +40,14 @@ endpoint:
 Nothing is written; it's all read-then-compute. The math module takes plain
 numbers in and returns plain numbers out — it has no idea a database exists.
 
+**Blessing queries add one read.** When a query requires blessings, step 1 also
+fetches the `EquipmentBlessingDropRate` marginals for the equipment in play, and
+step 3 folds a per-equipment "presence" factor into the grade term
+(`blessingPresenceByGrade`). It's still read-then-compute — one extra indexed
+read, all the probability logic stays in the pure module — and because the
+blessing joint is a modelling estimate, the response is flagged `estimated`
+(see [`docs/calculation.md`](./calculation.md)).
+
 ### Why this split
 
 - **Testable without infrastructure.** The formula's unit tests (including the
