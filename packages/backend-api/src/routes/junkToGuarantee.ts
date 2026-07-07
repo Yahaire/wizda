@@ -7,7 +7,11 @@ import { sendErrorResponse } from '@app/http';
 import { getPrisma } from '@app/prisma';
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
 import {
-    DEFAULT_CERTAINTY, JunkGuaranteeEntry, JunkToGuaranteeResult
+    CertaintyCurvePoint,
+    CertaintyCurveResult,
+    DEFAULT_CERTAINTY,
+    JunkGuaranteeEntry,
+    JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
 import {
     DropRateRow, junksNeededForConfidence, matchProbabilityForJunk, MatchQuery
@@ -25,6 +29,12 @@ const filterShape = {
 
 const junkToGuaranteeSchema = z.object({
   certainty: z.number().gt(0).lt(1).optional(),
+  ...filterShape,
+});
+
+const certaintyCurveSchema = z.object({
+  junkName: z.string().min(1),
+  certainties: z.array(z.number().gt(0).lt(1)).min(1),
   ...filterShape,
 });
 
@@ -194,8 +204,74 @@ async function handleJunkToGuarantee(
   res.status(HttpStatusCode.OK).json(body);
 }
 
+async function handleCertaintyCurve(
+  req: express.Request,
+  res: express.Response,
+): Promise<void> {
+  const parsed = certaintyCurveSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendErrorResponse(
+      res,
+      HttpStatusCode.BAD_REQUEST,
+      ErrorCode.INVALID_QUERY,
+      parsed.error.message,
+    );
+    return;
+  }
+
+  const { junkName, certainties, equipment, quality, grade } = parsed.data;
+
+  // The junk is addressed by name — a missing one is a 404 (unlike the equipment
+  // filter's 400, this is the single target resource, not a filter value).
+  const junk = await getPrisma().junk.findUnique({
+    where: { name: junkName },
+    select: { id: true, name: true },
+  });
+  if (!junk) {
+    sendErrorResponse(
+      res,
+      HttpStatusCode.NOT_FOUND,
+      ErrorCode.UNKNOWN_JUNK,
+      `Unknown junk name: ${junkName}`,
+    );
+    return;
+  }
+
+  const equipmentIds = await resolveEquipmentIds(res, equipment);
+  if (equipmentIds === null) {
+    return; // response already sent
+  }
+
+  const rows = await getPrisma().equipmentDropRate.findMany({
+    where: {
+      junkId: junk.id,
+      ...(equipmentIds ? { equipmentId: { in: equipmentIds } } : {}),
+    },
+    select: dropRateRowSelect,
+  });
+
+  const matchQuery = toMatchQuery({ quality, grade });
+  const probabilityPerJunk = matchProbabilityForJunk(rows.map(toDropRateRow), matchQuery);
+
+  const points: CertaintyCurvePoint[] = certainties.map((certainty) => ({
+    certainty,
+    junkNeeded: junksNeededForConfidence(probabilityPerJunk, certainty),
+  }));
+
+  const body: CertaintyCurveResult = {
+    junkName: junk.name,
+    probabilityPerJunk,
+    points,
+  };
+  res.status(HttpStatusCode.OK).json(body);
+}
+
 export const junkToGuaranteeRouter = express.Router();
 
 junkToGuaranteeRouter.post('/', (req, res, next) => {
   handleJunkToGuarantee(req, res).catch(next);
+});
+
+junkToGuaranteeRouter.post('/curve', (req, res, next) => {
+  handleCertaintyCurve(req, res).catch(next);
 });
