@@ -1,21 +1,103 @@
-import type { Metadata } from "next";
+import type {
+  Metadata,
+  Viewport,
+} from 'next';
+import {
+  Cinzel,
+  Inter,
+  Caveat,
+} from 'next/font/google';
+
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
 import './globals.css';
 
-import { APP_NAME } from './app.constants';
+import {
+  ColorSchemeScript,
+  MantineProvider,
+  mantineHtmlProps,
+} from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
+
+import { Shell } from '@/components/Shell';
+
+import {
+  APP_DESCRIPTION,
+  APP_NAME,
+} from './app.constants';
+import { wizdaTheme } from './theme';
+
+const display = Cinzel({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+const body = Inter({
+  subsets: ['latin'],
+  variable: '--font-body',
+  display: 'swap',
+});
+
+const speech = Caveat({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-speech',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: APP_NAME,
-  description: 'Work out how much junk to farm to guarantee the item you want in Wizardry Variants Daphne.',
+  description: APP_DESCRIPTION,
+  applicationName: APP_NAME,
+  icons: { icon: '/icon.svg' },
+  appleWebApp: {
+    capable: true,
+    title: APP_NAME,
+    statusBarStyle: 'black-translucent',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0a0908',
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode,
 }>) {
+  // Env-gated: no script rendered until an Umami site id is provisioned.
+  const umamiWebsiteId = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
+
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html
+      lang="en"
+      {...mantineHtmlProps}
+      className={`${display.variable} ${body.variable} ${speech.variable}`}
+    >
+      <head>
+        <ColorSchemeScript forceColorScheme="dark" />
+        {umamiWebsiteId && (
+          <script
+            defer
+            src="/umami/script.js"
+            data-website-id={umamiWebsiteId}
+            data-host-url="/umami"
+          />
+        )}
+      </head>
+      <body>
+        <MantineProvider theme={wizdaTheme} forceColorScheme="dark">
+          <Notifications
+            position="bottom-center"
+            limit={3}
+            autoClose={5000}
+          />
+          <Shell>{children}</Shell>
+        </MantineProvider>
+      </body>
     </html>
   );
 }

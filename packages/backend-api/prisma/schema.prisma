@@ -149,6 +149,14 @@ model Junk {
   /// is a caveat flag for the frontend to surface, not a data-quality problem.
   hasMultiplePools Boolean @default(false)
 
+  /// Highest quality (★1–5) any equipment drops from this junk; null if unknown.
+  /// Denormalised summary of the per-row quality distributions (the pool's best,
+  /// even if not every piece in the pool reaches it).
+  maxDropQuality Int?
+  /// Highest grade (1–5, White…Red) any equipment drops from this junk; null if
+  /// unknown. Denormalised summary of the per-row grade distributions.
+  maxDropGrade   Int?
+
   dropRates EquipmentDropRate[]
 }
 
@@ -176,7 +184,7 @@ model EquipmentDropRate {
   /// data-quality checks (group-rate and within-group-rate sums).
   groupNumber Int?
 
-  /// P(quality | equipment), ★1–★5.
+  /// P(quality | equipment), 1★–5★.
   quality1Rate Float
   quality2Rate Float
   quality3Rate Float

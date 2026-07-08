@@ -25,4 +25,15 @@ export abstract class TsUtilities {
   ): void {
     TsUtilities.mapNumericEnum(enumObj, callback);
   }
+
+  /**
+   * Joins string fragments into one string. Lets a multi-line message be
+   * written as one-fragment-per-line array (clean diffs) instead of `+` glue.
+   * @param parts The fragments to join.
+   * @param separator What to place between fragments. Defaults to a single space.
+   * @returns The joined string.
+   */
+  static stringJoin(parts: string[], separator: string = " "): string {
+    return parts.join(separator);
+  }
 }

@@ -26,8 +26,8 @@ A piece of gear is described by several independent axes:
   Every junk-dropped item belongs to exactly one tier.
 - **Stats** — start and final (fully-enhanced) stats are fixed per item. 
   Not a source of randomness for our purposes.
-- **Quality** — shown as **stars, ★1–★5**. Higher quality = larger stat values
-  on each blessing (a ★1 blessing might give ~2 ATK; a ★5 the same blessing
+- **Quality** — shown as **stars, 1★–5★**. Higher quality = larger stat values
+  on each blessing (a 1★ blessing might give ~2 ATK; a 5★ the same blessing
   ~12).
 - **Grade** — shown as a **color = number**: White = 1, Green = 2, Blue = 3,
   Purple = 4, Red = 5. Grade dictates how many blessings are **active**:
@@ -91,7 +91,7 @@ with per-item quality and grade distributions:
 |-------|-----------|---------|---------|
 | Group | `Group Number` + `Drop Rates` (`rowspan`) | P(group) | 100% across groups |
 | Item  | `Equipment` + `Drop Rates` | P(item \| group) | 100% within a group |
-| Quality | `★1`…`★5` | P(quality \| item) | 100% per item |
+| Quality | `1★`…`5★` | P(quality \| item) | 100% per item |
 | Grade | `1`…`5` | P(grade \| item) | 100% per item |
 
 The `rowspan` on the group cells means a group's number + rate appear once and

@@ -25,9 +25,9 @@ behind the guarantee numbers is in
 
 | Method & path | Purpose | Models |
 |---------------|---------|--------|
-| `POST /junk-to-guarantee` | Rank the junks that can yield the desired gear, fewest-needed first. Body: equipment/quality/grade/blessing filters + optional `certainty`. | `junkToGuarantee.models.ts` |
+| `POST /junk-to-guarantee` | Rank the junks that can yield the desired gear, fewest-needed first. Body: equipment/quality/grade/blessing filters + optional `certainty`, `limit`, `offset`. | `junkToGuarantee.models.ts` |
 | `POST /junk-to-guarantee/curve` | For a **single** named junk + the same filters, how much is needed across several `certainties`. | `junkToGuarantee.models.ts` |
-| `GET /junks` | All junks (`name`, `hasMultiplePools`) for the filter selects. | `lists.models.ts` |
+| `GET /junks` | All junks (`name`, `hasMultiplePools`, `maxDropQuality`, `maxDropGrade`) for the filter selects and junk list. | `lists.models.ts` |
 | `GET /equipment` | All droppable equipment with the junks each drops from. | `lists.models.ts` |
 
 Notes:
@@ -37,6 +37,18 @@ Notes:
   `404` (`UNKNOWN_JUNK`). Filter axes are OR-sets; `blessings` is an AND-set.
 - Blessing queries flag their response `estimated: true` — the blessing joint is
   a modelling estimate (see `docs/calculation.md`).
+- `POST /junk-to-guarantee` requires **at least one** filter (equipment / quality
+  / grade / blessing) — a query with none is a `400` (`NO_QUERY`). Results are
+  **paged**: `limit` is defaulted and hard-capped (`DEFAULT_GUARANTEE_LIMIT` /
+  `MAX_GUARANTEE_LIMIT`), and the response carries `total` + `hasMore` for
+  "show more". This keeps the absurd tail (junks needing 100k+) off the wire.
+
+## Analytics
+
+`src/analytics.ts` fires a fire-and-forget `guarantee_query` custom event to
+Umami server-side (so it captures direct API consumers and dodges ad-blockers).
+It's **dormant** unless `UMAMI_API_URL` + `UMAMI_API_WEBSITE_ID` are set — see the
+`UMAMI_*` vars in the root `.env.example`.
 
 ## Testing
 

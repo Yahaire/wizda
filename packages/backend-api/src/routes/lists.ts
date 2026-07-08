@@ -17,6 +17,8 @@ async function handleListJunks(
     select: {
       name: true,
       hasMultiplePools: true,
+      maxDropQuality: true,
+      maxDropGrade: true,
     },
     orderBy: { name: 'asc' },
   });

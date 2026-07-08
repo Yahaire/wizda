@@ -11,6 +11,10 @@ export interface JunkListItem {
   name: string,
   /** See `Junk.hasMultiplePools` — a frontend caveat flag. */
   hasMultiplePools: boolean,
+  /** Highest quality (★1–5) any equipment drops from this junk; null if unknown. */
+  maxDropQuality: number | null,
+  /** Highest grade (1–5) any equipment drops from this junk; null if unknown. */
+  maxDropGrade: number | null,
 }
 
 /** A junk that a piece of equipment can drop from. */

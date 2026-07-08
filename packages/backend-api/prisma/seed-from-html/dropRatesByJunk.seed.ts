@@ -82,33 +82,43 @@ export async function seedDropRatesByJunk(
 
     const maxQualityByEquipment = new Map<string, number>();
     const maxGradeByEquipment = new Map<string, number>();
+    const maxQualityByJunk = new Map<string, number>();
+    const maxGradeByJunk = new Map<string, number>();
+    const accumulate = (map: Map<string, number>, key: string, value: number | undefined) => {
+      if (value !== undefined) {
+        map.set(key, Math.max(value, map.get(key) ?? 0));
+      }
+    };
     for (const row of rows) {
       const maxQuality = highestNonZeroTier(row.qualityRates);
-      if (maxQuality !== undefined) {
-        maxQualityByEquipment.set(
-          row.equipmentName,
-          Math.max(maxQuality, maxQualityByEquipment.get(row.equipmentName) ?? 0),
-        );
-      }
-
       const maxGrade = highestNonZeroTier(row.gradeRates);
-      if (maxGrade !== undefined) {
-        maxGradeByEquipment.set(
-          row.equipmentName,
-          Math.max(maxGrade, maxGradeByEquipment.get(row.equipmentName) ?? 0),
-        );
-      }
+      accumulate(maxQualityByEquipment, row.equipmentName, maxQuality);
+      accumulate(maxGradeByEquipment, row.equipmentName, maxGrade);
+      accumulate(maxQualityByJunk, row.junkName, maxQuality);
+      accumulate(maxGradeByJunk, row.junkName, maxGrade);
     }
 
-    const updateValues = [...equipmentIdByName].map(([name, id]) => Prisma.sql`(
+    const equipmentUpdateValues = [...equipmentIdByName].map(([name, id]) => Prisma.sql`(
       ${id}::text, ${maxQualityByEquipment.get(name) ?? null}::int, ${maxGradeByEquipment.get(name) ?? null}::int
     )`);
-    if (updateValues.length > 0) {
+    if (equipmentUpdateValues.length > 0) {
       await tx.$executeRaw`
         UPDATE "Equipment" AS e
         SET "maxDropQuality" = v.quality, "maxDropGrade" = v.grade
-        FROM (VALUES ${Prisma.join(updateValues)}) AS v(id, quality, grade)
+        FROM (VALUES ${Prisma.join(equipmentUpdateValues)}) AS v(id, quality, grade)
         WHERE e.id = v.id
+      `;
+    }
+
+    const junkUpdateValues = [...junkIdByName].map(([name, id]) => Prisma.sql`(
+      ${id}::text, ${maxQualityByJunk.get(name) ?? null}::int, ${maxGradeByJunk.get(name) ?? null}::int
+    )`);
+    if (junkUpdateValues.length > 0) {
+      await tx.$executeRaw`
+        UPDATE "Junk" AS j
+        SET "maxDropQuality" = v.quality, "maxDropGrade" = v.grade
+        FROM (VALUES ${Prisma.join(junkUpdateValues)}) AS v(id, quality, grade)
+        WHERE j.id = v.id
       `;
     }
   }, { timeout: 60_000 });

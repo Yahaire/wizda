@@ -8,7 +8,9 @@ This project is a monorepo, with the following packages:
 
 - `packages/shared`: Shared code between the web-client and the backend-api
 - `packages/backend-api`: API to handle interactions with DB (and the scraper that seeds it)
-- `packages/web-client`: Web interface for project
+- `packages/web-client`: Next.js web interface — the **Junk Oracle** calculator plus
+  the junk/equipment lists (Mantine, dark theme, installable PWA). See its
+  [README](./packages/web-client/README.md) for the stack and structure.
 
 How the packages fit together — and why the core calculation lives in a pure
 `shared` module rather than in the DB — is documented in

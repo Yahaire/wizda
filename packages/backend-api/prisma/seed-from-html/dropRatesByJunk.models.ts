@@ -1,4 +1,4 @@
-/** ★1-★5 quality drop rates, or grade 1-5 drop rates, as fractions in [0, 1]. */
+/** 1★-5★ quality drop rates, or grade 1-5 drop rates, as fractions in [0, 1]. */
 export type FiveTierRates = [number, number, number, number, number];
 
 /**

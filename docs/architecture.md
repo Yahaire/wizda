@@ -66,8 +66,9 @@ blessing joint is a modelling estimate, the response is flagged `estimated`
 
 The calc is cheap — a sum over a junk's handful of rows — so we deliberately
 precompute **nothing** at scrape time and add **no** derived columns for it. The
-one denormalisation that already exists (`Equipment.maxDropQuality` /
-`maxDropGrade`) is a cheap prefilter, not a precomputed answer.
+denormalisations that exist (`Equipment.maxDropQuality` / `maxDropGrade` and the
+mirrored `Junk.maxDropQuality` / `maxDropGrade`) are cheap prefilters and list
+summaries, not precomputed answers.
 
 If profiling on the full dataset (~700 junks) ever shows the read-then-compute
 path is too slow, *then* we revisit — e.g. pushing some work into the query or

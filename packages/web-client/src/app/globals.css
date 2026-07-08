@@ -14,3 +14,37 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/*
+ * "Wizda speech" — the reusable style for anything the mascot says (tool intro,
+ * tooltips, toast bodies). Grayish, italic, in the softer speech font so her
+ * voice reads consistently everywhere. See src/mascot/.
+ */
+.wizda-speech {
+  font-family: var(--font-speech), Georgia, serif;
+  /* font-style: italic; */
+  color: var(--mantine-color-dark-2);
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+/* Clickable table/list rows: pointer + a subtle hover highlight. */
+.wizda-row-hover {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.wizda-row-hover:hover {
+  background-color: var(--mantine-color-dark-6);
+}
+
+/*
+ * Sticky first column: needs an opaque background so sideways-scrolled cells
+ * don't show through. The base matches the table body; on row hover it tracks
+ * the row highlight so the pinned cell doesn't look detached.
+ */
+.wizda-sticky-cell {
+  background-color: var(--mantine-color-dark-7);
+}
+.wizda-row-hover:hover .wizda-sticky-cell {
+  background-color: var(--mantine-color-dark-6);
+}

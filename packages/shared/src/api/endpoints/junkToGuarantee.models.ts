@@ -5,8 +5,20 @@
  * `packages/shared/src/domain/dropRateMath.ts`; see `docs/calculation.md`.
  */
 
+import { TsUtilities } from '../../tsUtilities';
+
 /** Default target confidence when a query omits `certainty` (99%). */
 export const DEFAULT_CERTAINTY = 0.99;
+
+/**
+ * Result-count guards for `POST /junk-to-guarantee`. The results are sorted
+ * fewest-to-farm first, and the long tail (junks needing tens of thousands) is
+ * useless, so we page. `limit` is always enforced server-side:
+ * `effective = min(limit ?? DEFAULT_GUARANTEE_LIMIT, MAX_GUARANTEE_LIMIT)` — an
+ * omitted limit is defaulted and a client can never exceed the max.
+ */
+export const DEFAULT_GUARANTEE_LIMIT = 50;
+export const MAX_GUARANTEE_LIMIT = 200;
 
 /**
  * The accepted-outcome filters shared by both guarantee queries. Every array is
@@ -52,6 +64,14 @@ export interface JunkToGuaranteeQuery extends GuaranteeFilters {
    * unreachable and rejected.
    */
   certainty?: number,
+  /**
+   * Max results to return (the page size). Enforced: defaulted to
+   * {@link DEFAULT_GUARANTEE_LIMIT} when omitted, clamped to
+   * {@link MAX_GUARANTEE_LIMIT}. See the constants above.
+   */
+  limit?: number,
+  /** Results to skip before the page (for "show more"). Defaults to 0. */
+  offset?: number,
 }
 
 /** One junk's answer: how much of it to farm to reach the target confidence. */
@@ -73,10 +93,10 @@ export interface JunkGuaranteeEntry {
  * Short human-readable caveat that accompanies {@link estimated} results. A
  * shared constant so the backend and any UI use identical wording.
  */
-export const BLESSING_ESTIMATE_NOTE = (
-  'Blessing odds are estimated from per-slot rates (the source gives no joint '
-  + 'probabilities), so junk counts for blessing queries are approximate.'
-);
+export const BLESSING_ESTIMATE_NOTE = TsUtilities.stringJoin([
+  "Blessing odds are estimated from per-slot rates (the source gives no joint",
+  "probabilities), so junk counts for blessing queries are approximate.",
+]);
 
 /** Response of `POST /junk-to-guarantee`. */
 export interface JunkToGuaranteeResult {
@@ -93,9 +113,13 @@ export interface JunkToGuaranteeResult {
   /**
    * Matching junks, sorted ascending by {@link JunkGuaranteeEntry.junkNeeded}
    * (fewest to farm first). Junks that can never yield the target (P ≤ 0) are
-   * omitted entirely.
+   * omitted entirely. This is a page — see {@link total} / {@link hasMore}.
    */
   results: JunkGuaranteeEntry[],
+  /** Total matching junks across all pages (before `limit`/`offset`). */
+  total: number,
+  /** Whether more matching junks exist beyond this page (for "show more"). */
+  hasMore: boolean,
 }
 
 /**

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { Prisma } from '@local-prisma/generated/client';
 
+import { trackGuaranteeQuery } from '@app/analytics';
 import { sendErrorResponse } from '@app/http';
 import { getPrisma } from '@app/prisma';
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
@@ -11,8 +12,10 @@ import {
     CertaintyCurvePoint,
     CertaintyCurveResult,
     DEFAULT_CERTAINTY,
+    DEFAULT_GUARANTEE_LIMIT,
     JunkGuaranteeEntry,
     JunkToGuaranteeResult,
+    MAX_GUARANTEE_LIMIT,
 } from '@shared/api/endpoints/junkToGuarantee.models';
 import {
     blessingPresenceByGrade,
@@ -46,8 +49,31 @@ const NO_BLESSING_PRESENCE: readonly number[] = [0, 0, 0, 0, 0];
 
 const junkToGuaranteeSchema = z.object({
   certainty: z.number().gt(0).lt(1).optional(),
+  limit: z.number().int().min(1).optional(),
+  offset: z.number().int().min(0).optional(),
   ...filterShape,
 });
+
+/**
+ * Whether at least one accepted-outcome filter is set. Certainty/limit/offset
+ * don't count — a query with none of these would ask "how much of every junk to
+ * farm to get literally anything", i.e. the useless all-wildcard case.
+ */
+function hasAnyFilter(
+  filters: {
+    equipment?: string[] | undefined,
+    quality?: number[] | undefined,
+    grade?: number[] | undefined,
+    blessings?: string[] | undefined,
+  },
+): boolean {
+  return Boolean(
+    filters.equipment?.length
+    || filters.quality?.length
+    || filters.grade?.length
+    || filters.blessings?.length,
+  );
+}
 
 const certaintyCurveSchema = z.object({
   junkName: z.string().min(1),
@@ -253,7 +279,17 @@ async function handleJunkToGuarantee(
     return;
   }
 
-  const { certainty = DEFAULT_CERTAINTY, equipment, quality, grade, blessings } = parsed.data;
+  const { certainty = DEFAULT_CERTAINTY, limit, offset, equipment, quality, grade, blessings } = parsed.data;
+
+  if (!hasAnyFilter({ equipment, quality, grade, blessings })) {
+    sendErrorResponse(
+      res,
+      HttpStatusCode.BAD_REQUEST,
+      ErrorCode.NO_QUERY,
+      'Pick at least one filter (equipment, quality, grade, or blessing).',
+    );
+    return;
+  }
 
   const equipmentIds = await resolveEquipmentIds(res, equipment);
   if (equipmentIds === null) {
@@ -321,11 +357,30 @@ async function handleJunkToGuarantee(
   }
   results.sort((left, right) => left.junkNeeded - right.junkNeeded);
 
+  // Enforced paging: default an omitted limit, clamp a supplied one to the max,
+  // then slice — the absurd tail never ships even if a client asks for it all.
+  const total = results.length;
+  const effectiveLimit = Math.min(limit ?? DEFAULT_GUARANTEE_LIMIT, MAX_GUARANTEE_LIMIT);
+  const effectiveOffset = offset ?? 0;
+  const page = results.slice(effectiveOffset, effectiveOffset + effectiveLimit);
+
   const body: JunkToGuaranteeResult = {
     certainty,
     ...(hasBlessings ? { estimated: true, estimatedNote: BLESSING_ESTIMATE_NOTE } : {}),
-    results,
+    results: page,
+    total,
+    hasMore: effectiveOffset + page.length < total,
   };
+
+  trackGuaranteeQuery(req, {
+    equipmentCount: equipment?.length ?? 0,
+    qualityCount: quality?.length ?? 0,
+    gradeCount: grade?.length ?? 0,
+    blessingCount: blessingCodes.length,
+    certainty,
+    total,
+  });
+
   res.status(HttpStatusCode.OK).json(body);
 }
 

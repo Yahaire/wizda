@@ -10,6 +10,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@mantine/core": "^8.3.18",
+    "@mantine/hooks": "^8.3.18",
+    "@mantine/notifications": "^8.3.18",
+    "@tabler/icons-react": "^3.44.0",
+    "@tanstack/react-virtual": "^3.14.5",
     "@wizda/shared": "*",
     "next": "15.5.14",
     "react": "^19.0.0",
@@ -17,11 +22,16 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@serwist/next": "^9.5.11",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.14",
+    "postcss": "^8.5.16",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
+    "serwist": "^9.5.11",
     "typescript": "^5"
   }
 }
