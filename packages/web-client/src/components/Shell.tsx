@@ -101,6 +101,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         multiline
         w={220}
         withArrow
+        openDelay={400}
       >
         <div>{link}</div>
       </Tooltip>

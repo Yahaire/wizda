@@ -1,13 +1,8 @@
 'use client';
 
-import {
-  Badge,
-  Group,
-  Text,
-} from '@mantine/core';
-import { IconStarFilled } from '@tabler/icons-react';
-
+import { Badge, Group, Text } from '@mantine/core';
 import { GRADES } from '@shared/domain/grade';
+import { IconStarFilled } from '@tabler/icons-react';
 
 /** In-game grade colours (White…Red) as Mantine palette names, for badges. */
 export const GRADE_COLORS: Record<number, string> = {
@@ -31,7 +26,7 @@ export function gradeName(value: number | null | undefined): string | null {
   if (value === null || value === undefined) {
     return null;
   }
-  return GRADES.find((grade) => grade.value === value)?.name ?? `Grade ${value}`;
+  return GRADES.find((grade) => grade.value === value)?.name.substring(0, 3) ?? `Grade ${value}`;
 }
 
 /**
@@ -41,7 +36,7 @@ export function gradeName(value: number | null | undefined): string | null {
  */
 export function QualityStars({ value, size = 12 }: { value: number, size?: number }) {
   return (
-    <Group gap={2} wrap="nowrap" c="yellow.4" component="span" style={{ display: 'inline-flex' }}>
+    <Group gap={2} wrap="nowrap" component="span" style={{ display: 'inline-flex' }}>
       <Text span fw={600} fz="sm">{value}</Text>
       <IconStarFilled size={size} />
     </Group>

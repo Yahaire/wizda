@@ -57,6 +57,18 @@ const columns: Column<EquipmentListItem>[] = [
     ),
   },
   {
+    key: 'category',
+    header: 'Category',
+    width: '1.4fr',
+    minWidth: 130,
+    // Backend doesn't map categories yet, so this renders "—" for every row for
+    // now; it sorts/displays the category name as soon as the mapping is seeded.
+    sortValue: (row) => row.category?.name ?? '',
+    render: (row) => (row.category
+      ? <TruncatedText>{row.category.name}</TruncatedText>
+      : <Text c="dimmed">—</Text>),
+  },
+  {
     key: 'tier',
     header: 'Tier',
     width: '1fr',

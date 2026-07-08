@@ -109,8 +109,16 @@ export function DataTable<T>({
     overscan: 12,
   });
 
+  // The first column is sticky (pinned while scrolling sideways) so mobile users
+  // keep the row's identity in view. Cap its floor at half the visible width
+  // (50cqw, resolved against the horizontally-scrolling container below) so it
+  // can't eat most of a narrow screen; on wider viewports its px min wins.
   const gridTemplate = columns
-    .map((column) => `minmax(${column.minWidth ?? DEFAULT_MIN_WIDTH}px, ${column.width ?? '1fr'})`)
+    .map((column, index) => {
+      const min = column.minWidth ?? DEFAULT_MIN_WIDTH;
+      const lower = index === 0 ? `min(${min}px, 50cqw)` : `${min}px`;
+      return `minmax(${lower}, ${column.width ?? '1fr'})`;
+    })
     .join(' ');
 
   // Force a min table width so it scrolls horizontally instead of crushing on
@@ -168,12 +176,26 @@ export function DataTable<T>({
           border: '1px solid var(--mantine-color-dark-4)',
           borderRadius: 'var(--mantine-radius-md)',
           overflow: 'hidden',
+          // `containerType: inline-size` makes this (the full-width, non-scrolling
+          // frame) the reference for the first column's `50cqw` floor — see
+          // gridTemplate. It lives here rather than on the scroller below so it
+          // can't interfere with that box's sticky/scroll behaviour.
+          containerType: 'inline-size',
         }}
       >
-        {/* Horizontal scroller wrapping header + body so they scroll together. */}
-        <Box style={{ overflowX: 'auto' }}>
-          <Box style={{ minWidth: minTableWidth }}>
-            {/* Header */}
+        {/* A single box scrolls both axes so the sticky header (top) and sticky
+            first column (left) share one scroll container. With two nested
+            scrollers, a row's sticky-left cell would resolve to the inner
+            (vertical) scroller and slide away with the outer horizontal scroll. */}
+        <div
+          ref={scrollRef}
+          style={{
+            overflow: 'auto',
+            height: rows.length === 0 ? undefined : height,
+          }}
+        >
+          <Box style={{ minWidth: minTableWidth, position: 'relative' }}>
+            {/* Header — sticky to the top of the scroller. */}
             <Box
               style={{
                 display: 'grid',
@@ -182,6 +204,9 @@ export function DataTable<T>({
                 padding: `10px ${PAD_X}px`,
                 background: HEADER_BG,
                 borderBottom: '1px solid var(--mantine-color-dark-4)',
+                position: 'sticky',
+                top: 0,
+                zIndex: 3,
               }}
             >
               {columns.map((column, index) => {
@@ -220,54 +245,52 @@ export function DataTable<T>({
                 <Text c="dimmed">{emptyMessage}</Text>
               </Center>
             ) : (
-              <div ref={scrollRef} style={{ height, overflowY: 'auto' }}>
-                <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-                  {virtualizer.getVirtualItems().map((virtualRow) => {
-                    const row = rows[virtualRow.index]!;
-                    return (
-                      <Box
-                        key={getRowId(row)}
-                        className={onRowClick ? 'wizda-row-hover' : undefined}
-                        onClick={onRowClick ? () => onRowClick(row) : undefined}
-                        style={{
-                          position: 'absolute',
-                          top: virtualRow.start,
-                          left: 0,
-                          width: '100%',
-                          height: rowHeight,
-                          display: 'grid',
-                          gridTemplateColumns: gridTemplate,
-                          gap: GAP,
-                          alignItems: 'center',
-                          padding: `0 ${PAD_X}px`,
-                          borderBottom: '1px solid var(--mantine-color-dark-5)',
-                        }}
-                      >
-                        {columns.map((column, index) => (
-                          <Box
-                            key={column.key}
-                            className={index === 0 ? 'wizda-sticky-cell' : undefined}
-                            style={{
-                              justifySelf: column.align === 'right'
-                                ? 'end'
-                                : column.align === 'center' ? 'center' : 'start',
-                              minWidth: 0,
-                              width: '100%',
-                              textAlign: column.align ?? 'left',
-                              ...stickyPos(index),
-                            }}
-                          >
-                            {column.render(row)}
-                          </Box>
-                        ))}
-                      </Box>
-                    );
-                  })}
-                </div>
+              <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = rows[virtualRow.index]!;
+                  return (
+                    <Box
+                      key={getRowId(row)}
+                      className={onRowClick ? 'wizda-row-hover' : undefined}
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
+                      style={{
+                        position: 'absolute',
+                        top: virtualRow.start,
+                        left: 0,
+                        width: '100%',
+                        height: rowHeight,
+                        display: 'grid',
+                        gridTemplateColumns: gridTemplate,
+                        gap: GAP,
+                        alignItems: 'center',
+                        padding: `0 ${PAD_X}px`,
+                        borderBottom: '1px solid var(--mantine-color-dark-5)',
+                      }}
+                    >
+                      {columns.map((column, index) => (
+                        <Box
+                          key={column.key}
+                          className={index === 0 ? 'wizda-sticky-cell' : undefined}
+                          style={{
+                            justifySelf: column.align === 'right'
+                              ? 'end'
+                              : column.align === 'center' ? 'center' : 'start',
+                            minWidth: 0,
+                            width: '100%',
+                            textAlign: column.align ?? 'left',
+                            ...stickyPos(index),
+                          }}
+                        >
+                          {column.render(row)}
+                        </Box>
+                      ))}
+                    </Box>
+                  );
+                })}
               </div>
             )}
           </Box>
-        </Box>
+        </div>
       </Box>
     </div>
   );

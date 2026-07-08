@@ -38,12 +38,25 @@ a {
 }
 
 /*
+ * "You were here": the row we drilled into, marked when the detail modal pops
+ * back to a previous view. A soft branded tint — distinct in kind from the
+ * neutral grey hover, but subtle (no icon/border). Hover still wins on this row
+ * via its higher specificity (:hover), so the row stays interactive.
+ */
+.wizda-row-focused {
+  background-color: var(--mantine-primary-color-light);
+}
+
+/*
  * Sticky first column: needs an opaque background so sideways-scrolled cells
  * don't show through. The base matches the table body; on row hover it tracks
- * the row highlight so the pinned cell doesn't look detached.
+ * the row highlight so the pinned cell doesn't look detached. It must share the
+ * row's transition, otherwise its opaque background snaps to the hover colour a
+ * frame before the row fades in — a "painted square" artifact on the first cell.
  */
 .wizda-sticky-cell {
   background-color: var(--mantine-color-dark-7);
+  transition: background-color 120ms ease;
 }
 .wizda-row-hover:hover .wizda-sticky-cell {
   background-color: var(--mantine-color-dark-6);

@@ -1,51 +1,53 @@
 'use client';
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { CategoryIcon } from '@/components/CategoryIcon';
+import { GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
+import { TruncatedText } from '@/components/TruncatedText';
+import { api, MaintenanceError } from '@/services/api';
 import {
-  Alert,
-  Badge,
-  Divider,
-  Group,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-  UnstyledButton,
+    ActionIcon, Alert, Badge, Box, Divider, Group, Modal, ScrollArea, Stack, Text, UnstyledButton
 } from '@mantine/core';
-import {
-  IconChevronRight,
-  IconInfoCircle,
-} from '@tabler/icons-react';
-
 import { TsUtilities } from '@shared/tsUtilities';
+import { IconArrowLeft, IconChevronRight, IconInfoCircle } from '@tabler/icons-react';
+
 import type {
   EquipmentListItem,
   JunkListItem,
 } from '@shared/api/endpoints/lists.models';
-
-import {
-  MaintenanceError,
-  api,
-} from '@/services/api';
-import { CategoryIcon } from '@/components/CategoryIcon';
-import { TruncatedText } from '@/components/TruncatedText';
-import {
-  GradeBadge,
-  QualityStars,
-} from '@/components/gear/gearDisplays';
 
 const MULTI_POOL_NOTE = TsUtilities.stringJoin([
   "This junk has more than one recorded drop pool — only the newest is stored.",
   "If you haven't unlocked this area's newer pool, or you still have junks from the",
   "previous version, your actual drops may differ.",
 ]);
+
+/**
+ * Both detail lists (a junk's gear, an equipment's junks) share one grid so
+ * their columns line up and can't drift: name (fills) · quality · grade · a
+ * chevron. The chevron is a tap affordance — on mobile there's no hover, so
+ * without it a clickable row reads as static text. Each row is a subgrid
+ * spanning all four tracks, so column widths are measured once across rows.
+ */
+const DETAIL_LIST_GRID: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr auto auto auto',
+  columnGap: 'var(--mantine-spacing-xs)',
+  rowGap: 2,
+};
+
+const DETAIL_ROW_GRID: React.CSSProperties = {
+  display: 'grid',
+  gridColumn: '1 / -1',
+  gridTemplateColumns: 'subgrid',
+  alignItems: 'center',
+  borderRadius: 'var(--mantine-radius-sm)',
+};
+
+// Small and tucked (negative margin eats part of the column gap) so the
+// affordance doesn't steal width from the name/badges on narrow screens.
+const ROW_CHEVRON = <IconChevronRight size={12} style={{ opacity: 0.4, marginInlineStart: -4 }} />;
 
 type LoadStatus = 'loading' | 'ready' | 'maintenance' | 'error';
 
@@ -70,10 +72,39 @@ export function useDetail(): DetailContextValue {
 }
 
 /**
- * Loads the junk + equipment reference lists once and hosts the shared
- * junk/equipment detail modals, so any row (in either list, or inside the other
- * modal) can open the same detail view. The two modals cross-link: a junk's
- * gear opens the equipment modal and vice-versa.
+ * One entry in the detail-view navigation stack — either an equipment or a junk
+ * detail. Cross-links push a new entry; the modal's Back arrow pops one.
+ * `focusChild` is the name of the row that was clicked to drill deeper from this
+ * entry; when we pop back to it, that row is scrolled into view and highlighted
+ * so the user re-orients to where they were.
+ */
+type DetailEntry =
+  | { kind: 'equipment', item: EquipmentListItem, focusChild?: string }
+  | { kind: 'junk', item: JunkListItem, focusChild?: string };
+
+/**
+ * Push `entry` onto the stack, recording on the entry we're leaving which child
+ * row (`focusChild`) sent us there — see `DetailEntry.focusChild`.
+ */
+function pushWithFocus(
+  stack: DetailEntry[],
+  entry: DetailEntry,
+  focusChild: string,
+): DetailEntry[] {
+  if (stack.length === 0) {
+    return [entry];
+  }
+  const parent = { ...stack[stack.length - 1], focusChild };
+  return [...stack.slice(0, -1), parent, entry];
+}
+
+/**
+ * Loads the junk + equipment reference lists once and hosts a single shared
+ * detail modal, so any row (in either list, or inside the modal itself) can open
+ * the same detail view. Cross-links between junk and equipment build a
+ * navigation stack: following one pushes it on top, and a Back arrow returns to
+ * the previous view (rather than closing and reopening), so you can retrace e.g.
+ * equipment → junk → equipment. Closing the modal clears the whole stack.
  */
 export function DetailProvider({ children }: { children: React.ReactNode }) {
   const [equipment, setEquipment] = useState<EquipmentListItem[] | null>(null);
@@ -81,8 +112,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null);
 
-  const [equipmentDetail, setEquipmentDetail] = useState<EquipmentListItem | null>(null);
-  const [junkDetail, setJunkDetail] = useState<JunkListItem | null>(null);
+  const [detailStack, setDetailStack] = useState<DetailEntry[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -139,107 +169,139 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     return map;
   }, [equipment]);
 
+  const resolveEquipment = (name: string): EquipmentListItem => (
+    equipmentByName.get(name)
+    ?? { name, category: null, tier: null, maxDropQuality: null, maxDropGrade: null, sources: [] }
+  );
+  const resolveJunk = (name: string): JunkListItem => (
+    junkByName.get(name)
+    ?? { name, hasMultiplePools: false, maxDropQuality: null, maxDropGrade: null }
+  );
+
+  // Opening from a list starts a fresh stack; cross-links push onto it, tagging
+  // the parent with the clicked row so Back can restore focus. Back pops one
+  // level; closing the modal clears the stack entirely.
+  const pushEquipment = (item: EquipmentListItem) => setDetailStack((stack) => pushWithFocus(stack, { kind: 'equipment', item }, item.name));
+  const pushJunk = (name: string) => setDetailStack((stack) => pushWithFocus(stack, { kind: 'junk', item: resolveJunk(name) }, name));
+  const goBack = () => setDetailStack((stack) => stack.slice(0, -1));
+  const closeDetail = () => setDetailStack([]);
+
   const value = useMemo<DetailContextValue>(() => ({
     equipment,
     junks,
     dropsByJunk,
     status,
     maintenanceMessage,
-    openEquipment: (name) => setEquipmentDetail(equipmentByName.get(name) ?? { name, tier: null, maxDropQuality: null, maxDropGrade: null, sources: [] }),
-    openJunk: (name) => setJunkDetail(junkByName.get(name) ?? { name, hasMultiplePools: false, maxDropQuality: null, maxDropGrade: null }),
+    openEquipment: (name) => setDetailStack([{ kind: 'equipment', item: resolveEquipment(name) }]),
+    openJunk: (name) => setDetailStack([{ kind: 'junk', item: resolveJunk(name) }]),
   }), [equipment, junks, dropsByJunk, status, maintenanceMessage, equipmentByName, junkByName]);
 
-  const junkDrops = junkDetail ? dropsByJunk.get(junkDetail.name) ?? [] : [];
+  const current = detailStack.at(-1) ?? null;
+  const junkDrops = current?.kind === 'junk' ? dropsByJunk.get(current.item.name) ?? [] : [];
+
+  // On navigation (incl. Back), bring the row we came from into view. The ref is
+  // attached only to the row whose name matches the current entry's focusChild.
+  const focusChild = current?.focusChild ?? null;
+  const focusedRowRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!focusChild) {
+      return;
+    }
+    focusedRowRef.current?.scrollIntoView({ block: 'center' });
+  }, [detailStack, focusChild]);
 
   return (
     <DetailContext.Provider value={value}>
       {children}
 
-      {/* Equipment detail */}
       <Modal
-        opened={Boolean(equipmentDetail)}
-        onClose={() => setEquipmentDetail(null)}
-        title="Equipment details"
+        opened={detailStack.length > 0}
+        onClose={closeDetail}
         centered
         size="lg"
+        title={(
+          <Group gap="xs" wrap="nowrap">
+            {detailStack.length > 1 && (
+              <ActionIcon variant="subtle" color="gray" onClick={goBack} aria-label="Back">
+                <IconArrowLeft size={18} />
+              </ActionIcon>
+            )}
+            <Text fw={600}>
+              {current?.kind === 'junk' ? 'Junk details' : 'Equipment details'}
+            </Text>
+          </Group>
+        )}
       >
-        {equipmentDetail && (
+        {current?.kind === 'equipment' && (
           <Stack gap="sm">
             <Group gap="xs" wrap="nowrap">
               <CategoryIcon size={20} color="var(--mantine-color-dimmed)" />
-              <Text fw={600} fz="lg">{equipmentDetail.name}</Text>
+              <Text fw={600} fz="lg">{current.item.name}</Text>
             </Group>
             <Group gap="lg">
-              {equipmentDetail.tier && (
+              {current.item.tier && (
                 <Group gap={6}>
                   <Text c="dimmed" size="sm">Tier</Text>
-                  <Badge variant="light" color="gray" size="sm">{equipmentDetail.tier}</Badge>
+                  <Badge variant="light" color="gray" size="sm">{current.item.tier}</Badge>
                 </Group>
               )}
-              {equipmentDetail.maxDropQuality && (
+              {current.item.maxDropQuality && (
                 <Group gap={6}>
                   <Text c="dimmed" size="sm">Max</Text>
-                  <QualityStars value={equipmentDetail.maxDropQuality} />
+                  <QualityStars value={current.item.maxDropQuality} />
                 </Group>
               )}
-              {equipmentDetail.maxDropGrade && (
+              {current.item.maxDropGrade && (
                 <Group gap={6}>
                   <Text c="dimmed" size="sm">Grade</Text>
-                  <GradeBadge value={equipmentDetail.maxDropGrade} />
+                  <GradeBadge value={current.item.maxDropGrade} />
                 </Group>
               )}
             </Group>
-            <Divider label={`Drops from ${equipmentDetail.sources.length} junk${equipmentDetail.sources.length === 1 ? '' : 's'}`} />
-            {equipmentDetail.sources.length === 0 ? (
+            <Divider label={`Drops from ${current.item.sources.length} junk${current.item.sources.length === 1 ? '' : 's'}`} />
+            {current.item.sources.length === 0 ? (
               <Text c="dimmed" size="sm">No junk sources on record.</Text>
             ) : (
               <ScrollArea.Autosize mah={360}>
-                <Stack gap={2}>
-                  {equipmentDetail.sources.map((source) => (
+                <Box style={DETAIL_LIST_GRID}>
+                  {current.item.sources.map((source) => (
                     <UnstyledButton
                       key={source.junkName}
-                      className="wizda-row-hover"
-                      onClick={() => setJunkDetail(
-                        junkByName.get(source.junkName)
-                        ?? { name: source.junkName, hasMultiplePools: false, maxDropQuality: null, maxDropGrade: null },
-                      )}
+                      ref={focusChild === source.junkName ? focusedRowRef : undefined}
+                      className={focusChild === source.junkName ? 'wizda-row-hover wizda-row-focused' : 'wizda-row-hover'}
+                      onClick={() => pushJunk(source.junkName)}
                       p="xs"
-                      style={{ borderRadius: 'var(--mantine-radius-sm)' }}
+                      style={DETAIL_ROW_GRID}
                     >
-                      <Group justify="space-between" wrap="nowrap" gap="sm">
-                        <TruncatedText size="sm">{source.junkName}</TruncatedText>
-                        <IconChevronRight size={14} opacity={0.5} style={{ flexShrink: 0 }} />
-                      </Group>
+                      <TruncatedText size="sm" style={{ minWidth: 0 }}>{source.junkName}</TruncatedText>
+                      <Box style={{ justifySelf: 'start' }}>
+                        {source.maxDropQuality ? <QualityStars value={source.maxDropQuality} size={11} /> : null}
+                      </Box>
+                      <Box style={{ justifySelf: 'start' }}>
+                        {source.maxDropGrade ? <GradeBadge value={source.maxDropGrade} /> : null}
+                      </Box>
+                      {ROW_CHEVRON}
                     </UnstyledButton>
                   ))}
-                </Stack>
+                </Box>
               </ScrollArea.Autosize>
             )}
           </Stack>
         )}
-      </Modal>
 
-      {/* Junk detail */}
-      <Modal
-        opened={Boolean(junkDetail)}
-        onClose={() => setJunkDetail(null)}
-        title="Junk details"
-        centered
-        size="lg"
-      >
-        {junkDetail && (
+        {current?.kind === 'junk' && (
           <Stack gap="sm">
-            <Text fw={600} fz="lg">{junkDetail.name}</Text>
-            {junkDetail.hasMultiplePools && (
+            <Text fw={600} fz="lg">{current.item.name}</Text>
+            {current.item.hasMultiplePools && (
               <Alert color="yellow" variant="light" icon={<IconInfoCircle />}>
                 {MULTI_POOL_NOTE}
               </Alert>
             )}
-            {(junkDetail.maxDropQuality || junkDetail.maxDropGrade) && (
+            {(current.item.maxDropQuality || current.item.maxDropGrade) && (
               <Group gap="lg">
-                <Text c="dimmed" size="sm">Best it drops</Text>
-                {junkDetail.maxDropQuality && <QualityStars value={junkDetail.maxDropQuality} />}
-                {junkDetail.maxDropGrade && <GradeBadge value={junkDetail.maxDropGrade} />}
+                <Text c="dimmed" size="sm">At best it drops</Text>
+                {current.item.maxDropQuality && <QualityStars value={current.item.maxDropQuality} />}
+                {current.item.maxDropGrade && <GradeBadge value={current.item.maxDropGrade} />}
               </Group>
             )}
             <Divider label={`Drops ${junkDrops.length} piece${junkDrops.length === 1 ? '' : 's'} of gear`} />
@@ -247,28 +309,35 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
               <Text c="dimmed" size="sm">No droppable gear on record.</Text>
             ) : (
               <ScrollArea.Autosize mah={360}>
-                <Stack gap={2}>
-                  {junkDrops.map((piece) => (
-                    <UnstyledButton
-                      key={piece.name}
-                      className="wizda-row-hover"
-                      onClick={() => setEquipmentDetail(piece)}
-                      p="xs"
-                      style={{ borderRadius: 'var(--mantine-radius-sm)' }}
-                    >
-                      <Group justify="space-between" wrap="nowrap" gap="sm">
+                <Box style={DETAIL_LIST_GRID}>
+                  {junkDrops.map((piece) => {
+                    // Show what this piece drops at *from this junk*, not its
+                    // global best across every junk (piece.maxDrop*).
+                    const here = piece.sources.find((source) => source.junkName === current.item.name);
+                    return (
+                      <UnstyledButton
+                        key={piece.name}
+                        ref={focusChild === piece.name ? focusedRowRef : undefined}
+                        className={focusChild === piece.name ? 'wizda-row-hover wizda-row-focused' : 'wizda-row-hover'}
+                        onClick={() => pushEquipment(piece)}
+                        p="xs"
+                        style={DETAIL_ROW_GRID}
+                      >
                         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
                           <CategoryIcon size={14} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
-                          <TruncatedText size="sm">{piece.name}</TruncatedText>
+                          <TruncatedText size="sm" style={{ minWidth: 0 }}>{piece.name}</TruncatedText>
                         </Group>
-                        <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
-                          {piece.maxDropQuality && <QualityStars value={piece.maxDropQuality} size={11} />}
-                          {piece.maxDropGrade && <GradeBadge value={piece.maxDropGrade} />}
-                        </Group>
-                      </Group>
-                    </UnstyledButton>
-                  ))}
-                </Stack>
+                        <Box style={{ justifySelf: 'start' }}>
+                          {here?.maxDropQuality ? <QualityStars value={here.maxDropQuality} size={11} /> : null}
+                        </Box>
+                        <Box style={{ justifySelf: 'start' }}>
+                          {here?.maxDropGrade ? <GradeBadge value={here.maxDropGrade} /> : null}
+                        </Box>
+                        {ROW_CHEVRON}
+                      </UnstyledButton>
+                    );
+                  })}
+                </Box>
               </ScrollArea.Autosize>
             )}
           </Stack>
