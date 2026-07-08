@@ -9,6 +9,7 @@ import {
 import {
   Box,
   Center,
+  CloseButton,
   Group,
   Text,
   TextInput,
@@ -21,6 +22,8 @@ import {
   IconSortDescending,
 } from '@tabler/icons-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+
+import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
 
 export interface Column<T> {
   key: string,
@@ -74,6 +77,7 @@ export function DataTable<T>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { ref: searchRef, selectOnFocus: selectSearch } = useSelectOnFocus<HTMLInputElement>();
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -161,10 +165,19 @@ export function DataTable<T>({
     <div>
       <Group justify="space-between" mb="sm" gap="sm" wrap="wrap">
         <TextInput
+          ref={searchRef}
           leftSection={<IconSearch size={16} />}
+          rightSection={query && (
+            <CloseButton
+              size="sm"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => setQuery('')}
+            />
+          )}
           placeholder={searchPlaceholder}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
+          onFocus={selectSearch}
           w={{ base: '100%', xs: 260 }}
         />
         {toolbar}

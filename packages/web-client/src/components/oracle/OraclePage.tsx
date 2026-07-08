@@ -7,7 +7,7 @@ import { GRADE_HEX, QualityStars } from '@/components/gear/gearDisplays';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import {
-    Alert, Button, ColorSwatch, Grid, Group, Modal, Paper, Stack, Text, Title
+    Alert, Button, ColorSwatch, Grid, Group, Modal, Paper, Stack, Text, Title, Tooltip
 } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
@@ -21,8 +21,8 @@ import { EquipmentSelect } from './EquipmentSelect';
 import { FilterField } from './FilterField';
 import { LevelToggleGroup } from './LevelToggleGroup';
 import {
-    allowedGrades, allowedQualities, EMPTY_FILTERS, FILTER_DESCRIPTIONS, FILTERS_STORAGE_KEY,
-    gradeName, hasAnyFilter, joinHuman, OracleFilters, qualityLabel
+    activeFilters, allowedGrades, allowedQualities, EMPTY_FILTERS, FILTER_DESCRIPTIONS,
+    FILTERS_STORAGE_KEY, gradeName, hasAnyFilter, joinHuman, OracleFilters, qualityLabel
 } from './oracle.logic';
 import { ResultsPanel } from './ResultsPanel';
 
@@ -69,6 +69,27 @@ export function OraclePage() {
   // Scroll the results into view after a fresh calculation (not on "show more").
   const resultsRef = useRef<HTMLDivElement>(null);
   const pendingScrollRef = useRef(false);
+
+  // Side-by-side (Grid `md`+) only: cap the results panel to whatever vertical
+  // space is left below it so a tall row list can't push the page past the
+  // viewport and spawn a page-level scrollbar — the list scrolls internally
+  // instead. Left untouched (undefined) on the stacked mobile layout, where the
+  // page growing to fit the list is the existing, intentional behaviour.
+  const [resultsMaxHeight, setResultsMaxHeight] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const recompute = () => {
+      const isSideBySide = window.matchMedia('(min-width: 62em)').matches;
+      if (!resultsRef.current || !isSideBySide) {
+        setResultsMaxHeight(undefined);
+        return;
+      }
+      const top = resultsRef.current.getBoundingClientRect().top;
+      setResultsMaxHeight(Math.max(200, window.innerHeight - top - 24));
+    };
+    recompute();
+    window.addEventListener('resize', recompute);
+    return () => window.removeEventListener('resize', recompute);
+  }, [result, loading]);
 
   const patch = useCallback((change: Partial<OracleFilters>) => {
     setFilters((current) => ({ ...current, ...change }));
@@ -208,12 +229,18 @@ export function OraclePage() {
   const gradeOptions = GRADES.map((grade) => ({
     value: grade.value,
     disabled: !allowedGrade.has(grade.value),
+    // Circle only — the colour already conveys the grade, and the name is just
+    // filler that overflows the narrow chips. Kept as a tooltip / aria-label so
+    // the name stays discoverable on hover and to screen readers.
     label: (
-      <Group gap={6} wrap="nowrap" justify="center">
-        <ColorSwatch color={GRADE_HEX[grade.value]} size={12} withShadow={false} />
-        {/* On mobile the coloured swatch stands alone; the name shows from xs up. */}
-        <Text component="span" visibleFrom="xs">{grade.name}</Text>
-      </Group>
+      <Tooltip label={grade.name} withArrow openDelay={300}>
+        <ColorSwatch
+          color={GRADE_HEX[grade.value]}
+          size={16}
+          withShadow={false}
+          aria-label={grade.name}
+        />
+      </Tooltip>
     ),
   }));
 
@@ -224,14 +251,22 @@ export function OraclePage() {
   }));
 
   const buildQuery = (offset: number): JunkToGuaranteeQuery => ({
-    ...(filters.equipment.length ? { equipment: filters.equipment } : {}),
-    ...(filters.quality.length ? { quality: filters.quality } : {}),
-    ...(filters.grade.length ? { grade: filters.grade } : {}),
-    ...(filters.blessings.length ? { blessings: filters.blessings } : {}),
+    ...activeFilters(filters),
     certainty: filters.certaintyPct / 100,
     limit: DEFAULT_GUARANTEE_LIMIT,
     offset,
   });
+
+  // Per-junk certainty curve for the results detail modal — same filters as the
+  // guarantee query so the pool matches, across the caller's certainty window.
+  const requestCurve = useCallback(
+    (junkName: string, certainties: number[]) => api.certaintyCurve({
+      ...activeFilters(filters),
+      junkName,
+      certainties,
+    }),
+    [filters],
+  );
 
   const handleApiError = (error: unknown) => {
     if (error instanceof MaintenanceError) {
@@ -383,12 +418,25 @@ export function OraclePage() {
         <Grid.Col span={{ base: 12, md: 7 }}>
           <div ref={resultsRef} style={{ scrollMarginTop: 12 }}>
             {result || loading ? (
-              <Paper withBorder p="lg" radius="md">
+              <Paper
+                withBorder
+                p="lg"
+                radius="md"
+                style={resultsMaxHeight ? {
+                  maxHeight: resultsMaxHeight,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                } : undefined}
+              >
                 <ResultsPanel
                   result={result}
                   loading={loading}
                   loadingMore={loadingMore}
                   onShowMore={showMore}
+                  certaintyPct={filters.certaintyPct}
+                  onRequestCurve={requestCurve}
+                  fillHeight={Boolean(resultsMaxHeight)}
                 />
               </Paper>
             ) : (

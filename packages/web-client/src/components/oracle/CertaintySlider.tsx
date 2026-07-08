@@ -8,6 +8,7 @@ import {
 
 import { Group, NumberInput, Slider } from '@mantine/core';
 
+import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 
 import { MAX_CERTAINTY_PCT, MIN_CERTAINTY_PCT } from './oracle.logic';
@@ -30,10 +31,17 @@ export function CertaintySlider({ value, onChange }: CertaintySliderProps) {
   const [animate, setAnimate] = useState(false);
   const commitTimer = useRef<number | undefined>(undefined);
   const animateTimer = useRef<number | undefined>(undefined);
+  // Whether we're currently pinned at the cap. A ref (not `local`) so the
+  // "just reached max" check is synchronous — otherwise a burst of drag events
+  // firing before React commits `setLocal` all read the stale value and each
+  // pops its own Agora toast (see `handle`).
+  const atMaxRef = useRef(value >= MAX_CERTAINTY_PCT);
+  const { ref: numberRef, selectOnFocus: selectNumber } = useSelectOnFocus<HTMLInputElement>();
 
   // Reflect external changes (e.g. filters restored from storage).
   useEffect(() => {
     setLocal(value);
+    atMaxRef.current = value >= MAX_CERTAINTY_PCT;
   }, [value]);
 
   useEffect(() => () => {
@@ -45,9 +53,13 @@ export function CertaintySlider({ value, onChange }: CertaintySliderProps) {
   // the 99.99% cap. Cranking all the way up earns Wizda's reality check.
   const handle = (next: number, glide: boolean) => {
     const clamped = Math.min(Math.max(next, MIN_CERTAINTY_PCT), MAX_CERTAINTY_PCT);
-    if (clamped >= MAX_CERTAINTY_PCT && local < MAX_CERTAINTY_PCT) {
+    const atMax = clamped >= MAX_CERTAINTY_PCT;
+    // Only greet the *transition* into the cap, once — the ref flips
+    // synchronously so repeat calls in the same drag can't fire again.
+    if (atMax && !atMaxRef.current) {
       wizdaSay(AGORA_LINE, { emoji: WizdaEmoji.info });
     }
+    atMaxRef.current = atMax;
     setLocal(clamped);
 
     if (glide) {
@@ -76,9 +88,11 @@ export function CertaintySlider({ value, onChange }: CertaintySliderProps) {
         styles={{ thumb: { transition }, bar: { transition } }}
       />
       <NumberInput
+        ref={numberRef}
         w={116}
         value={local}
         onChange={(numberValue) => handle(Number(numberValue) || MIN_CERTAINTY_PCT, true)}
+        onFocus={selectNumber}
         min={MIN_CERTAINTY_PCT}
         max={MAX_CERTAINTY_PCT}
         step={1}

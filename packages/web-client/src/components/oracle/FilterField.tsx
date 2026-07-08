@@ -11,6 +11,8 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { IconInfoCircle } from '@tabler/icons-react';
 
+import { WizdaEmoji } from '@/mascot/wizda';
+
 interface FilterFieldProps {
   label: string,
   /** Plain-language explanation shown in the info (ⓘ) modal. */
@@ -80,7 +82,7 @@ export function FilterField({
         size="md"
         centered
       >
-        <Text className="wizda-speech">{description}</Text>
+        <Text className="wizda-speech">{WizdaEmoji.info} {description}</Text>
       </Modal>
     </Input.Wrapper>
   );

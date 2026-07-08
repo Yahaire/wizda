@@ -1,3 +1,4 @@
+import type { GuaranteeFilters } from '@shared/api/endpoints/junkToGuarantee.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 import { GRADES } from '@shared/domain/grade';
 import { QUALITIES } from '@shared/domain/quality';
@@ -57,6 +58,49 @@ export interface OracleFilters {
 export const DEFAULT_CERTAINTY_PCT = 90;
 export const MAX_CERTAINTY_PCT = 99.99;
 export const MIN_CERTAINTY_PCT = 1;
+
+/** How far above/below the selected certainty the detail curve reaches (points). */
+export const CERTAINTY_STEP = 5;
+
+/**
+ * Three certainty levels to chart around the selected one: a step below, the
+ * selection, and a step above. When a neighbour would fall outside
+ * [{@link MIN_CERTAINTY_PCT}, {@link MAX_CERTAINTY_PCT}], the whole window slides
+ * inward so we still show three distinct, in-range levels with the selection at
+ * the edge — e.g. at the 1% floor we show 1 / 6 / 11, and at the 99.99% cap we
+ * show 89.99 / 94.99 / 99.99. Returned ascending.
+ */
+export function certaintyWindow(selectedPct: number): number[] {
+  const step = CERTAINTY_STEP;
+  if (selectedPct - step < MIN_CERTAINTY_PCT) {
+    // No room below — slide the window up so the selection is the floor.
+    return [selectedPct, selectedPct + step, selectedPct + step * 2];
+  }
+  if (selectedPct + step > MAX_CERTAINTY_PCT) {
+    // No room above — slide the window down so the selection is the ceiling.
+    return [selectedPct - step * 2, selectedPct - step, selectedPct];
+  }
+  return [selectedPct - step, selectedPct, selectedPct + step];
+}
+
+/** A certainty percent as a compact label: "85%", "94.99%" (no trailing zeros). */
+export function formatCertaintyPct(pct: number): string {
+  return `${Number(pct.toFixed(2))}%`;
+}
+
+/**
+ * The active accepted-outcome filters as an API {@link GuaranteeFilters} object,
+ * omitting every empty axis (a wildcard). Shared by the guarantee query and the
+ * certainty-curve query so they always constrain the junk pool identically.
+ */
+export function activeFilters(filters: OracleFilters): GuaranteeFilters {
+  return {
+    ...(filters.equipment.length ? { equipment: filters.equipment } : {}),
+    ...(filters.quality.length ? { quality: filters.quality } : {}),
+    ...(filters.grade.length ? { grade: filters.grade } : {}),
+    ...(filters.blessings.length ? { blessings: filters.blessings } : {}),
+  };
+}
 
 export const EMPTY_FILTERS: OracleFilters = {
   equipment: [],

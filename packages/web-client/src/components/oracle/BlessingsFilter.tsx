@@ -14,6 +14,8 @@ import { IconSparkles } from '@tabler/icons-react';
 
 import { BLESSINGS } from '@shared/domain/stats';
 
+import { WizdaEmoji } from '@/mascot/wizda';
+
 import {
   blessingLabel,
   MAX_BLESSINGS,
@@ -73,11 +75,14 @@ export function BlessingsFilter({ value, onChange }: BlessingsFilterProps) {
         centered
       >
         <Text className="wizda-speech" size="sm" mb="sm">
-          Pick every blessing the item must carry — I&apos;ll only count pieces that
-          have all of them.
+          {WizdaEmoji.info} Pick every blessing the item must carry — I&apos;ll only count
+          pieces that have all of them.
         </Text>
         <Chip.Group multiple value={value} onChange={toggle}>
-          <SimpleGrid cols={{ base: 3, xs: 4 }} spacing="xs" verticalSpacing="xs">
+          {/* 2 columns on mobile, 4 from xs up. Each chip fills its cell with a
+              centred label so the wider codes (MDEF%, ASPD%) line up with the
+              rest instead of sizing to their own text. */}
+          <SimpleGrid cols={{ base: 2, xs: 4 }} spacing="xs" verticalSpacing="xs">
             {BLESSINGS.map((blessing) => (
               <Chip
                 key={blessing.code}
@@ -86,7 +91,11 @@ export function BlessingsFilter({ value, onChange }: BlessingsFilterProps) {
                 variant="outline"
                 size="sm"
                 disabled={atCap && !value.includes(blessing.code)}
-                styles={{ iconWrapper: { display: 'none' } }}
+                styles={{
+                  root: { width: '100%' },
+                  label: { width: '100%', justifyContent: 'center', paddingInline: 4 },
+                  iconWrapper: { display: 'none' },
+                }}
               >
                 {blessingLabel(blessing.code)}
               </Chip>

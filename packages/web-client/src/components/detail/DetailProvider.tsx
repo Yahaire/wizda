@@ -57,8 +57,8 @@ interface DetailContextValue {
   dropsByJunk: Map<string, EquipmentListItem[]>,
   status: LoadStatus,
   maintenanceMessage: string | null,
-  openEquipment: (name: string) => void,
-  openJunk: (name: string) => void,
+  openEquipment: (name: string, backable?: boolean) => void,
+  openJunk: (name: string, backable?: boolean) => void,
 }
 
 const DetailContext = createContext<DetailContextValue | null>(null);
@@ -113,6 +113,11 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null);
 
   const [detailStack, setDetailStack] = useState<DetailEntry[]>([]);
+
+  // True when the modal was opened from a view that stays mounted behind it (the
+  // per-result summary), so the root-level Back arrow closes this modal to reveal
+  // that view — rather than there being nothing to go back to (a list-table open).
+  const [rootBackable, setRootBackable] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -184,7 +189,10 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   const pushEquipment = (item: EquipmentListItem) => setDetailStack((stack) => pushWithFocus(stack, { kind: 'equipment', item }, item.name));
   const pushJunk = (name: string) => setDetailStack((stack) => pushWithFocus(stack, { kind: 'junk', item: resolveJunk(name) }, name));
   const goBack = () => setDetailStack((stack) => stack.slice(0, -1));
-  const closeDetail = () => setDetailStack([]);
+  const closeDetail = () => {
+    setDetailStack([]);
+    setRootBackable(false);
+  };
 
   const value = useMemo<DetailContextValue>(() => ({
     equipment,
@@ -192,12 +200,30 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     dropsByJunk,
     status,
     maintenanceMessage,
-    openEquipment: (name) => setDetailStack([{ kind: 'equipment', item: resolveEquipment(name) }]),
-    openJunk: (name) => setDetailStack([{ kind: 'junk', item: resolveJunk(name) }]),
+    openEquipment: (name, backable = false) => {
+      setDetailStack([{ kind: 'equipment', item: resolveEquipment(name) }]);
+      setRootBackable(backable);
+    },
+    openJunk: (name, backable = false) => {
+      setDetailStack([{ kind: 'junk', item: resolveJunk(name) }]);
+      setRootBackable(backable);
+    },
   }), [equipment, junks, dropsByJunk, status, maintenanceMessage, equipmentByName, junkByName]);
 
   const current = detailStack.at(-1) ?? null;
   const junkDrops = current?.kind === 'junk' ? dropsByJunk.get(current.item.name) ?? [] : [];
+
+  // The Back arrow retraces a cross-link when we're deep in the stack, or — at the
+  // root — closes back to the view still mounted behind us (e.g. the per-result
+  // summary). It stays hidden for a root opened straight from a list table.
+  const showBack = detailStack.length > 1 || rootBackable;
+  const goBackOrClose = () => {
+    if (detailStack.length > 1) {
+      goBack();
+      return;
+    }
+    closeDetail();
+  };
 
   // On navigation (incl. Back), bring the row we came from into view. The ref is
   // attached only to the row whose name matches the current entry's focusChild.
@@ -219,10 +245,13 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
         onClose={closeDetail}
         centered
         size="lg"
+        // Sits above any modal that opened it (e.g. the per-result summary, which
+        // stays mounted behind at Mantine's default z-index of 200).
+        zIndex={300}
         title={(
           <Group gap="xs" wrap="nowrap">
-            {detailStack.length > 1 && (
-              <ActionIcon variant="subtle" color="gray" onClick={goBack} aria-label="Back">
+            {showBack && (
+              <ActionIcon variant="subtle" color="gray" onClick={goBackOrClose} aria-label="Back">
                 <IconArrowLeft size={18} />
               </ActionIcon>
             )}

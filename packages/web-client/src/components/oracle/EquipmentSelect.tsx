@@ -9,6 +9,7 @@ import {
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 
 import { CategoryIcon } from '@/components/CategoryIcon';
+import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
 
 interface EquipmentSelectProps {
   data: EquipmentListItem[],
@@ -36,13 +37,19 @@ export function EquipmentSelect({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
   const [search, setSearch] = useState('');
+  const { ref: searchRef, selectOnFocus: selectSearch } = useSelectOnFocus<HTMLInputElement>();
 
   const selected = new Set(value);
 
   const toggle = (name: string) => {
     onChange(selected.has(name) ? value.filter((entry) => entry !== name) : [...value, name]);
+    // Re-select the search so keyboard users can immediately type their next query.
+    selectSearch();
   };
-  const remove = (name: string) => onChange(value.filter((entry) => entry !== name));
+  const remove = (name: string) => {
+    onChange(value.filter((entry) => entry !== name));
+    selectSearch();
+  };
 
   const terms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const matches = data
@@ -95,10 +102,16 @@ export function EquipmentSelect({
             {pills}
             <Combobox.EventsTarget>
               <PillsInput.Field
+                ref={searchRef}
                 value={search}
                 placeholder={value.length ? 'Add more gear…' : 'Search equipment'}
                 disabled={disabled}
-                onFocus={() => combobox.openDropdown()}
+                onFocus={() => {
+                  combobox.openDropdown();
+                  // Select on focus-transition (not every click) so re-clicks can
+                  // still position the caret and never clobber a manual selection.
+                  selectSearch();
+                }}
                 onBlur={() => combobox.closeDropdown()}
                 onChange={(event) => {
                   combobox.openDropdown();
