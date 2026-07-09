@@ -1,7 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 
-import { Prisma } from '@local-prisma/generated/client';
+import { EquipmentTierKind, Prisma } from '@local-prisma/generated/client';
 
 import { trackGuaranteeQuery } from '@app/analytics';
 import { sendErrorResponse } from '@app/http';
@@ -24,7 +24,11 @@ import {
     matchProbabilityForJunk,
     MatchQuery,
 } from '@shared/domain/dropRateMath';
+import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
 import { BLESSINGS } from '@shared/domain/stats';
+import { EQUIPMENT_TIERS } from '@shared/domain/tier';
+
+import { buildMatchedOutcome, MatchedCandidate } from './matchedOutcome';
 
 /** A quality/grade level: an integer star/grade in 1–5. */
 const levelSchema = z.number().int().min(1).max(5);
@@ -35,10 +39,15 @@ const filterShape = {
   quality: z.array(levelSchema).optional(),
   grade: z.array(levelSchema).optional(),
   blessings: z.array(z.string().min(1)).optional(),
+  tier: z.array(z.string().min(1)).optional(),
+  category: z.array(z.string().min(1)).optional(),
 };
 
 /** Valid blessing codes, from the shared catalog — the public key for the AND filter. */
 const validBlessingCodes = new Set(BLESSINGS.map((blessing) => blessing.code));
+/** Valid tier kinds / category codes, from the shared catalogs (OR-filter public keys). */
+const validTierKinds = new Set<string>(EQUIPMENT_TIERS.map((tier) => tier.kind));
+const validCategoryCodes = new Set<string>(EQUIPMENT_CATEGORIES.map((category) => category.code));
 
 /**
  * A grade-presence vector that excludes an equipment at every grade. Used as the
@@ -65,13 +74,17 @@ function hasAnyFilter(
     quality?: number[] | undefined,
     grade?: number[] | undefined,
     blessings?: string[] | undefined,
+    tier?: string[] | undefined,
+    category?: string[] | undefined,
   },
 ): boolean {
   return Boolean(
     filters.equipment?.length
     || filters.quality?.length
     || filters.grade?.length
-    || filters.blessings?.length,
+    || filters.blessings?.length
+    || filters.tier?.length
+    || filters.category?.length,
   );
 }
 
@@ -119,6 +132,17 @@ export const dropRateRowSelect = {
 type DropRateRowWithJunk = Prisma.EquipmentDropRateGetPayload<{ select: typeof dropRateRowSelect }>;
 
 /**
+ * {@link dropRateRowSelect} plus the row's equipment identity, for the curve
+ * handler's {@link MatchedOutcome} assembly. Only that handler pays for the join:
+ * it reads one junk's rows, whereas the guarantee handler scans every junk's and
+ * has to stay lean.
+ */
+export const curveRowSelect = {
+  ...dropRateRowSelect,
+  equipment: { select: { name: true, tier: true, categoryCode: true } },
+} satisfies Prisma.EquipmentDropRateSelect;
+
+/**
  * Flatten a Prisma drop-rate row into the pure-math {@link DropRateRow} shape.
  * `gradePresence` (the row equipment's per-grade blessing-presence vector) is
  * attached only for blessing queries — omitted otherwise (respects
@@ -149,40 +173,93 @@ export function toDropRateRow(
   };
 }
 
+
 /**
- * Resolve equipment names to ids, failing loud (400) on any unknown name — the
- * client picks these from a select, so an unknown name means a stale client, not
- * a typo to tolerate. Returns `undefined` when no equipment filter was given
- * ("any equipment"). Sends the error response itself and returns `null` on
- * failure, so the caller just returns.
+ * Resolve the accepted-equipment id set from the equipment-name, tier, and
+ * category axes, ANDed together (an item must satisfy every axis that's set).
+ * Fails loud (400) on any unknown equipment name, tier kind, or category code —
+ * all are picked from selects, so an unknown value means a stale client, not a
+ * typo to tolerate.
+ *
+ * Returns `undefined` when none of the three axes is set ("any equipment"); an
+ * empty array when the axes are valid but nothing matches (a legitimate zero-
+ * result query, e.g. a category with no items at the chosen tier). Sends the
+ * error response itself and returns `null` on failure, so the caller just returns.
  */
-async function resolveEquipmentIds(
+async function resolveCandidateEquipmentIds(
   res: express.Response,
-  equipment: string[] | undefined,
+  filters: {
+    equipment?: string[] | undefined,
+    tier?: string[] | undefined,
+    category?: string[] | undefined,
+  },
 ): Promise<string[] | undefined | null> {
-  if (!equipment || equipment.length === 0) {
-    return undefined;
+  const names = filters.equipment?.length ? [...new Set(filters.equipment)] : undefined;
+  const tiers = filters.tier?.length ? [...new Set(filters.tier)] : undefined;
+  const codes = filters.category?.length ? [...new Set(filters.category)] : undefined;
+
+  if (tiers) {
+    const unknown = tiers.filter((kind) => !validTierKinds.has(kind));
+    if (unknown.length > 0) {
+      sendErrorResponse(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        ErrorCode.UNKNOWN_TIER,
+        `Unknown tier kind(s): ${unknown.join(', ')}`,
+      );
+      return null;
+    }
   }
 
-  const names = [...new Set(equipment)];
-  const found = await getPrisma().equipment.findMany({
-    where: { name: { in: names } },
-    select: { id: true, name: true },
-  });
-
-  if (found.length < names.length) {
-    const foundNames = new Set(found.map((row) => row.name));
-    const missing = names.filter((name) => !foundNames.has(name));
-    sendErrorResponse(
-      res,
-      HttpStatusCode.BAD_REQUEST,
-      ErrorCode.UNKNOWN_EQUIPMENT,
-      `Unknown equipment name(s): ${missing.join(', ')}`,
-    );
-    return null;
+  if (codes) {
+    const unknown = codes.filter((code) => !validCategoryCodes.has(code));
+    if (unknown.length > 0) {
+      sendErrorResponse(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        ErrorCode.UNKNOWN_CATEGORY,
+        `Unknown category code(s): ${unknown.join(', ')}`,
+      );
+      return null;
+    }
   }
 
-  return found.map((row) => row.id);
+  if (!names && !tiers && !codes) {
+    return undefined; // any equipment
+  }
+
+  // Validate equipment names on their own (not narrowed by tier/category), so a
+  // real name excluded by another axis isn't mistaken for an unknown name.
+  if (names) {
+    const found = await getPrisma().equipment.findMany({
+      where: { name: { in: names } },
+      select: { name: true },
+    });
+    if (found.length < names.length) {
+      const known = new Set(found.map((row) => row.name));
+      const missing = names.filter((name) => !known.has(name));
+      sendErrorResponse(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        ErrorCode.UNKNOWN_EQUIPMENT,
+        `Unknown equipment name(s): ${missing.join(', ')}`,
+      );
+      return null;
+    }
+  }
+
+  const where: Prisma.EquipmentWhereInput = {};
+  if (names) {
+    where.name = { in: names };
+  }
+  if (tiers) {
+    where.tier = { in: tiers as EquipmentTierKind[] };
+  }
+  if (codes) {
+    where.categoryCode = { in: codes };
+  }
+  const candidates = await getPrisma().equipment.findMany({ where, select: { id: true } });
+  return candidates.map((row) => row.id);
 }
 
 /**
@@ -279,19 +356,29 @@ async function handleJunkToGuarantee(
     return;
   }
 
-  const { certainty = DEFAULT_CERTAINTY, limit, offset, equipment, quality, grade, blessings } = parsed.data;
+  const {
+    certainty = DEFAULT_CERTAINTY,
+    limit,
+    offset,
+    equipment,
+    quality,
+    grade,
+    blessings,
+    tier,
+    category,
+  } = parsed.data;
 
-  if (!hasAnyFilter({ equipment, quality, grade, blessings })) {
+  if (!hasAnyFilter({ equipment, quality, grade, blessings, tier, category })) {
     sendErrorResponse(
       res,
       HttpStatusCode.BAD_REQUEST,
       ErrorCode.NO_QUERY,
-      'Pick at least one filter (equipment, quality, grade, or blessing).',
+      'Pick at least one filter (equipment, quality, grade, blessing, tier, or category).',
     );
     return;
   }
 
-  const equipmentIds = await resolveEquipmentIds(res, equipment);
+  const equipmentIds = await resolveCandidateEquipmentIds(res, { equipment, tier, category });
   if (equipmentIds === null) {
     return; // response already sent
   }
@@ -399,7 +486,7 @@ async function handleCertaintyCurve(
     return;
   }
 
-  const { junkName, certainties, equipment, quality, grade, blessings } = parsed.data;
+  const { junkName, certainties, equipment, quality, grade, blessings, tier, category } = parsed.data;
 
   // The junk is addressed by name — a missing one is a 404 (unlike the equipment
   // filter's 400, this is the single target resource, not a filter value).
@@ -417,7 +504,7 @@ async function handleCertaintyCurve(
     return;
   }
 
-  const equipmentIds = await resolveEquipmentIds(res, equipment);
+  const equipmentIds = await resolveCandidateEquipmentIds(res, { equipment, tier, category });
   if (equipmentIds === null) {
     return; // response already sent
   }
@@ -433,7 +520,7 @@ async function handleCertaintyCurve(
       junkId: junk.id,
       ...(equipmentIds ? { equipmentId: { in: equipmentIds } } : {}),
     },
-    select: dropRateRowSelect,
+    select: curveRowSelect,
   });
 
   const presenceByEquipment = hasBlessings
@@ -443,15 +530,33 @@ async function handleCertaintyCurve(
       )
     : null;
 
-  const mathRows = rows.map((row) => toDropRateRow(
-    row,
-    presenceByEquipment
-      ? (presenceByEquipment.get(row.equipmentId) ?? NO_BLESSING_PRESENCE)
-      : undefined,
-  ));
+  // Grouped by equipment so `buildMatchedOutcome` can ask which pieces actually
+  // contribute; the curve itself sums over the same rows, flattened.
+  const candidatesById = new Map<string, MatchedCandidate>();
+  for (const row of rows) {
+    let candidate = candidatesById.get(row.equipmentId);
+    if (!candidate) {
+      candidate = {
+        name: row.equipment.name,
+        tier: row.equipment.tier,
+        categoryCode: row.equipment.categoryCode,
+        rows: [],
+      };
+      candidatesById.set(row.equipmentId, candidate);
+    }
+    candidate.rows.push(toDropRateRow(
+      row,
+      presenceByEquipment
+        ? (presenceByEquipment.get(row.equipmentId) ?? NO_BLESSING_PRESENCE)
+        : undefined,
+    ));
+  }
+  const candidates = [...candidatesById.values()];
+  const mathRows = candidates.flatMap((candidate) => candidate.rows);
 
   const matchQuery = toMatchQuery({ quality, grade });
   const probabilityPerJunk = matchProbabilityForJunk(mathRows, matchQuery);
+  const matched = buildMatchedOutcome(candidates, matchQuery, { equipment, tier, category });
 
   const points: CertaintyCurvePoint[] = certainties.map((certainty) => ({
     certainty,
@@ -463,6 +568,7 @@ async function handleCertaintyCurve(
     probabilityPerJunk,
     ...(hasBlessings ? { estimated: true, estimatedNote: BLESSING_ESTIMATE_NOTE } : {}),
     points,
+    matched,
   };
   res.status(HttpStatusCode.OK).json(body);
 }

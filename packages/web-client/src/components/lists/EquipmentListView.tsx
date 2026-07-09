@@ -1,45 +1,34 @@
 'use client';
 
-import {
-  useMemo,
-  useState,
-} from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import {
-  Alert,
-  Badge,
-  Center,
-  Group,
-  Loader,
-  Select,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core';
+import { CategoryIcon } from '@/components/CategoryIcon';
+import { DetailProvider, useDetail } from '@/components/detail/DetailProvider';
+import { getTierColor, GradeBadge, QualityStars, TierBadge } from '@/components/gear/gearDisplays';
+import { Column, DataTable } from '@/components/table/DataTable';
+import { TruncatedText } from '@/components/TruncatedText';
+import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
+import { Alert, Center, Group, Loader, Select, Stack, Text, Title } from '@mantine/core';
+import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
+import { EQUIPMENT_TIERS } from '@shared/domain/tier';
+import { TsUtilities } from '@shared/tsUtilities';
 import { IconInfoCircle } from '@tabler/icons-react';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
-import { EQUIPMENT_TIERS } from '@shared/domain/tier';
-
-import {
-  Column,
-  DataTable,
-} from '@/components/table/DataTable';
-import {
-  DetailProvider,
-  useDetail,
-} from '@/components/detail/DetailProvider';
-import { CategoryIcon } from '@/components/CategoryIcon';
-import { TruncatedText } from '@/components/TruncatedText';
-import {
-  GradeBadge,
-  QualityStars,
-} from '@/components/gear/gearDisplays';
-
 const TIER_OPTIONS = [
   { value: '', label: 'All tiers' },
-  ...EQUIPMENT_TIERS.map((tier) => ({ value: tier.kind as string, label: tier.name })),
+  ...[...EQUIPMENT_TIERS]
+    .sort((left, right) => left.orderIndex - right.orderIndex)
+    .map((tier) => ({ value: tier.kind as string, label: tier.name })),
 ];
+
+/** Category code → its equipment type, so the row icon can reflect the type. */
+const EQUIPMENT_TYPE_BY_CATEGORY = new Map(
+  EQUIPMENT_CATEGORIES.map((category) => [category.code, category.equipmentType]),
+);
+
+/** Tier kind → strength order, for sorting the Tier column meaningfully. */
+const TIER_ORDER = new Map(EQUIPMENT_TIERS.map((tier) => [tier.kind as string, tier.orderIndex]));
 
 const columns: Column<EquipmentListItem>[] = [
   {
@@ -50,8 +39,12 @@ const columns: Column<EquipmentListItem>[] = [
     sortValue: (row) => row.name.toLowerCase(),
     render: (row) => (
       <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-        {/* Neutral placeholder until the item→category mapping is seeded. */}
-        <CategoryIcon size={16} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
+        <CategoryIcon
+          size={16}
+          equipmentType={row.category ? EQUIPMENT_TYPE_BY_CATEGORY.get(row.category.code) ?? null : null}
+          color={getTierColor(row.tier) ?? 'var(--mantine-color-dimmed)'}
+          style={{ flexShrink: 0 }}
+        />
         <TruncatedText>{row.name}</TruncatedText>
       </Group>
     ),
@@ -61,8 +54,6 @@ const columns: Column<EquipmentListItem>[] = [
     header: 'Category',
     width: '1.4fr',
     minWidth: 130,
-    // Backend doesn't map categories yet, so this renders "—" for every row for
-    // now; it sorts/displays the category name as soon as the mapping is seeded.
     sortValue: (row) => row.category?.name ?? '',
     render: (row) => (row.category
       ? <TruncatedText>{row.category.name}</TruncatedText>
@@ -73,9 +64,11 @@ const columns: Column<EquipmentListItem>[] = [
     header: 'Tier',
     width: '1fr',
     minWidth: 110,
-    sortValue: (row) => row.tier ?? '',
+    // Sort by the tier's strength order, not the enum string, so it reads
+    // Worn → Silver rather than alphabetically.
+    sortValue: (row) => TIER_ORDER.get(row.tier ?? '') ?? -1,
     render: (row) => (row.tier
-      ? <Badge variant="light" color="gray" size="sm">{row.tier}</Badge>
+      ? <TierBadge kind={row.tier} />
       : <Text c="dimmed">—</Text>),
   },
   {
@@ -119,6 +112,24 @@ function EquipmentListContent() {
   } = useDetail();
   const [tier, setTier] = useState<string>('');
 
+  useEffect(() => {
+    const visited = localStorage.getItem('equipment-list-visited');
+    if (!visited) {
+      wizdaSay(
+        TsUtilities.stringJoin([
+          'Special thanks to NRJank and the Fasterthoughts team for compiling and maintaining',
+          'the gear lists — your work makes this possible!',
+        ]),
+        
+        {
+          emoji: WizdaEmoji.welcome,
+          autoClose: 12000,
+        }
+      );
+      localStorage.setItem('equipment-list-visited', 'true');
+    }
+  }, []);
+
   const filtered = useMemo(() => {
     if (!equipment) {
       return [];
@@ -148,7 +159,7 @@ function EquipmentListContent() {
           data={filtered}
           columns={columns}
           getRowId={(row) => row.name}
-          searchText={(row) => row.name.toLowerCase()}
+          searchText={(row) => row.name}
           searchPlaceholder="Filter gear by name"
           emptyMessage="No gear matches those filters."
           onRowClick={(row) => openEquipment(row.name)}

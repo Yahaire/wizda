@@ -55,8 +55,16 @@ export function AboutContent() {
           <Anchor href={DATA_SOURCE_URL} target="_blank" rel="noopener noreferrer">
             the official lists
           </Anchor>
-          &nbsp;provided by the game devs. We collect only minimal, anonymous usage stats to see what&apos;s useful —
-          no accounts, and we never sell your data to anyone.
+          &nbsp;provided by the game devs. Equipment details come from the{' '}
+          <Anchor href="https://wizardry.fasterthoughts.io/" target="_blank" rel="noopener noreferrer">
+            Fasterthoughts guide
+          </Anchor>
+          &nbsp;— special thanks to NRJank and the rest of the Fasterthoughts guys for compiling and maintaining 
+          equipment lists.
+        </Text>
+        <Text size="sm" mt="md">
+          We collect only minimal, anonymous usage stats to see what&apos;s useful — no accounts, and we never
+          sell your data to anyone.
         </Text>
       </div>
 

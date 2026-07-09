@@ -1,78 +1,42 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Box, Group, Stack, Text } from '@mantine/core';
 
-import { Box, Center, Group, Loader, Stack, Text } from '@mantine/core';
+import { formatCertaintyPct } from './oracle.logic';
 
-import { certaintyWindow, formatCertaintyPct } from './oracle.logic';
-
-import type {
-  CertaintyCurvePoint,
-  CertaintyCurveResult,
-} from '@shared/api/endpoints/junkToGuarantee.models';
+import type { CertaintyCurvePoint } from '@shared/api/endpoints/junkToGuarantee.models';
 
 const PCT_COL = 60;
-const NEEDED_COL = 76;
+// Wide enough for a five-digit count at the selected row's larger type.
+const NEEDED_COL = 84;
 const BAR_HEIGHT = 10;
 
+/** Row height of the selected row, which sets the tallest line — used for the loader. */
+export const CURVE_ROW_HEIGHT = 30;
+
 interface CertaintyCurveProps {
-  junkName: string,
+  /** One point per entry of {@link percents}, in the same order. */
+  points: CertaintyCurvePoint[],
+  /** The certainty levels charted, ascending (see `certaintyWindow`). */
+  percents: number[],
   /** The certainty the player picked — the highlighted row in the window. */
   selectedPct: number,
-  /** Fetches the curve for the given junk across the requested certainties (fractions). */
-  onRequestCurve: (junkName: string, certainties: number[]) => Promise<CertaintyCurveResult>,
 }
 
 /**
- * A compact three-point view of how much junk is needed as the target certainty
- * moves a step either side of the player's pick — a tiny bar chart that makes the
- * cost of chasing more certainty tangible. The selected level is highlighted.
+ * A compact three-point view of how much junk is needed as the target certainty moves
+ * a step either side of the player's pick — a tiny bar chart that makes the cost of
+ * chasing more certainty tangible. The selected level is the star of the modal: crimson
+ * and a size up, so it wins the eye before anything else on the card.
+ *
+ * Presentational — the owning modal fetches the curve, since the same response also
+ * carries the resolved match set the summary needs.
  */
 export function CertaintyCurve({
-  junkName,
+  points,
+  percents,
   selectedPct,
-  onRequestCurve,
 }: CertaintyCurveProps) {
-  const percents = useMemo(() => certaintyWindow(selectedPct), [selectedPct]);
-  const [points, setPoints] = useState<CertaintyCurvePoint[] | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setPoints(null);
-    setFailed(false);
-    onRequestCurve(junkName, percents.map((pct) => pct / 100))
-      .then((result) => {
-        if (!cancelled) {
-          setPoints(result.points);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [junkName, percents, onRequestCurve]);
-
-  if (failed) {
-    return (
-      <Text size="sm" c="dimmed">
-        Couldn&apos;t work out the certainty curve — the single number above still stands.
-      </Text>
-    );
-  }
-
-  if (!points) {
-    return (
-      <Center h={3 * (BAR_HEIGHT + 14)}>
-        <Loader size="sm" color="crimson" />
-      </Center>
-    );
-  }
-
   const maxNeeded = Math.max(1, ...points.map((point) => point.junkNeeded ?? 0));
 
   return (
@@ -84,9 +48,9 @@ export function CertaintyCurve({
         // Give a non-zero bar a visible minimum so the smallest count still reads.
         const width = needed ? Math.max((needed / maxNeeded) * 100, 4) : 0;
         return (
-          <Group key={pct} gap="sm" wrap="nowrap" align="center">
+          <Group key={pct} gap="sm" wrap="nowrap" align="center" mih={CURVE_ROW_HEIGHT}>
             <Text
-              size="sm"
+              size={selected ? 'md' : 'sm'}
               w={PCT_COL}
               ta="right"
               fw={selected ? 700 : 400}
@@ -116,7 +80,8 @@ export function CertaintyCurve({
               />
             </Box>
             <Text
-              size="sm"
+              size={selected ? undefined : 'sm'}
+              fz={selected ? '1.25rem' : undefined}
               w={NEEDED_COL}
               ta="right"
               fw={selected ? 700 : 500}

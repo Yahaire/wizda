@@ -132,7 +132,7 @@ function JunkListContent() {
           data={rows}
           columns={columns}
           getRowId={(row) => row.name}
-          searchText={(row) => row.name.toLowerCase()}
+          searchText={(row) => row.name}
           searchPlaceholder="Filter junk by name"
           emptyMessage="No junk by that name."
           onRowClick={(row) => openJunk(row.name)}

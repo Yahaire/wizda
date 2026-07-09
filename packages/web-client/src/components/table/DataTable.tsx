@@ -24,6 +24,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
+import { matchesAllTerms } from '@/utils/search';
 
 export interface Column<T> {
   key: string,
@@ -44,7 +45,7 @@ interface DataTableProps<T> {
   data: T[],
   columns: Column<T>[],
   getRowId: (row: T) => string,
-  /** Lower-cased text a row is matched against by the search box. */
+  /** Text a row is matched against by the search box. */
   searchText: (row: T) => string,
   searchPlaceholder?: string,
   /** Extra filter controls (e.g. a tier select) shown beside the search box. */
@@ -80,9 +81,8 @@ export function DataTable<T>({
   const { ref: searchRef, selectOnFocus: selectSearch } = useSelectOnFocus<HTMLInputElement>();
 
   const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const filtered = needle
-      ? data.filter((row) => searchText(row).includes(needle))
+    const filtered = query.trim()
+      ? data.filter((row) => matchesAllTerms(searchText(row), query))
       : data;
 
     if (!sortKey) {

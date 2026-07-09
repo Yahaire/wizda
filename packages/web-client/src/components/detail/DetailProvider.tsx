@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { CategoryIcon } from '@/components/CategoryIcon';
-import { GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
+import { CategoryIcon, getEquipmentType } from '@/components/CategoryIcon';
+import { getTierColor, GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
 import { TruncatedText } from '@/components/TruncatedText';
 import { api, MaintenanceError } from '@/services/api';
 import {
@@ -264,7 +264,11 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
         {current?.kind === 'equipment' && (
           <Stack gap="sm">
             <Group gap="xs" wrap="nowrap">
-              <CategoryIcon size={20} color="var(--mantine-color-dimmed)" />
+              <CategoryIcon
+                size={20}
+                equipmentType={getEquipmentType(current.item.category?.code)}
+                color={getTierColor(current.item.tier) ?? 'var(--mantine-color-dimmed)'}
+              />
               <Text fw={600} fz="lg">{current.item.name}</Text>
             </Group>
             <Group gap="lg">
@@ -353,7 +357,12 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
                         style={DETAIL_ROW_GRID}
                       >
                         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-                          <CategoryIcon size={14} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
+                          <CategoryIcon
+                            size={14}
+                            equipmentType={getEquipmentType(piece.category?.code)}
+                            color={getTierColor(piece.tier) ?? 'var(--mantine-color-dimmed)'}
+                            style={{ flexShrink: 0 }}
+                          />
                           <TruncatedText size="sm" style={{ minWidth: 0 }}>{piece.name}</TruncatedText>
                         </Group>
                         <Box style={{ justifySelf: 'start' }}>

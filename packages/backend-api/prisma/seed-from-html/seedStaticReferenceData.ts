@@ -1,12 +1,20 @@
 import { PrismaClient } from '@local-prisma/generated/client';
+import { EQUIPMENT_CATEGORIES, EQUIPMENT_TYPES } from '@shared/domain/equipment';
 import { BLESSINGS, STATS } from '@shared/domain/stats';
+import { EQUIPMENT_TIERS } from '@shared/domain/tier';
 
 /**
- * Upserts the static `Stat` (10 rows) and `Blessing` (19 rows) reference
- * tables from `@shared/domain/stats.ts` — the single source of truth for the
- * stat/blessing catalog. Must run before `seedEquipmentBlessingDropRates`,
- * whose rows FK to `Blessing.code`. Small enough (~30 rows) that a plain
- * upsert loop is fine — no batching needed.
+ * Upserts the static reference tables from `packages/shared/src/domain` — the
+ * single source of truth for these catalogs:
+ *   - `Stat` (10) + `Blessing` (19)               from `stats.ts`
+ *   - `EquipmentType` (7) + `EquipmentCategory` (32) from `equipment.ts`
+ *   - `EquipmentTier` (7)                          from `tier.ts`
+ *
+ * Must run before the drop-rate seeds: `EquipmentBlessingDropRate` FKs to
+ * `Blessing.code`, and the equipment-taxonomy enrichment pass FKs to
+ * `EquipmentCategory.code`. `EquipmentType` is upserted before
+ * `EquipmentCategory` (the FK). Small enough (~75 rows) that plain upsert loops
+ * are fine — no batching needed.
  */
 export async function seedStaticReferenceData(prisma: PrismaClient): Promise<void> {
   await prisma.$transaction(async (tx) => {
@@ -23,6 +31,43 @@ export async function seedStaticReferenceData(prisma: PrismaClient): Promise<voi
         where: { code: blessing.code },
         create: { code: blessing.code, statKind: blessing.statKind, isPercent: blessing.isPercent },
         update: { statKind: blessing.statKind, isPercent: blessing.isPercent },
+      });
+    }
+
+    for (const type of EQUIPMENT_TYPES) {
+      await tx.equipmentType.upsert({
+        where: { kind: type.kind },
+        create: { kind: type.kind, name: type.name },
+        update: { name: type.name },
+      });
+    }
+
+    for (const category of EQUIPMENT_CATEGORIES) {
+      await tx.equipmentCategory.upsert({
+        where: { code: category.code },
+        create: {
+          code: category.code,
+          name: category.name,
+          equipmentType: category.equipmentType,
+        },
+        update: { name: category.name, equipmentType: category.equipmentType },
+      });
+    }
+
+    for (const tier of EQUIPMENT_TIERS) {
+      await tx.equipmentTier.upsert({
+        where: { kind: tier.kind },
+        create: {
+          kind: tier.kind,
+          name: tier.name,
+          orderIndex: tier.orderIndex,
+          isObtainableThroughJunk: tier.isObtainableThroughJunk,
+        },
+        update: {
+          name: tier.name,
+          orderIndex: tier.orderIndex,
+          isObtainableThroughJunk: tier.isObtainableThroughJunk,
+        },
       });
     }
   });

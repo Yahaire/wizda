@@ -1,44 +1,27 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
-
-import {
-  ActionIcon,
-  Alert,
-  Box,
-  Button,
-  Center,
-  Divider,
-  Group,
-  Loader,
-  Modal,
-  Paper,
-  Stack,
-  Text,
-  TextInput,
-  ThemeIcon,
-  Tooltip,
-  UnstyledButton,
-} from '@mantine/core';
-import {
-  IconAlertTriangle,
-  IconChevronRight,
-  IconInfoCircle,
-  IconSearch,
-} from '@tabler/icons-react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useDetail } from '@/components/detail/DetailProvider';
 import { WizdaEmoji } from '@/mascot/wizda';
-
+import {
+    ActionIcon, Alert, Box, Button, Center, Group, Loader, Modal, Paper, Stack, Text, TextInput,
+    ThemeIcon, Tooltip, UnstyledButton
+} from '@mantine/core';
 import { TsUtilities } from '@shared/tsUtilities';
+import {
+    IconAlertTriangle, IconChevronRight, IconInfoCircle, IconSearch
+} from '@tabler/icons-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+
+import { JunkDetailModal } from './JunkDetailModal';
+import { formatPercent, OracleFilters } from './oracle.logic';
+
 import type {
   CertaintyCurveResult,
   JunkGuaranteeEntry,
   JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
-
-import { CertaintyCurve } from './CertaintyCurve';
 
 const ROW_HEIGHT = 64;
 const LIST_HEIGHT = 460;
@@ -49,13 +32,6 @@ const CHEVRON_COL = 16;
 // reserves an equal-width empty slot so the number columns stay aligned with it.
 const ROW_CHEVRON = <IconChevronRight size={CHEVRON_COL} style={{ opacity: 0.4, flexShrink: 0 }} />;
 
-const MULTI_POOL_NOTE = TsUtilities.stringJoin([
-  "Rates shown are for the latest version of this junk.",
-  "If you haven't completed the progression that unlocks this area's newer pool,",
-  "or you still have junks left from the previous version,",
-  "your actual drops may differ.",
-]);
-
 const ESTIMATE_NOTE = TsUtilities.stringJoin([
   "These numbers are a careful estimate.",
   "Blessings roll on their own slots, so I work out the combined odds rather than",
@@ -63,25 +39,17 @@ const ESTIMATE_NOTE = TsUtilities.stringJoin([
   "They'll be close — treat them as a solid guide rather than a promise.",
 ]);
 
-function formatPercent(probability: number): string {
-  const percent = probability * 100;
-  if (percent >= 1) {
-    return `${percent.toFixed(1)}%`;
-  }
-  if (percent <= 0) {
-    return "0%";
-  }
-  return `${percent.toPrecision(2)}%`;
-}
-
 interface ResultsPanelProps {
   result: JunkToGuaranteeResult | null,
   loading: boolean,
   loadingMore: boolean,
   onShowMore: () => void,
-  /** The certainty the query used, as a whole percent — centres the detail curve. */
-  certaintyPct: number,
-  /** Fetches a junk's certainty curve for the detail modal (see {@link CertaintyCurve}). */
+  /**
+   * The filters that produced `result` — snapshotted, not the live selection, so a
+   * later edit can't change what the detail modal describes or fetches.
+   */
+  queryFilters: OracleFilters,
+  /** Fetches a junk's certainty curve for the detail modal (see {@link JunkDetailModal}). */
   onRequestCurve: (junkName: string, certainties: number[]) => Promise<CertaintyCurveResult>,
   /**
    * When set, the row list stretches to fill its parent instead of using a
@@ -96,7 +64,7 @@ export function ResultsPanel({
   loading,
   loadingMore,
   onShowMore,
-  certaintyPct,
+  queryFilters,
   onRequestCurve,
   fillHeight,
 }: ResultsPanelProps) {
@@ -109,6 +77,14 @@ export function ResultsPanel({
   const [estimateOpen, setEstimateOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { openJunk } = useDetail();
+
+  // Index of the first freshly-loaded row, captured right before a "Show more"
+  // fetch — once the new rows land, we smooth-scroll them into view.
+  const showMoreAnchorRef = useRef<number | null>(null);
+  const handleShowMore = () => {
+    showMoreAnchorRef.current = result?.results.length ?? null;
+    onShowMore();
+  };
 
   // Hand off to the shared junk detail modal (drops list + cross-links). We leave
   // this compact per-result view mounted behind it and open the shared modal as
@@ -135,6 +111,19 @@ export function ResultsPanel({
     estimateSize: () => ROW_HEIGHT,
     overscan: 8,
   });
+
+  // Once "Show more" rows land (loadingMore drops back to false), smooth-scroll
+  // the list so the first newly-loaded row comes into view.
+  useEffect(() => {
+    if (loadingMore || showMoreAnchorRef.current === null) {
+      return;
+    }
+    const anchor = showMoreAnchorRef.current;
+    showMoreAnchorRef.current = null;
+    if (anchor < entries.length) {
+      virtualizer.scrollToIndex(anchor, { align: 'center', behavior: 'smooth', });
+    }
+  }, [loadingMore, entries.length, virtualizer]);
 
   if (loading) {
     return (
@@ -274,66 +263,41 @@ export function ResultsPanel({
             );
           })}
         </div>
+
+        {/* Lives inside the scroll container, right after the last row, so it
+            only comes into view once the player scrolls to the end of the list. */}
+        {nameFilter.trim() === "" && (
+          <Center py="sm">
+            {result.hasMore ? (
+              <Button
+                variant="light"
+                color="crimson"
+                onClick={handleShowMore}
+                loading={loadingMore}
+              >
+                Show more
+              </Button>
+            ) : (
+              <Text className="wizda-speech" ta="center">
+                {WizdaEmoji.welcome} That&apos;s all I got!
+              </Text>
+            )}
+          </Center>
+        )}
       </Box>
 
       {entries.length === 0 && (
         <Text c="dimmed" ta="center" size="sm">No junk matches that name.</Text>
       )}
 
-      {result.hasMore && nameFilter.trim() === "" && (
-        <Center>
-          <Button
-            variant="light"
-            color="crimson"
-            onClick={onShowMore}
-            loading={loadingMore}
-          >
-            Show more
-          </Button>
-        </Center>
-      )}
-
       {/* Per-junk detail — recovers the full name when it's been truncated. */}
-      <Modal
-        opened={Boolean(detail)}
+      <JunkDetailModal
+        entry={detail}
         onClose={() => setDetail(null)}
-        title="Junk details"
-        centered
-        size="md"
-      >
-        {detail && (
-          <Stack gap="sm">
-            <Text fw={600} fz="lg">{detail.junkName}</Text>
-            <Divider />
-            <Group justify="space-between">
-              <Text c="dimmed">Chance per junk</Text>
-              <Text fw={500}>{formatPercent(detail.probabilityPerJunk)}</Text>
-            </Group>
-            <div>
-              <Text c="dimmed" mb="xs">Junk needed by certainty</Text>
-              <CertaintyCurve
-                junkName={detail.junkName}
-                selectedPct={certaintyPct}
-                onRequestCurve={onRequestCurve}
-              />
-            </div>
-            {detail.hasMultiplePools && (
-              <Alert color="yellow" variant="light" icon={<IconInfoCircle />} mt="xs">
-                {MULTI_POOL_NOTE}
-              </Alert>
-            )}
-            <Button
-              variant="light"
-              color="crimson"
-              mt="xs"
-              rightSection={<IconChevronRight size={16} />}
-              onClick={() => seeFullJunkDetails(detail.junkName)}
-            >
-              See full junk details
-            </Button>
-          </Stack>
-        )}
-      </Modal>
+        queryFilters={queryFilters}
+        onRequestCurve={onRequestCurve}
+        onSeeFullDetails={seeFullJunkDetails}
+      />
 
       {/* Estimate explanation */}
       <Modal

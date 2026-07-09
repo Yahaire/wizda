@@ -62,6 +62,7 @@ async function handleListEquipment(
         tier: true,
         maxDropQuality: true,
         maxDropGrade: true,
+        category: { select: { code: true, name: true } },
       },
       orderBy: { name: 'asc' },
     }),
@@ -108,9 +109,9 @@ async function handleListEquipment(
 
   const body: EquipmentListItem[] = equipment.map((item) => ({
     name: item.name,
-    // Groundwork: the item→category mapping isn't seeded yet, so this is always
-    // null for now. Once `EquipmentCategory` is wired up, populate it here.
-    category: null,
+    // Enriched from the Fasterthoughts taxonomy (see the seed); null for the few
+    // items whose name isn't in that source.
+    category: item.category ? { code: item.category.code, name: item.category.name } : null,
     tier: item.tier as EquipmentTierKind | null,
     maxDropQuality: item.maxDropQuality,
     maxDropGrade: item.maxDropGrade,

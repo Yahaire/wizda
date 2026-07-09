@@ -16,6 +16,10 @@ export enum ErrorCode {
   UNKNOWN_JUNK = 'UNKNOWN_JUNK',
   /** One or more requested blessing codes don't exist */
   UNKNOWN_BLESSING = 'UNKNOWN_BLESSING',
+  /** One or more requested equipment category codes don't exist */
+  UNKNOWN_CATEGORY = 'UNKNOWN_CATEGORY',
+  /** One or more requested tier kinds don't exist */
+  UNKNOWN_TIER = 'UNKNOWN_TIER',
   /** An unexpected server-side error */
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { EquipmentTypeKind } from '@shared/domain/equipment';
+import { EQUIPMENT_CATEGORIES, EquipmentTypeKind } from '@shared/domain/equipment';
 import {
     IconBrandRedhat, IconCircle, IconHandStop, IconProps, IconShield, IconShirt, IconShoe,
     IconSquare, IconSword
@@ -25,11 +25,26 @@ const EQUIPMENT_TYPE_ICONS: Record<EquipmentTypeKind, ComponentType<IconProps>> 
   [EquipmentTypeKind.ACCESSORY]: IconCircle,
 };
 
+/** The icon component for an equipment type, or a neutral square when unknown. */
+export function getCategoryIcon(equipmentType?: EquipmentTypeKind | null): ComponentType<IconProps> {
+  return equipmentType ? EQUIPMENT_TYPE_ICONS[equipmentType] : IconSquare;
+}
+
+/** Category code → its equipment type, so a code alone is enough to pick an icon. */
+const EQUIPMENT_TYPE_BY_CATEGORY = new Map(
+  EQUIPMENT_CATEGORIES.map((category) => [category.code, category.equipmentType]),
+);
+
+/** The equipment type a category belongs to, or null for an unknown/absent code. */
+export function getEquipmentType(categoryCode?: string | null): EquipmentTypeKind | null {
+  return categoryCode ? EQUIPMENT_TYPE_BY_CATEGORY.get(categoryCode) ?? null : null;
+}
+
 interface CategoryIconProps extends IconProps {
   equipmentType?: EquipmentTypeKind | null,
 }
 
 export function CategoryIcon({ equipmentType, ...iconProps }: CategoryIconProps) {
-  const Icon = equipmentType ? EQUIPMENT_TYPE_ICONS[equipmentType] : IconSquare;
+  const Icon = getCategoryIcon(equipmentType);
   return <Icon {...iconProps} />;
 }

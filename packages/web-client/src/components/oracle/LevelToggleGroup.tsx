@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  Chip,
-  SimpleGrid,
-} from '@mantine/core';
+import { Chip, SimpleGrid } from '@mantine/core';
 
 export interface LevelOption {
   value: number,
@@ -35,23 +32,36 @@ export function LevelToggleGroup({
       onChange={(values) => onChange(values.map(Number))}
     >
       <SimpleGrid cols={5} spacing="xs" verticalSpacing="xs">
-        {options.map((option) => (
-          <Chip
-            key={option.value}
-            value={String(option.value)}
-            disabled={option.disabled}
-            color="crimson"
-            variant="outline"
-            size="sm"
-            styles={{
-              root: { width: '100%' },
-              label: { width: '100%', justifyContent: 'center', paddingInline: 4 },
-              iconWrapper: { display: 'none' },
-            }}
-          >
-            {option.label}
-          </Chip>
-        ))}
+        {options.map((option) => {
+          const isChecked = value.includes(option.value);
+          return (
+            <Chip
+              key={option.value}
+              value={String(option.value)}
+              disabled={option.disabled}
+              color="crimson"
+              variant="outline"
+              size="sm"
+              styles={{
+                root: {
+                  width: '100%',
+                  ...(option.disabled && { opacity: 0.4 }),
+                },
+                label: {
+                  width: '100%',
+                  justifyContent: 'center',
+                  paddingInline: 4,
+                  ...(isChecked && {
+                    borderWidth: '2px',
+                  }),
+                },
+                iconWrapper: { display: 'none' },
+              }}
+            >
+              {option.label}
+            </Chip>
+          );
+        })}
       </SimpleGrid>
     </Chip.Group>
   );

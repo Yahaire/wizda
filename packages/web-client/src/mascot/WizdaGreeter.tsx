@@ -5,6 +5,8 @@ import {
   useState,
 } from 'react';
 
+import { usePathname } from 'next/navigation';
+
 import {
   Alert,
   Text,
@@ -26,13 +28,18 @@ function today(): string {
 }
 
 /**
- * Greets the visitor once ever (welcome) and once per day thereafter. To stay
- * out of the way on phones, the daily greeting becomes a subtle dismissible
- * banner on small screens instead of a toast; the one-time welcome is always a
- * toast. Flags are written before showing anything, so StrictMode's double-mount
- * never double-greets.
+ * Greets the visitor once ever (welcome) and once per day thereafter. The
+ * one-time welcome only fires on the home page — a visitor landing first on
+ * some other route (e.g. a shared /junks link) won't see it until they visit
+ * home, since Shell stays mounted across client-side navigation and this
+ * effect re-checks on every pathname change. To stay out of the way on
+ * phones, the daily greeting becomes a subtle dismissible banner on small
+ * screens instead of a toast; the one-time welcome is always a toast. Flags
+ * are written before showing anything, so StrictMode's double-mount never
+ * double-greets.
  */
 export function WizdaGreeter() {
+  const pathname = usePathname();
   const [banner, setBanner] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,6 +47,9 @@ export function WizdaGreeter() {
     const stamp = today();
 
     if (!welcomed) {
+      if (pathname !== '/') {
+        return;
+      }
       localStorage.setItem(WELCOMED_KEY, '1');
       localStorage.setItem(LAST_GREETED_KEY, stamp);
       wizdaSay(WIZDA_WELCOME, { emoji: WizdaEmoji.welcome, autoClose: 8000 });
@@ -58,7 +68,7 @@ export function WizdaGreeter() {
     } else {
       wizdaSay(line, { emoji: WizdaEmoji.greet, autoClose: 7000 });
     }
-  }, []);
+  }, [pathname]);
 
   if (!banner) {
     return null;

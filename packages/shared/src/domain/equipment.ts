@@ -130,6 +130,11 @@ export const EQUIPMENT_CATEGORIES: readonly EquipmentCategoryInfo[] = [
     equipmentType: EquipmentTypeKind.WEAPON,
   },
   {
+    code: 'TWO_HANDED_SPEAR',
+    name: 'Two-Handed Spear',
+    equipmentType: EquipmentTypeKind.WEAPON,
+  },
+  {
     code: 'BOW',
     name: 'Bow',
     equipmentType: EquipmentTypeKind.WEAPON,

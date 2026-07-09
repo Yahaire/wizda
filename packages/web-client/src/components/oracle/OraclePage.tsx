@@ -7,7 +7,7 @@ import { GRADE_HEX, QualityStars } from '@/components/gear/gearDisplays';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import {
-    Alert, Button, ColorSwatch, Grid, Group, Modal, Paper, Stack, Text, Title, Tooltip
+    Alert, Button, ColorSwatch, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title, Tooltip
 } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
@@ -16,10 +16,12 @@ import { QUALITIES } from '@shared/domain/quality';
 import { IconInfoCircle, IconSparkles } from '@tabler/icons-react';
 
 import { BlessingsFilter } from './BlessingsFilter';
+import { CategoryFilter } from './CategoryFilter';
 import { CertaintySlider } from './CertaintySlider';
 import { EquipmentSelect } from './EquipmentSelect';
 import { FilterField } from './FilterField';
 import { LevelToggleGroup } from './LevelToggleGroup';
+import { TierFilter } from './TierFilter';
 import {
     activeFilters, allowedGrades, allowedQualities, EMPTY_FILTERS, FILTER_DESCRIPTIONS,
     FILTERS_STORAGE_KEY, gradeName, hasAnyFilter, joinHuman, OracleFilters, qualityLabel
@@ -57,8 +59,18 @@ export function OraclePage() {
   const [maintenance, setMaintenance] = useState<string | null>(null);
 
   const [result, setResult] = useState<JunkToGuaranteeResult | null>(null);
+  // The filters that produced `result` — snapshotted when the result is
+  // presented, not the live `filters` state, so editing filters afterwards
+  // (e.g. clearing them) can't change what "Show more" or the detail curve
+  // fetch for an already-shown result set.
+  const [queryFilters, setQueryFilters] = useState<OracleFilters | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Bumped on every fresh calculate() (not on showMore's append) and used as
+  // ResultsPanel's key, so a new calculation remounts the results list —
+  // resetting its internal scroll position — instead of inheriting whatever
+  // scroll offset the previous result set was left at.
+  const [resultVersion, setResultVersion] = useState(0);
 
   // A blocking prompt shown when a filter change makes an existing pick
   // impossible. Confirm → clear the offending picks; cancel → revert to the
@@ -250,22 +262,23 @@ export function OraclePage() {
     label: <QualityStars value={quality.value} />,
   }));
 
-  const buildQuery = (offset: number): JunkToGuaranteeQuery => ({
-    ...activeFilters(filters),
-    certainty: filters.certaintyPct / 100,
+  const buildQuery = (filtersForQuery: OracleFilters, offset: number): JunkToGuaranteeQuery => ({
+    ...activeFilters(filtersForQuery),
+    certainty: filtersForQuery.certaintyPct / 100,
     limit: DEFAULT_GUARANTEE_LIMIT,
     offset,
   });
 
   // Per-junk certainty curve for the results detail modal — same filters as the
-  // guarantee query so the pool matches, across the caller's certainty window.
+  // guarantee query that produced the currently-shown result (not the live
+  // filters, which may have since changed) so the pool matches.
   const requestCurve = useCallback(
     (junkName: string, certainties: number[]) => api.certaintyCurve({
-      ...activeFilters(filters),
+      ...activeFilters(queryFilters ?? filters),
       junkName,
       certainties,
     }),
-    [filters],
+    [queryFilters, filters],
   );
 
   const handleApiError = (error: unknown) => {
@@ -284,9 +297,12 @@ export function OraclePage() {
     }
     setLoading(true);
     setResult(null);
+    setResultVersion((version) => version + 1);
     pendingScrollRef.current = true;
     try {
-      setResult(await api.junkToGuarantee(buildQuery(0)));
+      const fresh = await api.junkToGuarantee(buildQuery(filters, 0));
+      setQueryFilters(filters);
+      setResult(fresh);
     } catch (error) {
       pendingScrollRef.current = false;
       handleApiError(error);
@@ -296,12 +312,12 @@ export function OraclePage() {
   };
 
   const showMore = async () => {
-    if (!result) {
+    if (!result || !queryFilters) {
       return;
     }
     setLoadingMore(true);
     try {
-      const next = await api.junkToGuarantee(buildQuery(result.results.length));
+      const next = await api.junkToGuarantee(buildQuery(queryFilters, result.results.length));
       setResult((current) => (current
         ? { ...next, results: [...current.results, ...next.results] }
         : next));
@@ -331,6 +347,32 @@ export function OraclePage() {
           />
         </FilterField>
 
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+          <FilterField
+            label="Category"
+            description={FILTER_DESCRIPTIONS.category}
+            onClear={() => patch({ category: [] })}
+            canClear={filters.category.length > 0}
+          >
+            <CategoryFilter
+              value={filters.category}
+              onChange={(value) => patch({ category: value })}
+            />
+          </FilterField>
+
+          <FilterField
+            label="Tier"
+            description={FILTER_DESCRIPTIONS.tier}
+            onClear={() => patch({ tier: [] })}
+            canClear={filters.tier.length > 0}
+          >
+            <TierFilter
+              value={filters.tier}
+              onChange={(value) => patch({ tier: value })}
+            />
+          </FilterField>
+        </SimpleGrid>
+
         <FilterField
           label="Quality"
           description={FILTER_DESCRIPTIONS.quality}
@@ -357,27 +399,29 @@ export function OraclePage() {
           />
         </FilterField>
 
-        <FilterField
-          label="Blessings"
-          description={FILTER_DESCRIPTIONS.blessings}
-          onClear={() => patch({ blessings: [] })}
-          canClear={filters.blessings.length > 0}
-        >
-          <BlessingsFilter
-            value={filters.blessings}
-            onChange={(value) => patch({ blessings: value })}
-          />
-        </FilterField>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+          <FilterField
+            label="Blessings"
+            description={FILTER_DESCRIPTIONS.blessings}
+            onClear={() => patch({ blessings: [] })}
+            canClear={filters.blessings.length > 0}
+          >
+            <BlessingsFilter
+              value={filters.blessings}
+              onChange={(value) => patch({ blessings: value })}
+            />
+          </FilterField>
 
-        <FilterField
-          label="Certainty"
-          description={FILTER_DESCRIPTIONS.certainty}
-        >
-          <CertaintySlider
-            value={filters.certaintyPct}
-            onChange={(value) => patch({ certaintyPct: value })}
-          />
-        </FilterField>
+          <FilterField
+            label="Certainty"
+            description={FILTER_DESCRIPTIONS.certainty}
+          >
+            <CertaintySlider
+              value={filters.certaintyPct}
+              onChange={(value) => patch({ certaintyPct: value })}
+            />
+          </FilterField>
+        </SimpleGrid>
 
         <Button
           size="md"
@@ -430,11 +474,12 @@ export function OraclePage() {
                 } : undefined}
               >
                 <ResultsPanel
+                  key={resultVersion}
                   result={result}
                   loading={loading}
                   loadingMore={loadingMore}
                   onShowMore={showMore}
-                  certaintyPct={filters.certaintyPct}
+                  queryFilters={queryFilters ?? filters}
                   onRequestCurve={requestCurve}
                   fillHeight={Boolean(resultsMaxHeight)}
                 />

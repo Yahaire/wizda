@@ -1,0 +1,235 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  EMPTY_FILTERS,
+  OracleFilters,
+  qualityDisplay,
+  resolveQuery,
+  subjectIdentity,
+  subjectOf,
+  wasNarrowed,
+} from './oracle.logic';
+
+import type { MatchedOutcome } from '@shared/api/endpoints/junkToGuarantee.models';
+import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
+import { EquipmentTierKind } from '@shared/domain/tier';
+
+function filters(overrides: Partial<OracleFilters> = {}): OracleFilters {
+  return { ...EMPTY_FILTERS, ...overrides, };
+}
+
+function equipmentList(...items: Partial<EquipmentListItem>[]): Map<string, EquipmentListItem> {
+  const map = new Map<string, EquipmentListItem>();
+  for (const item of items) {
+    map.set(item.name!, {
+      name: item.name!,
+      category: item.category ?? null,
+      tier: item.tier ?? null,
+      maxDropQuality: null,
+      maxDropGrade: null,
+      sources: [],
+    });
+  }
+  return map;
+}
+
+const AXE = { code: 'TWO_HANDED_AXE', name: 'Two-Handed Axe' };
+const ROBE = { code: 'CLOTHES', name: 'Clothes' };
+
+/** The subject as it reads for a query nothing has narrowed yet. */
+function subjectFor(overrides: Partial<OracleFilters>): string {
+  return subjectOf(resolveQuery(null, filters(overrides))).text;
+}
+
+describe('subjectOf', () => {
+  it('names the equipment when the player picked some', () => {
+    expect(subjectFor({ equipment: ['Frost Dagger'] })).toBe('Frost Dagger');
+    expect(subjectFor({ equipment: ['Frost Dagger', 'Sunfang'] })).toBe('Frost Dagger or Sunfang');
+    expect(subjectFor({ equipment: ['Frost Dagger', 'Sunfang', 'Ember Bow'] }))
+      .toBe('Frost Dagger, Sunfang, or Ember Bow');
+  });
+
+  it('caps a long equipment list, holding the overflow back for the "+N more" affordance', () => {
+    const subject = subjectOf(resolveQuery(null, filters({
+      equipment: ['Frost Dagger', 'Sunfang', 'Ember Bow', 'Gale Axe', 'Tide Staff'],
+    })));
+
+    // No trailing "or" — the visible list isn't the whole list.
+    expect(subject.text).toBe('Frost Dagger, Sunfang, Ember Bow');
+    expect(subject.hidden).toEqual(['Gale Axe', 'Tide Staff']);
+  });
+
+  it('ignores tier and category once equipment is named — narrowing already reflects them', () => {
+    expect(subjectFor({
+      equipment: ['Frost Dagger'],
+      tier: [EquipmentTierKind.SILVER],
+      category: ['DAGGER'],
+    })).toBe('Frost Dagger');
+  });
+
+  it('describes an unnamed query as "Any <tier> <category>"', () => {
+    expect(subjectFor({ tier: [EquipmentTierKind.SILVER] })).toBe('Any Silver equipment');
+    expect(subjectFor({ category: ['ONE_HANDED_AXE'] })).toBe('Any One-Handed Axe');
+    expect(subjectFor({ tier: [EquipmentTierKind.SILVER], category: ['ONE_HANDED_AXE'] }))
+      .toBe('Any Silver One-Handed Axe');
+  });
+
+  it('treats a lone tier as an adjective even across several categories', () => {
+    expect(subjectFor({
+      tier: [EquipmentTierKind.SILVER],
+      category: ['ONE_HANDED_AXE', 'TWO_HANDED_AXE'],
+    })).toBe('Any Silver One-Handed Axe or Two-Handed Axe');
+  });
+
+  it('keeps several tiers inline while there is at most one category', () => {
+    expect(subjectFor({ tier: [EquipmentTierKind.SILVER, EquipmentTierKind.EBONSTEEL] }))
+      .toBe('Any Silver or Ebonsteel equipment');
+    expect(subjectFor({
+      tier: [EquipmentTierKind.SILVER, EquipmentTierKind.EBONSTEEL],
+      category: ['ODACHI'],
+    })).toBe('Any Silver or Ebonsteel Odachi');
+  });
+
+  it('parenthesises the tiers when both axes are plural, which would otherwise be ambiguous', () => {
+    expect(subjectFor({
+      tier: [EquipmentTierKind.SILVER, EquipmentTierKind.EBONSTEEL],
+      category: ['ODACHI', 'KATANA'],
+    })).toBe('Any Odachi or Katana (Silver or Ebonsteel)');
+  });
+
+  it('falls back to "Any equipment" when only quality/grade/blessings are set', () => {
+    expect(subjectFor({ quality: [5], grade: [5], blessings: ['ATK'] })).toBe('Any equipment');
+  });
+
+  it('describes the narrowed equipment, not everything the player asked for', () => {
+    const matched: MatchedOutcome = { equipment: ['Beastskin Robe'] };
+    const query = resolveQuery(matched, filters({ equipment: ['Silver Axe', 'Beastskin Robe'] }));
+
+    expect(subjectOf(query).text).toBe('Beastskin Robe');
+  });
+});
+
+describe('resolveQuery', () => {
+  it('stands in the raw query when no match set arrived', () => {
+    const raw = filters({ equipment: ['Frost Dagger'], quality: [3, 4] });
+
+    expect(resolveQuery(null, raw)).toMatchObject({ equipment: ['Frost Dagger'], quality: [3, 4] });
+  });
+
+  it('falls back per-axis, since a wildcard axis is absent from the match set', () => {
+    // The junk narrowed quality; grade was never filtered, so it stays empty.
+    const resolved = resolveQuery({ quality: [3] }, filters({ quality: [3, 4] }));
+
+    expect(resolved.quality).toEqual([3]);
+    expect(resolved.grade).toEqual([]);
+  });
+
+  it('never narrows blessings — the AND set is required in full', () => {
+    const resolved = resolveQuery({ quality: [3] }, filters({ quality: [3], blessings: ['ATK', 'CRIT'] }));
+
+    expect(resolved.blessings).toEqual(['ATK', 'CRIT']);
+  });
+});
+
+describe('wasNarrowed', () => {
+  it('is false without a match set, and when nothing was dropped', () => {
+    expect(wasNarrowed(null, filters({ quality: [3, 4] }))).toBe(false);
+    expect(wasNarrowed({ quality: [3, 4] }, filters({ quality: [3, 4] }))).toBe(false);
+  });
+
+  it('is true when any axis lost a value', () => {
+    expect(wasNarrowed({ quality: [3] }, filters({ quality: [3, 4] }))).toBe(true);
+    expect(wasNarrowed(
+      { equipment: ['Beastskin Robe'] },
+      filters({ equipment: ['Silver Axe', 'Beastskin Robe'] }),
+    )).toBe(true);
+  });
+});
+
+describe('subjectIdentity', () => {
+  const known = equipmentList(
+    { name: 'Silver Axe', category: AXE, tier: EquipmentTierKind.SILVER },
+    { name: 'Earthrend Axe', category: AXE, tier: EquipmentTierKind.EBONSTEEL },
+    { name: 'Blackwing Robe', category: ROBE, tier: EquipmentTierKind.SILVER },
+    { name: 'Nameless Thing', category: null, tier: null },
+  );
+
+  it('reads a named piece\'s own category and tier, ignoring the filter axes', () => {
+    const query = resolveQuery(null, filters({
+      equipment: ['Silver Axe'],
+      tier: [EquipmentTierKind.EBONSTEEL],
+    }));
+
+    expect(subjectIdentity(query, known)).toEqual({
+      categoryCode: 'TWO_HANDED_AXE',
+      tierKinds: [EquipmentTierKind.SILVER],
+    });
+  });
+
+  it('keeps the shared category across several pieces, collecting their tiers ascending', () => {
+    const query = resolveQuery(null, filters({ equipment: ['Earthrend Axe', 'Silver Axe'] }));
+
+    expect(subjectIdentity(query, known)).toEqual({
+      categoryCode: 'TWO_HANDED_AXE',
+      tierKinds: [EquipmentTierKind.EBONSTEEL, EquipmentTierKind.SILVER],
+    });
+  });
+
+  it('forfeits the category when the pieces disagree — no icon means "an axe or a robe"', () => {
+    const query = resolveQuery(null, filters({ equipment: ['Silver Axe', 'Blackwing Robe'] }));
+
+    expect(subjectIdentity(query, known).categoryCode).toBeNull();
+  });
+
+  it('forfeits the category when a piece has no taxonomy', () => {
+    const query = resolveQuery(null, filters({ equipment: ['Silver Axe', 'Nameless Thing'] }));
+
+    expect(subjectIdentity(query, known).categoryCode).toBeNull();
+  });
+
+  it('falls back to the queried axes when nothing is named', () => {
+    const query = resolveQuery(null, filters({
+      category: ['TWO_HANDED_AXE'],
+      tier: [EquipmentTierKind.SILVER, EquipmentTierKind.BRONZE],
+    }));
+
+    expect(subjectIdentity(query, known)).toEqual({
+      categoryCode: 'TWO_HANDED_AXE',
+      // Ascending by tier strength, not by the order the filter listed them.
+      tierKinds: [EquipmentTierKind.BRONZE, EquipmentTierKind.SILVER],
+    });
+  });
+
+  it('has no category when several were queried, and none when the axis is a wildcard', () => {
+    const several = resolveQuery(null, filters({ category: ['TWO_HANDED_AXE', 'CLOTHES'] }));
+    expect(subjectIdentity(several, known).categoryCode).toBeNull();
+
+    const wildcard = resolveQuery(null, filters({ quality: [5] }));
+    expect(subjectIdentity(wildcard, known)).toEqual({ categoryCode: null, tierKinds: [] });
+  });
+});
+
+describe('qualityDisplay', () => {
+  it('draws a single level as written stars, matching the game', () => {
+    expect(qualityDisplay([4])).toEqual({ kind: 'stars', value: 4 });
+  });
+
+  it('lists a two-level set rather than ranging it — "3★/4★" beats "3★–4★"', () => {
+    expect(qualityDisplay([3, 4])).toEqual({ kind: 'levels', values: [3, 4] });
+    expect(qualityDisplay([4, 5])).toEqual({ kind: 'levels', values: [4, 5] });
+  });
+
+  it('ranges a contiguous run once it is long enough to be worth compressing', () => {
+    expect(qualityDisplay([2, 3, 4])).toEqual({ kind: 'range', from: 2, to: 4 });
+    expect(qualityDisplay([1, 2, 3, 4, 5])).toEqual({ kind: 'range', from: 1, to: 5 });
+  });
+
+  it('lists a gapped set compactly, ascending, however long', () => {
+    expect(qualityDisplay([4, 2])).toEqual({ kind: 'levels', values: [2, 4] });
+    expect(qualityDisplay([5, 1, 2, 4])).toEqual({ kind: 'levels', values: [1, 2, 4, 5] });
+  });
+
+  it('is nothing at all for a wildcard axis', () => {
+    expect(qualityDisplay([])).toBeNull();
+  });
+});

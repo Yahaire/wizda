@@ -8,10 +8,11 @@
     "seed": "tsx -r tsconfig-paths/register prisma/seed-from-html/seedFromHtml.ts"
   },
   "dependencies": {
-    "@wizda/shared": "*",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
+    "@wizda/shared": "*",
     "cheerio": "^1.0.0",
+    "csv-parse": "^7.0.1",
     "dotenv": "^17.3.1",
     "express": "^4.22.1",
     "pg": "^8.16.3",
@@ -23,8 +24,8 @@
     "@types/node": "^20.19.27",
     "@types/pg": "^8.16.0",
     "ts-node-dev": "^2.0.0",
-    "tsconfig-paths": "^4.2.0",
     "tsc-alias": "^1.8.16",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"
   },
   "description": "API to handle interactions with DB",

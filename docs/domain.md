@@ -21,9 +21,14 @@ tools — back to their prime. Mechanically:
 
 A piece of gear is described by several independent axes:
 
-- **Tier** — the base strength band, tied to a material. Currently, ascending:
-  `bronze` → `steel` → `ebonsteel` → `silver`. Higher tier = higher base stats.
-  Every junk-dropped item belongs to exactly one tier.
+- **Tier** — the base strength band, tied to a material (also called an item's
+  **rank** — *not* to be confused with *adventurer rank*). Ascending: `Worn` →
+  `Bronze` → `Iron` → `Steel` → `Ebonsteel` → `Silver`. Higher tier = higher base
+  stats; every item belongs to exactly one tier. Only **`Worn`** never drops from
+  junk — the other five are junk-obtainable, which the `EquipmentTier` reference
+  table records as `isObtainableThroughJunk`. (The Fasterthoughts taxonomy CSVs
+  mark some items `"Ex."` — that lives in their `Compendium Number` column, not
+  `Rank`, and isn't a tier: an Ex item still has a normal `Rank`, e.g. Silver.)
 - **Stats** — start and final (fully-enhanced) stats are fixed per item. 
   Not a source of randomness for our purposes.
 - **Quality** — shown as **stars, 1★–5★**. Higher quality = larger stat values
@@ -55,8 +60,12 @@ can often be recovered by parsing the name.
 
 But not always. Plenty of named items don't spell out their category or tier —
 e.g. *Mace of Agony*, *Thieves' Boots*, *Rabbit Tail*, *Ring of the Warrior
-Princess*. For those, category (and sometimes tier) cannot be derived from the
-name and needs an explicit item→category association instead of string parsing.
+Princess*. So rather than parse names, we recover category + tier from an
+explicit, authoritative table: the **Fasterthoughts equipment CSVs** (see
+[Data sources](#data-sources)), matched to our equipment **by name**. Each row
+gives a `Type` (+ armor `Armor Type`) we map to an `EquipmentCategory`, and a
+`Rank` we map to a tier. The enrichment pass only *updates* existing (junk-
+sourced) equipment; items in the CSV that never drop from junk are ignored here.
 
 Crucially, **the core "how much junk?" calculation does not need the category or
 tier at all.** It works off the item as it appears in the drop table — the
@@ -65,9 +74,17 @@ and category are an *enrichment* axis: they power looser, friendlier queries
 (*"any silver two-handed axe"*) and display, but the answer to *"how much junk
 for **this specific item**?"* is computable even when the category is unknown.
 
+### Naming: "equipment" vs "gear"
+
+The two are interchangeable in-game and in prose (Wizda happily says "gear").
+But for **structural** names — tables, enums, API fields, filter labels — we
+standardise on **"Equipment"** (`Equipment`, `EquipmentType`, `EquipmentTier`,
+`EquipmentCategory`). Keep "gear" for flavour text only.
+
 ## Data sources
 
-Two distinct HTML tables (samples live in `sample_data_source/`):
+Two distinct HTML tables from wizardry.info (samples live in
+`sample_data_source/`):
 
 1. **Drop Rates by Junk** — item identity + quality + grade, per junk type.
    This is the primary structure described below.
@@ -76,6 +93,19 @@ Two distinct HTML tables (samples live in `sample_data_source/`):
    quality determines their *magnitude*; this table determines *which* ones.
 
 A complete calculation joins both. Each source's structure is detailed below.
+
+Plus an **enrichment** source (not needed by the core calc):
+
+3. **Fasterthoughts equipment CSVs** — `data/weapon.csv` + `data/armor.csv` from
+   the [wizardry-daphne-guide](https://github.com/itsnicksia/wizardry-daphne-guide)
+   repo (thanks to Fasterthoughts and NRJank). Each row carries an item's `Item
+   Name`, `Type` (armor also has `Armor Type`), and `Rank`. We map `Type`
+   (+`Armor Type`) → an `EquipmentCategory` code and `Rank` → an `EquipmentTier`,
+   then match to our equipment **by name** to fill in `categoryCode` + `tier`.
+   Pulled via the `WEAPON_TAXONOMY_SOURCE_URL` / `ARMOR_TAXONOMY_SOURCE_URL` env
+   vars (raw-GitHub URL or a local file). The mapping tables + name-match live in
+   `prisma/seed-from-html/equipmentTaxonomy.*`; the seed logs its match rate and
+   any unmatched names. An unrecognised `Rank` fails the seed loudly.
 
 ## "Drop Rates by Junk" structure
 

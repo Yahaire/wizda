@@ -137,14 +137,26 @@ export function Shell({ children }: { children: React.ReactNode }) {
             size="sm"
             aria-label="Toggle navigation"
           />
-          <Title
-            order={1}
-            fz="1.5rem"
-            c="crimson.5"
-            style={{ letterSpacing: '0.08em' }}
+          <Link
+            href="/"
+            style={{ textDecoration: 'none' }}
+            onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
+              closeMobile();
+              if (pathname === '/') {
+                event.preventDefault();
+                window.location.reload();
+              }
+            }}
           >
-            {APP_NAME}
-          </Title>
+            <Title
+              order={1}
+              fz="1.5rem"
+              c="crimson.5"
+              style={{ letterSpacing: '0.08em' }}
+            >
+              {APP_NAME}
+            </Title>
+          </Link>
         </Group>
       </AppShell.Header>
 

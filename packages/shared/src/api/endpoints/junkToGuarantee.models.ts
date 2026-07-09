@@ -5,6 +5,7 @@
  * `packages/shared/src/domain/dropRateMath.ts`; see `docs/calculation.md`.
  */
 
+import { EquipmentTierKind } from '../../domain/tier';
 import { TsUtilities } from '../../tsUtilities';
 
 /** Default target confidence when a query omits `certainty` (99%). */
@@ -50,10 +51,18 @@ export interface GuaranteeFilters {
    * `docs/calculation.md`. Omitted/empty = no blessing requirement.
    */
   blessings?: string[],
-
-  // Reserved — not yet implemented (no seed / deferred, see docs/calculation.md):
-  //   tier?: EquipmentTierKind[]  (OR)  — needs the tier seed
-  //   category?: string[]      (OR)  — needs the category mapping
+  /**
+   * Accepted equipment tiers, by kind (e.g. "SILVER"), from the shared
+   * `EQUIPMENT_TIERS` catalog. OR set — an item may be of any listed tier. An
+   * unknown kind is a 400. Omitted/empty = any tier.
+   */
+  tier?: EquipmentTierKind[],
+  /**
+   * Accepted equipment categories, by **code** (e.g. "TWO_HANDED_AXE"), from the
+   * shared `EQUIPMENT_CATEGORIES` catalog. OR set — an item may be of any listed
+   * category. An unknown code is a 400. Omitted/empty = any category.
+   */
+  category?: string[],
 }
 
 /** Body of `POST /junk-to-guarantee`. */
@@ -140,6 +149,37 @@ export interface CertaintyCurvePoint {
   junkNeeded: number | null,
 }
 
+/**
+ * What one junk can actually deliver for a query — the queried filters minus every
+ * outcome that junk can't produce. A player asking for ★3 or ★4 from a junk that
+ * only drops the piece at ★3 gets back `quality: [3]`; asking for a DEF blessing on
+ * a weapon and an armor gets back only the armor, since weapons can't roll DEF.
+ *
+ * Each axis appears only when the query constrained it, so a present axis is always
+ * a subset of the corresponding {@link GuaranteeFilters} axis, and an absent one was
+ * a wildcard. Blessings are never listed: the AND set is required in full, so it
+ * cannot narrow — a junk either satisfies it or is absent from the results.
+ */
+export interface MatchedOutcome {
+  /**
+   * Names of the equipment that actually contribute. Present only when the query
+   * named equipment, which bounds it to the player's own selection — a wildcard
+   * query would otherwise list every piece the junk drops.
+   */
+  equipment?: string[],
+  /** Tiers of the contributing equipment. */
+  tier?: EquipmentTierKind[],
+  /** Category codes of the contributing equipment. */
+  category?: string[],
+  /** Quality levels this junk can actually roll for the contributing equipment. */
+  quality?: number[],
+  /**
+   * Grade levels this junk can actually roll. Blessing-aware: a grade with too few
+   * slots to hold the required blessings never survives here.
+   */
+  grade?: number[],
+}
+
 /** Response of `POST /junk-to-guarantee/curve`. */
 export interface CertaintyCurveResult {
   junkName: string,
@@ -151,4 +191,10 @@ export interface CertaintyCurveResult {
   estimatedNote?: string,
   /** One entry per requested certainty, in the requested order. */
   points: CertaintyCurvePoint[],
+  /**
+   * The query resolved against *this* junk — what it can actually drop of what was
+   * asked for. Lets the client caption the numbers with the real criteria rather
+   * than replaying the raw filters. See {@link MatchedOutcome}.
+   */
+  matched: MatchedOutcome,
 }

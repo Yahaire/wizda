@@ -58,16 +58,16 @@ model Blessing {
 }
 
 // ---------------------------------------------------------------------------
-// Gear taxonomy (static reference data)
+// Equipment taxonomy (static reference data)
 //
-// Two seeded lookup tables: the 7 broad gear types, and the equipment
-// categories within each. Single source of truth + copy lives in
-// packages/shared (src/domain/gear.ts); the seed reads from there.
+// Seeded lookup tables: the 7 broad equipment types, the equipment categories
+// within each, and the equipment tiers. Single source of truth + copy lives in
+// packages/shared (src/domain/equipment.ts, tier.ts); the seed reads from there.
 // ---------------------------------------------------------------------------
 
-/// The 7 broad gear types. Stable set; used as the readable PK of `GearType`
-/// and the FK on `EquipmentCategory`.
-enum GearTypeKind {
+/// The 7 broad equipment types. Stable set; used as the readable PK of
+/// `EquipmentType` and the FK on `EquipmentCategory`.
+enum EquipmentTypeKind {
   WEAPON
   SHIELD
   HELMET
@@ -77,27 +77,28 @@ enum GearTypeKind {
   ACCESSORY
 }
 
-/// Broad gear types — static reference data (7 rows).
-model GearType {
-  kind GearTypeKind @id
+/// Broad equipment types — static reference data (7 rows).
+model EquipmentType {
+  kind EquipmentTypeKind @id
   name String
 
   categories EquipmentCategory[]
 }
 
-/// Equipment categories within a gear type, e.g. "Two-Handed Axe". Static, but
-/// grows as the game adds gear types, so it's a table (not an enum) with a
+/// Equipment categories within an equipment type, e.g. "Two-Handed Axe". Static,
+/// but grows as the game adds types, so it's a table (not an enum) with a
 /// readable `code` PK that items / drop rows FK to. Extra attributes for looser
 /// queries (e.g. one/two-handed, weight class) can be added as columns later.
 model EquipmentCategory {
   /// Readable code, e.g. "TWO_HANDED_AXE".
-  code     String       @id
-  name     String
-  gearType GearTypeKind
+  code          String            @id
+  name          String
+  equipmentType EquipmentTypeKind
 
-  type GearType @relation(fields: [gearType], references: [kind])
+  type      EquipmentType @relation(fields: [equipmentType], references: [kind])
+  equipment Equipment[]
 
-  @@index([gearType])
+  @@index([equipmentType])
 }
 
 // ---------------------------------------------------------------------------
@@ -106,24 +107,38 @@ model EquipmentCategory {
 // modelled as M2M join tables next.
 // ---------------------------------------------------------------------------
 
-/// Gear tier — the base strength band tied to a material. Declared ascending so
-/// enum order = strength rank. Grows rarely (a migration when the game adds a
+/// Equipment tier — the base strength band tied to a material (a.k.a. an item's
+/// "rank"; see docs/domain.md). Grows rarely (a migration when the game adds a
 /// tier). Nullable on `Equipment` when it can't be derived from the item name.
-enum GearTier {
+enum EquipmentTierKind {
+  WORN
   BRONZE
+  IRON
   STEEL
   EBONSTEEL
   SILVER
 }
 
-/// A single piece of gear, as it appears in the drop tables. Deduplicated by
-/// `name` (the same item recurs across junks and groups — see docs/domain.md).
-/// `tier`, `maxDropQuality` and `maxDropGrade` are enrichment, hence nullable:
-/// the core "how much junk?" calc doesn't require them.
+/// Equipment tiers — static reference data (6 rows). `orderIndex` is the
+/// authoritative strength ordering; only `Worn` is not obtainable by reversing
+/// junk. Mirrors packages/shared/src/domain/tier.ts.
+model EquipmentTier {
+  kind                    EquipmentTierKind @id
+  name                    String
+  orderIndex              Int
+  isObtainableThroughJunk Boolean
+}
+
+/// A single piece of equipment, as it appears in the drop tables. Deduplicated
+/// by `name` (the same item recurs across junks and groups — see docs/domain.md).
+/// `tier`, `categoryCode`, `maxDropQuality` and `maxDropGrade` are enrichment,
+/// hence nullable: the core "how much junk?" calc doesn't require them.
 model Equipment {
-  id   String    @id @default(cuid())
-  name String    @unique
-  tier GearTier?
+  id           String             @id @default(cuid())
+  name         String             @unique
+  tier         EquipmentTierKind?
+  /// FK to the item's category (e.g. "TWO_HANDED_AXE"); null until enriched.
+  categoryCode String?
 
   /// Highest quality (★1–5) this equipment is known to drop at; null if unknown.
   /// Denormalised summary of the per-pool quality distributions.
@@ -132,8 +147,11 @@ model Equipment {
   /// Denormalised summary of the per-pool grade distributions.
   maxDropGrade   Int?
 
+  category      EquipmentCategory?          @relation(fields: [categoryCode], references: [code])
   dropRates     EquipmentDropRate[]
   blessingRates EquipmentBlessingDropRate[]
+
+  @@index([categoryCode])
 }
 
 /// A specific loot pool ("junk"), e.g. "Beginning Junk". Deduplicated by name.
