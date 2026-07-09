@@ -19,7 +19,7 @@ import {
 import { IconInfoCircle } from '@tabler/icons-react';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
-import { GEAR_TIERS } from '@shared/domain/tier';
+import { EQUIPMENT_TIERS } from '@shared/domain/tier';
 
 import {
   Column,
@@ -38,7 +38,7 @@ import {
 
 const TIER_OPTIONS = [
   { value: '', label: 'All tiers' },
-  ...GEAR_TIERS.map((tier) => ({ value: tier.kind as string, label: tier.name })),
+  ...EQUIPMENT_TIERS.map((tier) => ({ value: tier.kind as string, label: tier.name })),
 ];
 
 const columns: Column<EquipmentListItem>[] = [

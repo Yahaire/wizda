@@ -52,7 +52,7 @@ export interface GuaranteeFilters {
   blessings?: string[],
 
   // Reserved — not yet implemented (no seed / deferred, see docs/calculation.md):
-  //   tier?: GearTier[]        (OR)  — needs the tier seed
+  //   tier?: EquipmentTierKind[]  (OR)  — needs the tier seed
   //   category?: string[]      (OR)  — needs the category mapping
 }
 

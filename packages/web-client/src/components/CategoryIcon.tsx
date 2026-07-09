@@ -1,41 +1,35 @@
 'use client';
 
+import { EquipmentTypeKind } from '@shared/domain/equipment';
 import {
-  IconDiamond,
-  IconHelmet,
-  IconShield,
-  IconShirt,
-  IconShoe,
-  IconSquare,
-  IconSword,
-  type IconProps,
+    IconBrandRedhat, IconCircle, IconHandStop, IconProps, IconShield, IconShirt, IconShoe,
+    IconSquare, IconSword
 } from '@tabler/icons-react';
-import type { ComponentType } from 'react';
 
-import { GearTypeKind } from '@shared/domain/gear';
+import type { ComponentType } from 'react';
 
 /**
  * Placeholder equipment-category icons. Recolourable (tabler icons take a
- * `color`/`stroke`), so we can later tint them by tier. Keyed by gear type for
- * now; a per-category map can slot in once the item→category mapping is seeded.
- * A neutral square stands in whenever the category/type is unknown — which,
- * until that backend mapping lands, is every piece.
+ * `color`/`stroke`), so we can later tint them by tier. Keyed by equipment type
+ * for now; a per-category map can slot in once the item→category mapping is
+ * seeded. A neutral square stands in whenever the category/type is unknown —
+ * which, until that backend mapping lands, is every piece.
  */
-const GEAR_TYPE_ICONS: Record<GearTypeKind, ComponentType<IconProps>> = {
-  [GearTypeKind.WEAPON]: IconSword,
-  [GearTypeKind.SHIELD]: IconShield,
-  [GearTypeKind.HELMET]: IconHelmet,
-  [GearTypeKind.GLOVES]: IconShirt,
-  [GearTypeKind.CHEST_ARMOR]: IconShirt,
-  [GearTypeKind.BOOTS]: IconShoe,
-  [GearTypeKind.ACCESSORY]: IconDiamond,
+const EQUIPMENT_TYPE_ICONS: Record<EquipmentTypeKind, ComponentType<IconProps>> = {
+  [EquipmentTypeKind.WEAPON]: IconSword,
+  [EquipmentTypeKind.SHIELD]: IconShield,
+  [EquipmentTypeKind.HELMET]: IconBrandRedhat,
+  [EquipmentTypeKind.GLOVES]: IconHandStop,
+  [EquipmentTypeKind.CHEST_ARMOR]: IconShirt,
+  [EquipmentTypeKind.BOOTS]: IconShoe,
+  [EquipmentTypeKind.ACCESSORY]: IconCircle,
 };
 
 interface CategoryIconProps extends IconProps {
-  gearType?: GearTypeKind | null,
+  equipmentType?: EquipmentTypeKind | null,
 }
 
-export function CategoryIcon({ gearType, ...iconProps }: CategoryIconProps) {
-  const Icon = gearType ? GEAR_TYPE_ICONS[gearType] : IconSquare;
+export function CategoryIcon({ equipmentType, ...iconProps }: CategoryIconProps) {
+  const Icon = equipmentType ? EQUIPMENT_TYPE_ICONS[equipmentType] : IconSquare;
   return <Icon {...iconProps} />;
 }

@@ -6,7 +6,7 @@ import {
     EquipmentListItem,
     JunkListItem,
 } from '@shared/api/endpoints/lists.models';
-import { GearTier } from '@shared/domain/tier';
+import { EquipmentTierKind } from '@shared/domain/tier';
 
 import { getPrisma } from '@app/prisma';
 
@@ -111,7 +111,7 @@ async function handleListEquipment(
     // Groundwork: the item→category mapping isn't seeded yet, so this is always
     // null for now. Once `EquipmentCategory` is wired up, populate it here.
     category: null,
-    tier: item.tier as GearTier | null,
+    tier: item.tier as EquipmentTierKind | null,
     maxDropQuality: item.maxDropQuality,
     maxDropGrade: item.maxDropGrade,
     sources: (sourcesByEquipmentId.get(item.id) ?? [])

@@ -4,7 +4,7 @@
  * valid equipment/junk names that the guarantee endpoints expect as input.
  */
 
-import { GearTier } from '../../domain/tier';
+import { EquipmentTierKind } from '../../domain/tier';
 
 /** One entry of `GET /junks`. */
 export interface JunkListItem {
@@ -47,8 +47,8 @@ export interface EquipmentListItem {
   name: string,
   /** Category, or null when it hasn't been mapped yet (not seeded — see routes). */
   category: EquipmentCategoryRef | null,
-  /** Gear tier, or null when it couldn't be derived (enrichment — see schema). */
-  tier: GearTier | null,
+  /** Equipment tier, or null when it couldn't be derived (enrichment — see schema). */
+  tier: EquipmentTierKind | null,
   /** Highest quality (★1–5) this equipment is known to drop at; null if unknown. */
   maxDropQuality: number | null,
   /** Highest grade (1–5) this equipment is known to drop at; null if unknown. */
