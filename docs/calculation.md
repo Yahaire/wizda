@@ -127,31 +127,68 @@ no-blessing path (`B` empty ⇒ presence 1 everywhere) is unchanged.
 `P(B all present | grade g)` is **not** a product of per-slot odds, because
 "Additional Blessings ... do not stack" — across the `g − 1` active slots the
 blessings are drawn **without replacement** (no piece gets the same blessing
-twice; see `docs/domain.md`). The source gives only the per-slot *marginal*
-distributions, so the joint uses a model.
+twice; see `docs/domain.md`).
 
-**The model:** independent per-slot draws **conditioned on all-distinct**,
-renormalised. Enumerate injective assignments of the active slots to distinct
-blessings, weight each by the product of its per-slot marginals, and compute
+**The model — a sequential chain.** Slots are rolled **in order**, slot 1 first.
+Each slot draws from its own published row with the blessings earlier slots
+already took removed, and the surviving rates renormalised:
 
 ```
-P(B all present | grade g) =
-    ( Σ over injective assignments whose blessing set ⊇ B  of  Π_s marginal )
-  / ( Σ over all injective assignments                     of  Π_s marginal )
+P(b₁ … b_m) = Π_s  rate_s(b_s) / Σ_{x ∉ {b₁ … b_{s−1}}} rate_s(x)
+
+P(B all present | grade g) = Σ over assignments whose blessing set ⊇ B  of  P(b₁ … b_m)
 ```
+
+where `m = g − 1`. Note there is **no global normaliser**: the chain already sums
+to 1 over the valid assignments. Slot 1 is therefore rolled straight off its
+published row, untouched — nothing downstream can reach back and reweight it.
 
 This is exactly computable — with ≤ 4 active slots over 19 blessings the
-denominator has at most `19·18·17·16 ≈ 93k` terms (usually far fewer, since only
-nonzero marginals are stored), trivial to sum per equipment.
+enumeration has at most `19·18·17·16 ≈ 93k` terms (usually far fewer, since only
+nonzero rates are stored, and a branch is pruned once too few slots remain to fit
+what `B` still needs), trivial to sum per equipment.
 
-It is an *assumption* about the generative process: it reproduces the input
-marginals only approximately and can't be checked against the game's true joint
-(the source doesn't publish one). The tests therefore validate that we compute
-*this model* exactly — a Monte-Carlo rejection sampler of the same
-without-replacement process matches the analytic presence — **not** that the
-model equals reality. To keep that honest to users, any query with blessings
-marks its response `estimated: true` (with a short note); pure
-equipment/quality/grade queries stay exact and unflagged.
+### The one assumption
+
+The source publishes a rate per `(equipment, slot, blessing)` but never says what
+the game does when a slot rolls a blessing the piece already carries. We assume
+it **rerolls that slot**. Equivalently — and identically, as a distribution —
+that it removes the taken blessing from the row and redistributes its weight
+over the survivors. Rejection-sampling one slot from `rate_s` while refusing the
+taken blessings *is* the renormalised row, so those two mechanics are the same
+model, not two models that happen to agree.
+
+The alternative is that the game rolls every slot at once and, on any collision,
+throws away the whole piece and starts over. That is a genuinely different
+distribution: discarding the whole tuple lets a slot-3 collision retroactively
+change what slot 1 was, so slot 1's published row stops holding. Wizda used to
+compute that model. We switched because two of the three plausible mechanics
+collapse to the sequential chain, and only the third — restarting the whole item
+— gives the old numbers.
+
+Measured across the 374 equipment with 3 active slots, for a required `{ATK,
+ATK%}`: the two models differ by **under 1% for the median item** and at most
+**~13%** at the tails, in both directions. So this is not a correctness scandal
+in the old code; it's a better-motivated model at a comparable price.
+
+Because the mechanic is unpublished, any query with blessings still marks its
+response `estimated: true` (with a short note). Pure equipment/quality/grade
+queries stay exact and unflagged.
+
+**A second-order caveat**, kept here and out of the UI: we read the published
+rows as the game's per-slot rate *tables* — the weights it rolls from before
+exclusion. If they were instead the *observed* outcome rates (what fraction of
+pieces end up with blessing `b` in slot `s`), then slot 1 still pins exactly, but
+slots 2+ have already been shaped by the exclusion and renormalising them again
+double-counts. The exact fix under that reading is to invert the observed
+marginals back to the underlying tables — a small fixed point per equipment,
+precomputable at seed time. We haven't, because the rows come from the devs'
+official lists and read as tables.
+
+The tests validate that we compute *this model* exactly — a Monte-Carlo sampler
+of the same sequential process matches the analytic presence, and the per-blessing
+presences sum to the slot count as a proper distribution must — **not** that the
+model equals reality.
 
 **Missing blessing data:** an equipment with drop rows but no seeded
 `EquipmentBlessingDropRate` rows (a data gap) gets an all-zero presence when
@@ -170,6 +207,10 @@ The pure math is checked two ways (see `dropRateMath.test.ts`):
    quality and a grade by their distributions, many times — and asserts the
    closed-form `P(match | junk)` matches the empirical hit rate within a few
    standard errors. A separate simulation draws `n` junks and confirms the
-   ≥1-success frequency matches the requested confidence. If the closed form and
-   the simulated process ever disagree, the formula (or our reading of the model)
-   is wrong.
+   ≥1-success frequency matches the requested confidence. For blessings, a
+   sampler rolls the slots in order, excluding what's taken, and must match
+   `blessingPresenceByGrade`. If the closed form and the simulated process ever
+   disagree, the formula (or our reading of the model) is wrong.
+3. **A distribution invariant**: exactly `m` distinct blessings land on an
+   `m`-slot piece, so `Σ_b P(b present) = m` by linearity of expectation. A
+   botched renormalisation breaks this even when the hand-computed cases pass.

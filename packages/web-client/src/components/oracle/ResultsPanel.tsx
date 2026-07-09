@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { CALCULATION_DOC_URL } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { WizdaEmoji } from '@/mascot/wizda';
 import {
-    ActionIcon, Alert, Box, Button, Center, Group, Loader, Modal, Paper, Stack, Text, TextInput,
-    ThemeIcon, Tooltip, UnstyledButton
+    ActionIcon, Alert, Anchor, Box, Button, Center, Group, Loader, Modal, Paper, Stack, Text,
+    TextInput, ThemeIcon, Tooltip, UnstyledButton
 } from '@mantine/core';
 import { TsUtilities } from '@shared/tsUtilities';
 import {
@@ -32,11 +33,14 @@ const CHEVRON_COL = 16;
 // reserves an equal-width empty slot so the number columns stay aligned with it.
 const ROW_CHEVRON = <IconChevronRight size={CHEVRON_COL} style={{ opacity: 0.4, flexShrink: 0 }} />;
 
+// Wizda's in-character version of the API's `BLESSING_ESTIMATE_NOTE`. Same
+// claim, different register — keep the two in step.
 const ESTIMATE_NOTE = TsUtilities.stringJoin([
-  "These numbers are a careful estimate.",
-  "Blessings roll on their own slots, so I work out the combined odds rather than",
-  "reading them straight off a single table.",
-  "They'll be close — treat them as a solid guide rather than a promise.",
+  "Blessings fill one slot at a time, and no piece ever gets the same one twice.",
+  "The devs publish each slot's odds, but never say what happens exactly after the first slot is sfilled.",
+  "I assume the game simply rerolls that slot.",
+  "If it starts the whole piece over instead, my numbers drift a little — usually by",
+  "well under 1%, and at worst by about a tenth. Everything else here is exact.",
 ]);
 
 interface ResultsPanelProps {
@@ -157,13 +161,13 @@ export function ResultsPanel({
             {result.total} {result.total === 1 ? "junk" : "junks"} can get it
           </Text>
           {showEstimate && (
-            <Tooltip label="These are estimates — tap to learn why" withArrow>
+            <Tooltip label="Blessing odds rest on one assumption — tap to see it" withArrow>
               <ActionIcon
                 variant="subtle"
                 color="yellow"
                 size="sm"
                 radius="xl"
-                aria-label="Why these are estimates"
+                aria-label="The assumption behind these blessing odds"
                 onClick={() => setEstimateOpen(true)}
               >
                 <IconAlertTriangle size={16} />
@@ -299,15 +303,29 @@ export function ResultsPanel({
         onSeeFullDetails={seeFullJunkDetails}
       />
 
-      {/* Estimate explanation */}
+      {/* The one assumption behind blessing-filtered results */}
       <Modal
         opened={estimateOpen}
         onClose={() => setEstimateOpen(false)}
-        title="About these estimates"
+        title="About the blessing odds"
         centered
         size="md"
       >
-        <Text className="wizda-speech">{WizdaEmoji.info} {ESTIMATE_NOTE}</Text>
+        <Stack gap="sm">
+          <Text className="wizda-speech">{WizdaEmoji.info} {ESTIMATE_NOTE}</Text>
+          <Text size="sm" c="dimmed">
+            Want to check my calculations — or know how the game really rolls?{' '}
+            <Anchor
+              href={CALCULATION_DOC_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              inherit
+            >
+              The calculation doc
+            </Anchor>{' '}
+            spells out every step, and corrections are welcome.
+          </Text>
+        </Stack>
       </Modal>
     </Stack>
   );

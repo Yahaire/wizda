@@ -2,7 +2,7 @@
  * Drop-rate math — the pure, Prisma-free core of the "how much junk to
  * guarantee item X?" calculation.
  *
- * Derivation, rationale, and the (deferred) blessing extension are documented in
+ * Derivation, rationale, and the blessing extension are documented in
  * `docs/calculation.md`. Keep this module free of DB/HTTP concerns so it stays
  * trivially unit-testable (see `dropRateMath.test.ts`).
  */
@@ -98,22 +98,30 @@ function gradeFactorForRow(
  * P(all `required` blessings present | grade), for each grade 1..5 at indices
  * 0..4 — the blessing extension of the grade factor (`docs/calculation.md`).
  *
- * A grade-`g` piece has `m = g − 1` active slots, filled top-to-bottom (slot 1
- * first), so it uses `slotMarginals[0..m-1]`. `slotMarginals[s]` maps each
- * blessing code to `P(it lands in slot s+1 | equipment)`; only nonzero entries
- * need be present. Because additional blessings don't stack, the `m` slots are
- * drawn **without replacement**, so the joint is the injective-assignment sum
- * (draw each slot from its marginal, condition on all-distinct, renormalise):
+ * A grade-`g` piece has `m = g − 1` active slots, rolled in order top-to-bottom
+ * (slot 1 first), so it uses `slotRates[0..m-1]`. `slotRates[s]` maps each
+ * blessing code to its published rate for slot `s+1`; only nonzero entries need
+ * be present. Because additional blessings don't stack, a slot never rolls a
+ * blessing an earlier slot already took: it draws from its own published row
+ * with those removed and the survivors renormalised. The joint is therefore an
+ * ordered chain, and the presence sums it over the assignments covering
+ * `required`:
  *
- *   presence = Σ injective assignments whose blessing set ⊇ required  of  Π marginal
- *            / Σ all injective assignments                            of  Π marginal
+ *   P(b₁ … b_m) = Π_s  rate_s(b_s) / Σ_{x ∉ {b₁ … b_{s−1}}} rate_s(x)
+ *
+ *   presence    = Σ over assignments whose blessing set ⊇ required  of  P(b₁ … b_m)
+ *
+ * The chain already sums to 1 over the valid assignments, so — unlike a model
+ * that rerolls the *whole* piece on a collision — there is no global normaliser
+ * to divide out. See `docs/calculation.md` for why we model it this way, and for
+ * the one assumption it rests on.
  *
  * Edge cases: `required` empty ⇒ 1 at every grade (so the grade factor collapses
- * to the plain accepted mass); `|required| > m` ⇒ 0 (can't fit); a zero
- * denominator (no valid distinct assignment) ⇒ 0.
+ * to the plain accepted mass); `|required| > m` ⇒ 0 (can't fit); a required
+ * blessing no slot can roll ⇒ 0 (no assignment covers it).
  */
 export function blessingPresenceByGrade(
-  slotMarginals: readonly ReadonlyMap<string, number>[],
+  slotRates: readonly ReadonlyMap<string, number>[],
   required: readonly string[],
 ): number[] {
   const requiredSet = new Set(required);
@@ -121,7 +129,7 @@ export function blessingPresenceByGrade(
   for (let grade = 1; grade <= RATE_LEVEL_COUNT; grade++) {
     const activeSlots = grade - 1;
     presence[grade - 1] = jointBlessingPresence(
-      slotMarginals.slice(0, activeSlots),
+      slotRates.slice(0, activeSlots),
       requiredSet,
     );
   }
@@ -130,7 +138,8 @@ export function blessingPresenceByGrade(
 
 /**
  * Core of {@link blessingPresenceByGrade} for a fixed active-slot count: the
- * conditioned-injective joint over the given slots. See that function's doc.
+ * sequential without-replacement chain over the given slots, summed over the
+ * assignments covering `required`. See that function's doc.
  */
 function jointBlessingPresence(
   slots: readonly ReadonlyMap<string, number>[],
@@ -143,36 +152,51 @@ function jointBlessingPresence(
     return 0; // not enough active slots to hold this many distinct blessings
   }
 
-  // Sum Π(marginals) over injective slot→blessing assignments (no repeats):
-  // `denom` over all such assignments, `numer` over those covering `required`.
-  let denom = 0;
-  let numer = 0;
-  const used = new Set<string>();
+  let total = 0;
+  const taken = new Set<string>();
 
-  const walk = (slotIndex: number, weight: number, stillNeeded: number): void => {
+  const walk = (slotIndex: number, chained: number, stillNeeded: number): void => {
+    if (stillNeeded > slots.length - slotIndex) {
+      return; // too few slots left to fit what's still required
+    }
     if (slotIndex === slots.length) {
-      denom += weight;
-      if (stillNeeded === 0) {
-        numer += weight;
-      }
+      total += chained; // stillNeeded is 0 here, or the guard above returned
       return;
     }
-    const marginal = slots[slotIndex];
-    if (!marginal) {
+    const slotRates = slots[slotIndex];
+    if (!slotRates) {
       return; // an empty slot admits no assignment → this path contributes 0
     }
-    for (const [blessing, rate] of marginal) {
-      if (rate <= 0 || used.has(blessing)) {
+
+    // What this slot can still roll: its published row minus the blessings
+    // earlier slots took. Sum the survivors rather than subtracting the taken
+    // ones from 1 — the published rows only sum to 100% up to their rounding.
+    let available = 0;
+    for (const [blessing, rate] of slotRates) {
+      if (rate > 0 && !taken.has(blessing)) {
+        available += rate;
+      }
+    }
+    if (available <= 0) {
+      return; // nothing left for this slot to roll
+    }
+
+    for (const [blessing, rate] of slotRates) {
+      if (rate <= 0 || taken.has(blessing)) {
         continue;
       }
-      used.add(blessing);
-      walk(slotIndex + 1, weight * rate, stillNeeded - (required.has(blessing) ? 1 : 0));
-      used.delete(blessing);
+      taken.add(blessing);
+      walk(
+        slotIndex + 1,
+        (chained * rate) / available,
+        stillNeeded - (required.has(blessing) ? 1 : 0),
+      );
+      taken.delete(blessing);
     }
   };
   walk(0, 1, required.size);
 
-  return denom > 0 ? numer / denom : 0;
+  return total;
 }
 
 /**

@@ -58,40 +58,44 @@ function sampleJunkOutcome(
   };
 }
 
-/** Sample a blessing code from one slot's marginal (code → weight). */
-function sampleBlessing(marginal: ReadonlyMap<string, number>, u: number): string {
-  const entries = [...marginal];
-  const index = sampleIndex(entries.map(([, weight]) => weight), u);
-  return entries[index][0];
+/**
+ * Roll one slot: sample from its published row, restricted to the blessings no
+ * earlier slot has taken. `sampleIndex` normalises by the weight total, which is
+ * exactly the renormalisation over survivors the sequential model performs.
+ */
+function sampleBlessingExcluding(
+  slotRates: ReadonlyMap<string, number>,
+  taken: ReadonlySet<string>,
+  u: number,
+): string {
+  const available = [...slotRates].filter(([code, rate]) => rate > 0 && !taken.has(code));
+  return available[sampleIndex(available.map(([, rate]) => rate), u)][0];
 }
 
 /**
- * Empirical `P(required ⊆ assigned)` under the without-replacement model, by
- * rejection sampling: draw each active slot independently from its marginal,
- * discard draws with any repeated blessing (blessings don't stack), and measure
- * the fraction of kept draws that cover `required`. Mirrors the generative
- * process `blessingPresenceByGrade` claims to summarise.
+ * Empirical `P(required ⊆ assigned)` under the sequential without-replacement
+ * process: roll each active slot in order from its published row with the
+ * already-taken blessings removed. This is the generative process
+ * `blessingPresenceByGrade` claims to summarise — no rejection, so every draw
+ * counts (a whole-set-reroll model would need one, and would give other numbers).
  */
 function empiricalBlessingPresence(
   slots: readonly ReadonlyMap<string, number>[],
   required: readonly string[],
   rng: () => number,
-  keep: number,
+  draws: number,
 ): number {
-  let kept = 0;
   let hits = 0;
-  while (kept < keep) {
-    const assigned = slots.map((slot) => sampleBlessing(slot, rng()));
-    if (new Set(assigned).size !== assigned.length) {
-      continue; // collision → reject (without-replacement)
+  for (let draw = 0; draw < draws; draw++) {
+    const taken = new Set<string>();
+    for (const slotRates of slots) {
+      taken.add(sampleBlessingExcluding(slotRates, taken, rng()));
     }
-    kept++;
-    const set = new Set(assigned);
-    if (required.every((code) => set.has(code))) {
+    if (required.every((code) => taken.has(code))) {
       hits++;
     }
   }
-  return hits / kept;
+  return hits / draws;
 }
 
 // ---------------------------------------------------------------------------
@@ -290,12 +294,30 @@ describe('blessingPresenceByGrade', () => {
     slot({ A: 0.4, B: 0.4, C: 0.2 }),
   ];
 
-  it('matches the pen-and-paper conditioned-injective joint', () => {
-    // Distinct (slot1, slot2) assignments and their Π marginals:
-    //   A,B .20  A,C .10  B,A .12  B,C .06  C,A .08  C,B .08   → denom .64
-    // Covering {A,B}: A,B .20 + B,A .12 = .32 → numer .32 → .32/.64 = 0.5
+  it('matches the pen-and-paper sequential chain', () => {
+    // Slot 2 renormalises over whatever slot 1 didn't take. Assignments covering
+    // {A, B}, each as rate₁ · rate₂/(surviving rate₂ mass):
+    //   A then B:  0.5 · 0.4/(0.4 + 0.2) = 0.5 · 2/3 = 1/3
+    //   B then A:  0.3 · 0.4/(0.4 + 0.2) = 0.3 · 2/3 = 1/5
+    //   (C first can never cover both)              → 1/3 + 1/5 = 8/15
     const presence = blessingPresenceByGrade(twoSlots, ['A', 'B']);
-    expect(presence[2]).toBeCloseTo(0.5, 12); // grade 3 (2 active slots)
+    expect(presence[2]).toBeCloseTo(8 / 15, 12); // grade 3 (2 active slots)
+  });
+
+  it('rolls slot 1 straight off its published row (no back-influence)', () => {
+    // With one active slot the chain is just that row — nothing has been taken,
+    // and no later slot can reach back and reweight it.
+    const presence = blessingPresenceByGrade(twoSlots, ['A']);
+    expect(presence[1]).toBeCloseTo(0.5, 12); // grade 2 (1 active slot)
+  });
+
+  it('is a proper distribution: presences over all blessings sum to the slot count', () => {
+    // Exactly 2 distinct blessings land on a 2-slot piece, so by linearity of
+    // expectation Σ_b P(b present) = 2. Catches a botched renormalisation.
+    const total = ['A', 'B', 'C']
+      .map((code) => blessingPresenceByGrade(twoSlots, [code])[2])
+      .reduce((sum, presence) => sum + presence, 0);
+    expect(total).toBeCloseTo(2, 12);
   });
 
   it('is 0 at grades whose active slots (grade − 1) cannot hold all required', () => {
@@ -350,13 +372,14 @@ describe('matchProbabilityForJunk with gradePresence', () => {
 
 // ---------------------------------------------------------------------------
 // Monte-Carlo cross-check for the blessing joint — the analytic presence must
-// match the frequency of the rejection-sampled without-replacement process it
-// models. (This proves we compute the MODEL correctly; whether the model equals
-// the game's true joint is the documented, response-flagged assumption.)
+// match the frequency of the sequential without-replacement process it models.
+// (This proves we compute the MODEL correctly; whether the game rerolls a single
+// slot on a collision, as we assume, or restarts the whole piece, is the
+// documented, response-flagged assumption. See `docs/calculation.md`.)
 // ---------------------------------------------------------------------------
 
 describe('blessing Monte-Carlo cross-check', () => {
-  it('presence at grade 5 equals the empirical rejection-sampled frequency', () => {
+  it('presence at grade 5 equals the empirical sequentially-sampled frequency', () => {
     const fourSlots = [
       slot({ A: 0.5, B: 0.2, C: 0.15, D: 0.1, E: 0.05 }),
       slot({ A: 0.3, B: 0.3, C: 0.2, D: 0.1, E: 0.1 }),

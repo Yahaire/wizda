@@ -1,8 +1,19 @@
 'use client';
 
-import { APP_NAME, DATA_SOURCE_URL, ORACLE_NAME, SUPPORT_URL } from '@/app/app.constants';
-import { Anchor, Button, List, Paper, Stack, Text, Title } from '@mantine/core';
-import { IconHeartFilled } from '@tabler/icons-react';
+import {
+    APP_NAME, CALCULATION_DOC_URL, DATA_SOURCE_URL, DOMAIN_DOC_URL, ISSUES_URL, ORACLE_NAME,
+    REPO_URL, SUPPORT_URL
+} from '@/app/app.constants';
+import { Anchor, Button, Code, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
+import { IconBrandGithub, IconHeartFilled } from '@tabler/icons-react';
+
+// The two lines that produce every number the Oracle prints. Real newlines, so
+// this can't go through `TsUtilities.stringJoin` (which joins prose with spaces).
+const FORMULA = [
+  'n = ⌈ ln(1 − c) / ln(1 − P) ⌉',
+  '',
+  'P(b₁ … b_m) = Π_s  rate_s(b_s) / Σ_{x ∉ taken} rate_s(x)',
+].join('\n');
 
 export function AboutContent() {
   return (
@@ -36,9 +47,11 @@ export function AboutContent() {
         <Title order={4} mb="xs">Two things to keep in mind</Title>
         <List spacing="xs" size="sm">
           <List.Item>
-            <strong>Blessing counts are estimates.</strong> The official source only gives
-            per-slot odds, not combined ones, so any result that filters by blessings is
-            approximate (we flag it when it happens).
+            <strong>Blessing odds rest on one assumption.</strong> The devs publish each
+            slot&apos;s odds, but never say what the game does when a slot rolls a blessing
+            the piece already has. We assume it rerolls that slot. If it starts the whole
+            piece over instead, results shift by well under 1% for most gear — about a tenth
+            at the extremes. We flag every result that leans on this.
           </List.Item>
           <List.Item>
             <strong>Some junk has multiple versions.</strong> A few junks changed over
@@ -46,6 +59,48 @@ export function AboutContent() {
             pool, your real drops may differ — those are marked with a note.
           </List.Item>
         </List>
+      </div>
+
+      <div>
+        <Title order={4} mb="xs">Contribute</Title>
+        <Text size="sm" mb="sm">
+          {APP_NAME} is open source, and none of the maths is hidden. Nearly every number
+          the {ORACLE_NAME} prints comes out of these two lines:
+        </Text>
+        <Code block>{FORMULA}</Code>
+        <Text size="sm" mt="sm">
+          The first is how much junk reaches certainty <em>c</em> when a single junk has
+          chance <em>P</em>. The second is how a piece fills its blessing slots — one at a
+          time, in order, never repeating, each slot re-weighted over whatever is left. The{' '}
+          <Anchor href={CALCULATION_DOC_URL} target="_blank" rel="noopener noreferrer">
+            calculation doc
+          </Anchor>
+          &nbsp;derives both in full; the{' '}
+          <Anchor href={DOMAIN_DOC_URL} target="_blank" rel="noopener noreferrer">
+            domain doc
+          </Anchor>
+          &nbsp;covers how the game&apos;s drop tables are shaped.
+        </Text>
+        <Text size="sm" mt="sm" mb="sm">
+          If we&apos;ve got something wrong, please tell us — especially if you play and
+          know a mechanic we&apos;ve modelled badly. Open an{' '}
+          <Anchor href={ISSUES_URL} target="_blank" rel="noopener noreferrer">
+            issue
+          </Anchor>
+          &nbsp;or send a pull request. You know things we don&apos;t.
+        </Text>
+        <Group>
+          <Button
+            component="a"
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="default"
+            leftSection={<IconBrandGithub size={16} />}
+          >
+            {APP_NAME} on GitHub
+          </Button>
+        </Group>
       </div>
 
       <div>

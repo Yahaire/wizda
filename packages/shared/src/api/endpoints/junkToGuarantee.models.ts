@@ -46,9 +46,10 @@ export interface GuaranteeFilters {
    *
    * Because a piece's active blessing slots equal `grade − 1` and blessings
    * don't stack, this couples to `grade`: a combo needs a grade with enough
-   * slots to hold it. The odds are a documented modelling estimate — responses
-   * to blessing queries set {@link JunkToGuaranteeResult.estimated}. See
-   * `docs/calculation.md`. Omitted/empty = no blessing requirement.
+   * slots to hold it. The odds are exact arithmetic on the published per-slot
+   * rates, resting on one documented assumption about an unpublished mechanic —
+   * responses to blessing queries set {@link JunkToGuaranteeResult.estimated}.
+   * See `docs/calculation.md`. Omitted/empty = no blessing requirement.
    */
   blessings?: string[],
   /**
@@ -99,12 +100,15 @@ export interface JunkGuaranteeEntry {
 }
 
 /**
- * Short human-readable caveat that accompanies {@link estimated} results. A
- * shared constant so the backend and any UI use identical wording.
+ * Short human-readable caveat that accompanies {@link estimated} results —
+ * neutral wording, for API consumers. The web client deliberately does *not*
+ * render this: it says the same thing in the mascot's voice (see the oracle's
+ * `ResultsPanel`). Keep the two in step.
  */
 export const BLESSING_ESTIMATE_NOTE = TsUtilities.stringJoin([
-  "Blessing odds are estimated from per-slot rates (the source gives no joint",
-  "probabilities), so junk counts for blessing queries are approximate.",
+  "Blessing odds assume the game rerolls a single slot when it lands on a",
+  "blessing the piece already has, rather than rerolling the whole piece. The",
+  "per-slot rates themselves are exact; this is the only modelling step.",
 ]);
 
 /** Response of `POST /junk-to-guarantee`. */
@@ -112,9 +116,10 @@ export interface JunkToGuaranteeResult {
   /** The effective certainty used. */
   certainty: number,
   /**
-   * True when the query required blessings, so the numbers rely on the
-   * documented blessing-joint estimate (see {@link GuaranteeFilters.blessings}).
-   * Absent/false for pure equipment/quality/grade queries, which are exact.
+   * True when the query required blessings, so the numbers rest on the one
+   * documented assumption about how the game handles a repeat roll (see
+   * {@link GuaranteeFilters.blessings}). Absent/false for pure
+   * equipment/quality/grade queries, which assume nothing.
    */
   estimated?: boolean,
   /** Present with {@link BLESSING_ESTIMATE_NOTE} whenever {@link estimated}. */
