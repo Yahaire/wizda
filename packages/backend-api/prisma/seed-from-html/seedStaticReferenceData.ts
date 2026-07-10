@@ -1,14 +1,14 @@
 import { PrismaClient } from '@local-prisma/generated/client';
 import { EQUIPMENT_CATEGORIES, EQUIPMENT_TYPES } from '@shared/domain/equipment';
 import { BLESSINGS, STATS } from '@shared/domain/stats';
-import { EQUIPMENT_TIERS } from '@shared/domain/tier';
+import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 
 /**
  * Upserts the static reference tables from `packages/shared/src/domain` — the
  * single source of truth for these catalogs:
  *   - `Stat` (10) + `Blessing` (19)               from `stats.ts`
  *   - `EquipmentType` (7) + `EquipmentCategory` (32) from `equipment.ts`
- *   - `EquipmentTier` (7)                          from `tier.ts`
+ *   - `EquipmentRank` (7)                          from `rank.ts`
  *
  * Must run before the drop-rate seeds: `EquipmentBlessingDropRate` FKs to
  * `Blessing.code`, and the equipment-taxonomy enrichment pass FKs to
@@ -54,19 +54,19 @@ export async function seedStaticReferenceData(prisma: PrismaClient): Promise<voi
       });
     }
 
-    for (const tier of EQUIPMENT_TIERS) {
-      await tx.equipmentTier.upsert({
-        where: { kind: tier.kind },
+    for (const rank of EQUIPMENT_RANKS) {
+      await tx.equipmentRank.upsert({
+        where: { kind: rank.kind },
         create: {
-          kind: tier.kind,
-          name: tier.name,
-          orderIndex: tier.orderIndex,
-          isObtainableThroughJunk: tier.isObtainableThroughJunk,
+          kind: rank.kind,
+          name: rank.name,
+          orderIndex: rank.orderIndex,
+          isObtainableThroughJunk: rank.isObtainableThroughJunk,
         },
         update: {
-          name: tier.name,
-          orderIndex: tier.orderIndex,
-          isObtainableThroughJunk: tier.isObtainableThroughJunk,
+          name: rank.name,
+          orderIndex: rank.orderIndex,
+          isObtainableThroughJunk: rank.isObtainableThroughJunk,
         },
       });
     }

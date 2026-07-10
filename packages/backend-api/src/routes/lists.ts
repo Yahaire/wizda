@@ -6,16 +6,16 @@ import {
     EquipmentListItem,
     JunkListItem,
 } from '@shared/api/endpoints/lists.models';
-import { EquipmentTierKind } from '@shared/domain/tier';
+import { EquipmentRankKind } from '@shared/domain/rank';
 
 import { getPrisma } from '@app/prisma';
 
 /**
- * One (equipment, junk) drop pairing, with the highest quality/grade tier that
- * pairing reaches — i.e. the greatest 1–5 index whose per-tier rate is nonzero,
- * across every group row for the pair (mirrors the seed's `highestNonZeroTier`,
+ * One (equipment, junk) drop pairing, with the highest quality/grade rank that
+ * pairing reaches — i.e. the greatest 1–5 index whose per-rank rate is nonzero,
+ * across every group row for the pair (mirrors the seed's `highestNonZeroRank`,
  * done in SQL so we aggregate in the DB rather than pulling every rate row).
- * `0` means "all tiers zero" (shouldn't happen) and is normalised to null.
+ * `0` means "all ranks zero" (shouldn't happen) and is normalised to null.
  */
 interface EquipmentSourceMaxRow {
   equipmentId: string,
@@ -61,7 +61,7 @@ async function handleListEquipment(
       select: {
         id: true,
         name: true,
-        tier: true,
+        rank: true,
         maxDropQuality: true,
         maxDropGrade: true,
         category: { select: { code: true, name: true } },
@@ -125,7 +125,7 @@ async function handleListEquipment(
     // Enriched from the Fasterthoughts taxonomy (see the seed); null for the few
     // items whose name isn't in that source.
     category: item.category ? { code: item.category.code, name: item.category.name } : null,
-    tier: item.tier as EquipmentTierKind | null,
+    rank: item.rank as EquipmentRankKind | null,
     maxDropQuality: item.maxDropQuality,
     maxDropGrade: item.maxDropGrade,
     blessings: (blessingsByEquipmentId.get(item.id) ?? []).sort(),

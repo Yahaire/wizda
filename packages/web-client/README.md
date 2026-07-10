@@ -87,7 +87,7 @@ is in `transpilePackages` so Next compiles its TS (runtime enums/catalogs).
   remembered in `localStorage`.
 - **Lag guards** — the backend enforces a result limit and a "≥1 filter" rule; the
   Calculate button is disabled until a filter is set (and nudges you if poked).
-- **Lists** — click a column to sort, filter by name (equipment also by tier).
+- **Lists** — click a column to sort, filter by name (equipment also by rank).
   Virtualized with a sticky first column and horizontal scroll on narrow screens;
   clicking a row opens the **shared detail modals** (`detail/DetailProvider`), which
   cross-link — a junk lists the gear it drops, each piece opens the equipment modal,

@@ -1,35 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
-import { EquipmentTierKind } from '@shared/domain/tier';
+import { EquipmentRankKind } from '@shared/domain/rank';
 
 import {
   ARMOR_TYPE_TO_CATEGORY,
   WEAPON_TYPE_TO_CATEGORY,
   armorCategoryCode,
   buildTaxonomyByName,
-  rankToTier,
+  rankToKind,
   weaponCategoryCode,
 } from './equipmentTaxonomy.mapping';
 
 const VALID_CATEGORY_CODES = new Set(EQUIPMENT_CATEGORIES.map((category) => category.code));
 
-describe('rankToTier', () => {
-  it('maps every source rank to a tier', () => {
-    expect(rankToTier('Worn')).toBe(EquipmentTierKind.WORN);
-    expect(rankToTier('Bronze')).toBe(EquipmentTierKind.BRONZE);
-    expect(rankToTier('Iron')).toBe(EquipmentTierKind.IRON);
-    expect(rankToTier('Steel')).toBe(EquipmentTierKind.STEEL);
-    expect(rankToTier('Ebonsteel')).toBe(EquipmentTierKind.EBONSTEEL);
-    expect(rankToTier('Silver')).toBe(EquipmentTierKind.SILVER);
+describe('rankToKind', () => {
+  it('maps every source rank to a rank', () => {
+    expect(rankToKind('Worn')).toBe(EquipmentRankKind.WORN);
+    expect(rankToKind('Bronze')).toBe(EquipmentRankKind.BRONZE);
+    expect(rankToKind('Iron')).toBe(EquipmentRankKind.IRON);
+    expect(rankToKind('Steel')).toBe(EquipmentRankKind.STEEL);
+    expect(rankToKind('Ebonsteel')).toBe(EquipmentRankKind.EBONSTEEL);
+    expect(rankToKind('Silver')).toBe(EquipmentRankKind.SILVER);
   });
 
   it('throws on an unknown rank', () => {
-    expect(() => rankToTier('Mythril')).toThrow(/Unknown equipment rank/);
+    expect(() => rankToKind('Mythril')).toThrow(/Unknown equipment rank/);
   });
 
   it('throws on "Ex." — that marker lives in Compendium Number, never in Rank', () => {
-    expect(() => rankToTier('Ex.')).toThrow(/Unknown equipment rank/);
+    expect(() => rankToKind('Ex.')).toThrow(/Unknown equipment rank/);
   });
 });
 
@@ -72,26 +72,26 @@ describe('armorCategoryCode', () => {
 });
 
 describe('buildTaxonomyByName', () => {
-  it('builds a name -> { categoryCode, tier } map from weapon + armor rows, skipping blanks', () => {
+  it('builds a name -> { categoryCode, rank } map from weapon + armor rows, skipping blanks', () => {
     const weaponRows = [
       { 'Item Name': 'Bronze Dagger', Type: 'Dagger', Rank: 'Bronze' },
       // Real-world case: an "Ex." item, but that marker is in Compendium Number
-      // (not modelled here) — its Rank is a normal tier, Ebonsteel.
+      // (not modelled here) — its Rank is a normal rank, Ebonsteel.
       { 'Item Name': 'Blade Cuisinart', Type: '1H_Sword', Rank: 'Ebonsteel' },
       { 'Item Name': '', Type: '', Rank: '' },
     ];
     const armorRows = [
       { 'Item Name': 'Cloth Hat', Type: 'Head', Rank: 'Worn', 'Armor Type': 'Cloth' },
-      // Source gap: a real Silver glove with no weight class — tier only, no category.
+      // Source gap: a real Silver glove with no weight class — rank only, no category.
       { 'Item Name': 'Grip Gloves', Type: 'Hands', Rank: 'Silver', 'Armor Type': '' },
     ];
 
     const byName = buildTaxonomyByName(weaponRows, armorRows);
 
-    expect(byName.get('Bronze Dagger')).toEqual({ categoryCode: 'DAGGER', tier: EquipmentTierKind.BRONZE });
-    expect(byName.get('Blade Cuisinart')).toEqual({ categoryCode: 'ONE_HANDED_SWORD', tier: EquipmentTierKind.EBONSTEEL });
-    expect(byName.get('Cloth Hat')).toEqual({ categoryCode: 'HAT', tier: EquipmentTierKind.WORN });
-    expect(byName.get('Grip Gloves')).toEqual({ categoryCode: null, tier: EquipmentTierKind.SILVER });
+    expect(byName.get('Bronze Dagger')).toEqual({ categoryCode: 'DAGGER', rank: EquipmentRankKind.BRONZE });
+    expect(byName.get('Blade Cuisinart')).toEqual({ categoryCode: 'ONE_HANDED_SWORD', rank: EquipmentRankKind.EBONSTEEL });
+    expect(byName.get('Cloth Hat')).toEqual({ categoryCode: 'HAT', rank: EquipmentRankKind.WORN });
+    expect(byName.get('Grip Gloves')).toEqual({ categoryCode: null, rank: EquipmentRankKind.SILVER });
     expect(byName.size).toBe(4);
   });
 });

@@ -29,7 +29,7 @@ export type IconComponent = ComponentType<IconComponentProps>;
  * instead lands in `style.color`, which resolves `currentColor` — that works for
  * a plain colour but *silently* drops a paint server, since `url(#…)` is not a
  * valid CSS `color`. Tabler side-steps this by painting its stroke from `color`.
- * Routing to `fill` keeps a tier gradient working across both families.
+ * Routing to `fill` keeps a rank gradient working across both families.
  */
 export function gameIcon(Icon: IconType): IconComponent {
   return function GameIcon({

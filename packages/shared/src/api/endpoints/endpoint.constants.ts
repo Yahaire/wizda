@@ -18,8 +18,8 @@ export enum ErrorCode {
   UNKNOWN_BLESSING = 'UNKNOWN_BLESSING',
   /** One or more requested equipment category codes don't exist */
   UNKNOWN_CATEGORY = 'UNKNOWN_CATEGORY',
-  /** One or more requested tier kinds don't exist */
-  UNKNOWN_TIER = 'UNKNOWN_TIER',
+  /** One or more requested rank kinds don't exist */
+  UNKNOWN_RANK = 'UNKNOWN_RANK',
   /** An unexpected server-side error */
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }

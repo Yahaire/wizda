@@ -5,7 +5,7 @@ import { useId, useMemo, useState } from 'react';
 import { getCategoryIcon } from '@/components/CategoryIcon';
 import { useDetail } from '@/components/detail/DetailProvider';
 import {
-    getTierColor, GRADE_HEX, QualityStarRow, QualityStars
+    getRankColor, GRADE_HEX, QualityStarRow, QualityStars
 } from '@/components/gear/gearDisplays';
 import { Divider, Group, Paper, Pill, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { IconTarget } from '@tabler/icons-react';
@@ -56,25 +56,25 @@ function gradeTextStyle(grades: number[]): React.CSSProperties {
 const SUBJECT_ICON_SIZE = 18;
 
 /**
- * The subject's icon: its category's shape, tinted by its tier — the two facts a
+ * The subject's icon: its category's shape, tinted by its rank — the two facts a
  * player reads off an item at a glance in-game.
  *
  * Falls back to a neutral target whenever the query covers more than one shape, since
- * no single icon can stand for "an axe or a robe". Several tiers still tint, though:
+ * no single icon can stand for "an axe or a robe". Several ranks still tint, though:
  * `color` reaches an SVG paint attribute in both icon families (Tabler's stroke, a
  * game-icon's fill — see `gameIcon`), so an SVG gradient works as a paint server
  * there exactly as `background-clip: text` does for the subject text.
  */
 function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
   // `useId` embeds colons, which can't appear in a `url(#…)` fragment reference.
-  const gradientId = `tier-${useId().replace(/:/g, '')}`;
+  const gradientId = `rank-${useId().replace(/:/g, '')}`;
 
   const Icon = identity.categoryCode
     ? getCategoryIcon(identity.categoryCode)
     : IconTarget;
 
-  const colors = identity.tierKinds
-    .map(getTierColor)
+  const colors = identity.rankKinds
+    .map(getRankColor)
     .filter((color): color is string => Boolean(color));
 
   const iconStyle = { flexShrink: 0, marginTop: 2 };
@@ -177,7 +177,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
   const subject = subjectOf(query);
   const narrowed = wasNarrowed(matched, filters);
 
-  // A named piece knows its own category/tier, so the icon reads them off the
+  // A named piece knows its own category/rank, so the icon reads them off the
   // reference list rather than off the (coarser) filter axes.
   const equipmentByName = useMemo(() => {
     const map = new Map<string, EquipmentListItem>();

@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CategoryIcon } from '@/components/CategoryIcon';
-import { getTierColor, GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
+import { getRankColor, GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
 import { TruncatedText } from '@/components/TruncatedText';
 import { api, MaintenanceError } from '@/services/api';
 import {
@@ -179,7 +179,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     ?? {
       name,
       category: null,
-      tier: null,
+      rank: null,
       maxDropQuality: null,
       maxDropGrade: null,
       blessings: [],
@@ -275,15 +275,15 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
               <CategoryIcon
                 size={20}
                 categoryCode={current.item.category?.code}
-                color={getTierColor(current.item.tier) ?? 'var(--mantine-color-dimmed)'}
+                color={getRankColor(current.item.rank) ?? 'var(--mantine-color-dimmed)'}
               />
               <Text fw={600} fz="lg">{current.item.name}</Text>
             </Group>
             <Group gap="lg">
-              {current.item.tier && (
+              {current.item.rank && (
                 <Group gap={6}>
-                  <Text c="dimmed" size="sm">Tier</Text>
-                  <Badge variant="light" color="gray" size="sm">{current.item.tier}</Badge>
+                  <Text c="dimmed" size="sm">Rank</Text>
+                  <Badge variant="light" color="gray" size="sm">{current.item.rank}</Badge>
                 </Group>
               )}
               {current.item.maxDropQuality && (
@@ -368,7 +368,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
                           <CategoryIcon
                             size={14}
                             categoryCode={piece.category?.code}
-                            color={getTierColor(piece.tier) ?? 'var(--mantine-color-dimmed)'}
+                            color={getRankColor(piece.rank) ?? 'var(--mantine-color-dimmed)'}
                             style={{ flexShrink: 0 }}
                           />
                           <TruncatedText size="sm" style={{ minWidth: 0 }}>{piece.name}</TruncatedText>

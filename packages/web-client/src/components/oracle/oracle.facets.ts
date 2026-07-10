@@ -2,9 +2,9 @@
  * Which filter options still lead anywhere, and which picks have stopped fitting
  * together — the Oracle's faceting rules.
  *
- * The API ANDs the three *identity* axes (equipment name, category, tier) while
+ * The API ANDs the three *identity* axes (equipment name, category, rank) while
  * OR-ing within each, so a piece must satisfy every axis that's set. Left alone,
- * that lets a player ask for a Bronze sword at Silver tier and get a silent zero.
+ * that lets a player ask for a Bronze sword at Silver rank and get a silent zero.
  * Everything here exists to make that unaskable: an option is offered only when
  * some piece would survive picking it, and the axes that *can't* be pre-empted
  * this way (quality, grade, blessings) are checked against what's left so the page
@@ -15,8 +15,8 @@
  */
 
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
+import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { BLESSINGS } from '@shared/domain/stats';
-import { EQUIPMENT_TIERS } from '@shared/domain/tier';
 import { TsUtilities } from '@shared/tsUtilities';
 
 import {
@@ -27,12 +27,12 @@ import {
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 
 /** The identity axes: the three that decide *which pieces* are in play. */
-type IdentityAxis = 'equipment' | 'category' | 'tier';
+type IdentityAxis = 'equipment' | 'category' | 'rank';
 
 /**
  * The value an item carries on one identity axis, or null when it has none — a
  * handful of items were never matched by the taxonomy enrichment and so have no
- * tier or category. The API filters those out whenever the axis is set (a `null`
+ * rank or category. The API filters those out whenever the axis is set (a `null`
  * column can't be `IN` a list), and this mirrors that: an unclassified piece is
  * admitted only while the axis is a wildcard.
  */
@@ -42,8 +42,8 @@ function valueOn(item: EquipmentListItem, axis: IdentityAxis): string | null {
       return item.name;
     case 'category':
       return item.category?.code ?? null;
-    case 'tier':
-      return item.tier;
+    case 'rank':
+      return item.rank;
   }
 }
 
@@ -56,7 +56,7 @@ function satisfiesAxis(item: EquipmentListItem, axis: IdentityAxis, selected: st
   return value !== null && selected.includes(value);
 }
 
-const IDENTITY_AXES: IdentityAxis[] = ['equipment', 'category', 'tier'];
+const IDENTITY_AXES: IdentityAxis[] = ['equipment', 'category', 'rank'];
 
 /** Whether an item satisfies every identity axis except the ones named. */
 function satisfiesIdentity(
@@ -71,7 +71,7 @@ function satisfiesIdentity(
 
 /**
  * The equipment the identity axes admit — every piece matching the equipment,
- * category, *and* tier filters. With all three left blank that's the whole list,
+ * category, *and* rank filters. With all three left blank that's the whole list,
  * which is what an unfiltered query means.
  */
 export function candidateEquipment(
@@ -89,7 +89,7 @@ export function candidateEquipment(
  * adding a second category can only widen the result — the only pick that can
  * empty the set is the first one on a previously-blank axis. Judging each value
  * against the other axes covers exactly that case, and it does so symmetrically:
- * pick a Bronze sword and Silver leaves the tier list; pick Silver and the Bronze
+ * pick a Bronze sword and Silver leaves the rank list; pick Silver and the Bronze
  * sword leaves the equipment list. A selection reached by only ever taking offered
  * options therefore always has candidates, and dropping a pick only ever widens.
  */
@@ -197,7 +197,7 @@ export function maxReachableGrade(items: readonly EquipmentListItem[]): number {
   return maxReachable(items, 'maxDropGrade');
 }
 
-/** The ceiling on the quality axis: the best star rank the equipment in play drops. */
+/** The ceiling on the quality axis: the best star count the equipment in play drops. */
 export function maxReachableQuality(items: readonly EquipmentListItem[]): number {
   return maxReachable(items, 'maxDropQuality');
 }
@@ -263,10 +263,10 @@ export function detectConflict(
   if (candidates.length === 0) {
     return {
       message: TsUtilities.stringJoin([
-        "Your gear, category, and tier picks don't overlap — nothing is all three at once.",
-        "I can drop the category and tier and keep the gear you named.",
+        "Your gear, category, and rank picks don't overlap — nothing is all three at once.",
+        "I can drop the category and rank and keep the gear you named.",
       ]),
-      fix: { category: [], tier: [] },
+      fix: { category: [], rank: [] },
     };
   }
 
@@ -325,7 +325,7 @@ export function detectConflict(
 
 /** Everything the filter panel needs to know about the current selection. */
 export interface OracleFacets {
-  /** Equipment names that still fit the category/tier picks. */
+  /** Equipment names that still fit the category/rank picks. */
   equipment: Set<string>,
   /**
    * Every category some catalogued piece belongs to, whatever the current picks —
@@ -336,10 +336,10 @@ export interface OracleFacets {
    * a junk starts dropping Tools they appear on their own.
    */
   catalogCategory: Set<string>,
-  /** Category codes some candidate still has, given the equipment/tier picks. */
+  /** Category codes some candidate still has, given the equipment/rank picks. */
   category: Set<string>,
-  /** Tier kinds some candidate still has, given the equipment/category picks. */
-  tier: Set<string>,
+  /** Rank kinds some candidate still has, given the equipment/category picks. */
+  rank: Set<string>,
   /** Blessings some candidate could roll alongside the ones already required. */
   blessings: Set<string>,
   /** Ceiling on the grade slider. */
@@ -373,7 +373,7 @@ export function computeFacets(
       equipment: new Set(filters.equipment),
       catalogCategory: everyCategory,
       category: everyCategory,
-      tier: new Set(EQUIPMENT_TIERS.map((entry) => entry.kind as string)),
+      rank: new Set(EQUIPMENT_RANKS.map((entry) => entry.kind as string)),
       blessings: new Set(BLESSINGS.map((blessing) => blessing.code)),
       maxGrade: MAX_LEVEL,
       maxQuality: MAX_LEVEL,
@@ -395,7 +395,7 @@ export function computeFacets(
     // Judged against nothing at all: what the catalog *has*, not what the picks leave.
     catalogCategory: availableOn(all, EMPTY_FILTERS, 'category'),
     category: availableOn(all, selection, 'category'),
-    tier: availableOn(all, selection, 'tier'),
+    rank: availableOn(all, selection, 'rank'),
     blessings: availableBlessings(candidates, selection.blessings),
     // Read off the gear that could actually answer the query: a piece that reaches
     // Red is no help if it can't roll the blessings the player asked for.

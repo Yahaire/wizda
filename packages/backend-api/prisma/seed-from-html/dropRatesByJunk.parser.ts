@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 
-import { FiveTierRates, ParsedJunkDropRow } from './dropRatesByJunk.models';
+import { FiveRankRates, ParsedJunkDropRow } from './dropRatesByJunk.models';
 import { isCloseToOne, parsePercent } from './rateParsing';
 
 const EXPECTED_HEADER_ROW_1 = [
@@ -54,8 +54,8 @@ function buildRow(
   itemCells: string[],
 ): ParsedJunkDropRow {
   const [equipmentName, dropRateText, ...rates] = itemCells;
-  const qualityRates = rates.slice(0, 5).map(parsePercent) as FiveTierRates;
-  const gradeRates = rates.slice(5, 10).map(parsePercent) as FiveTierRates;
+  const qualityRates = rates.slice(0, 5).map(parsePercent) as FiveRankRates;
+  const gradeRates = rates.slice(5, 10).map(parsePercent) as FiveRankRates;
 
   return {
     junkName,

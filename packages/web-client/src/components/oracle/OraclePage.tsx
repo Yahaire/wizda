@@ -25,7 +25,7 @@ import {
 } from './oracle.logic';
 import { QualityFilter, QualityReadout } from './QualityFilter';
 import { ResultsPanel } from './ResultsPanel';
-import { TierFilter } from './TierFilter';
+import { RankFilter } from './RankFilter';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 import type {
@@ -293,15 +293,15 @@ export function OraclePage() {
           </FilterField>
 
           <FilterField
-            label="Tier"
-            description={FILTER_DESCRIPTIONS.tier}
-            onClear={() => patch({ tier: [] })}
-            canClear={filters.tier.length > 0}
+            label="Rank"
+            description={FILTER_DESCRIPTIONS.rank}
+            onClear={() => patch({ rank: [] })}
+            canClear={filters.rank.length > 0}
           >
-            <TierFilter
-              value={filters.tier}
-              onChange={(value) => patch({ tier: value })}
-              available={facets.tier}
+            <RankFilter
+              value={filters.rank}
+              onChange={(value) => patch({ rank: value })}
+              available={facets.rank}
             />
           </FilterField>
         </SimpleGrid>

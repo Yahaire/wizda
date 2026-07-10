@@ -3,7 +3,7 @@ import path from 'path';
 
 import { PrismaClient } from '@local-prisma/generated/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { EQUIPMENT_TIERS } from '@shared/domain/tier';
+import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 
 import { parseDropRatesByJunk } from './dropRatesByJunk.parser';
 import { seedDropRatesByJunk } from './dropRatesByJunk.seed';
@@ -34,7 +34,7 @@ const EQUIPMENT_BLESSING_DROP_RATES_SOURCE = process.env.EQUIPMENT_BLESSING_DROP
 /**
  * Sources of the Fasterthoughts equipment taxonomy CSVs (weapons + armor). Each
  * is a remote URL (raw GitHub) or a path to a local copy. They carry each item's
- * category (Type / Armor Type) and tier (Rank), matched to our equipment by name.
+ * category (Type / Armor Type) and rank (Rank), matched to our equipment by name.
  * Examples: https://raw.githubusercontent.com/itsnicksia/wizardry-daphne-guide/main/data/weapon.csv
  */
 const WEAPON_TAXONOMY_SOURCE = process.env.WEAPON_TAXONOMY_SOURCE_URL;
@@ -58,7 +58,7 @@ async function main(): Promise<void> {
 
   try {
     console.log('[seed] seeding static reference data '
-      + '(stats, blessings, equipment types/categories/tiers)...');
+      + '(stats, blessings, equipment types/categories/ranks)...');
     await seedStaticReferenceData(prisma);
 
     console.log(`[seed] loading junk drop rates from: ${JUNK_DROP_RATES_SOURCE}`);
@@ -102,14 +102,14 @@ async function main(): Promise<void> {
     console.log(`[seed] parsed taxonomy for ${taxonomyByName.size} item(s) `
       + `(${weaponRows.length} weapon + ${armorRows.length} armor row(s)).`);
 
-    const obtainableTiers = new Set(
-      EQUIPMENT_TIERS.filter((tier) => tier.isObtainableThroughJunk).map((tier) => tier.kind),
+    const obtainableRanks = new Set(
+      EQUIPMENT_RANKS.filter((rank) => rank.isObtainableThroughJunk).map((rank) => rank.kind),
     );
-    const taxonomy = await seedEquipmentTaxonomy(prisma, taxonomyByName, obtainableTiers);
+    const taxonomy = await seedEquipmentTaxonomy(prisma, taxonomyByName, obtainableRanks);
     console.log(`[seed] taxonomy: enriched ${taxonomy.matched}/${taxonomy.totalEquipment} `
-      + 'equipment with category + tier.');
+      + 'equipment with category + rank.');
     if (taxonomy.matchedWithoutCategory.length > 0) {
-      console.log(`[seed] taxonomy: ${taxonomy.matchedWithoutCategory.length} matched item(s) got a tier but `
+      console.log(`[seed] taxonomy: ${taxonomy.matchedWithoutCategory.length} matched item(s) got a rank but `
         + `no category (source lacked a weight class): ${taxonomy.matchedWithoutCategory.join(', ')}`);
     }
     if (taxonomy.unmatchedNames.length > 0) {
@@ -121,9 +121,9 @@ async function main(): Promise<void> {
     }
     if (taxonomy.anomalies.length > 0) {
       console.log(`[seed] taxonomy: WARNING ${taxonomy.anomalies.length} junk-sourced item(s) mapped to a `
-        + 'non-obtainable tier:');
-      for (const { name, tier } of taxonomy.anomalies) {
-        console.log(`[seed]   - ${name} (${tier})`);
+        + 'non-obtainable rank:');
+      for (const { name, rank } of taxonomy.anomalies) {
+        console.log(`[seed]   - ${name} (${rank})`);
       }
     }
 

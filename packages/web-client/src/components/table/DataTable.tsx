@@ -48,7 +48,7 @@ interface DataTableProps<T> {
   /** Text a row is matched against by the search box. */
   searchText: (row: T) => string,
   searchPlaceholder?: string,
-  /** Extra filter controls (e.g. a tier select) shown beside the search box. */
+  /** Extra filter controls (e.g. a rank select) shown beside the search box. */
   toolbar?: React.ReactNode,
   rowHeight?: number,
   height?: number,

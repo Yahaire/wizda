@@ -15,7 +15,7 @@ interface CategoryFilterProps {
    * `OracleFacets.catalogCategory`. The rest never reach the menu.
    */
   offered: ReadonlySet<string>,
-  /** Category codes some candidate still has, given the equipment/tier picks. */
+  /** Category codes some candidate still has, given the equipment/rank picks. */
   available: ReadonlySet<string>,
 }
 

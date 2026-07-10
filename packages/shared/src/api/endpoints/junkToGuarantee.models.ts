@@ -5,7 +5,7 @@
  * `packages/shared/src/domain/dropRateMath.ts`; see `docs/calculation.md`.
  */
 
-import { EquipmentTierKind } from '../../domain/tier';
+import { EquipmentRankKind } from '../../domain/rank';
 import { TsUtilities } from '../../tsUtilities';
 
 /** Default target confidence when a query omits `certainty` (99%). */
@@ -53,11 +53,11 @@ export interface GuaranteeFilters {
    */
   blessings?: string[],
   /**
-   * Accepted equipment tiers, by kind (e.g. "SILVER"), from the shared
-   * `EQUIPMENT_TIERS` catalog. OR set — an item may be of any listed tier. An
-   * unknown kind is a 400. Omitted/empty = any tier.
+   * Accepted equipment ranks, by kind (e.g. "SILVER"), from the shared
+   * `EQUIPMENT_RANKS` catalog. OR set — an item may be of any listed rank. An
+   * unknown kind is a 400. Omitted/empty = any rank.
    */
-  tier?: EquipmentTierKind[],
+  rank?: EquipmentRankKind[],
   /**
    * Accepted equipment categories, by **code** (e.g. "TWO_HANDED_AXE"), from the
    * shared `EQUIPMENT_CATEGORIES` catalog. OR set — an item may be of any listed
@@ -172,8 +172,8 @@ export interface MatchedOutcome {
    * query would otherwise list every piece the junk drops.
    */
   equipment?: string[],
-  /** Tiers of the contributing equipment. */
-  tier?: EquipmentTierKind[],
+  /** Ranks of the contributing equipment. */
+  rank?: EquipmentRankKind[],
   /** Category codes of the contributing equipment. */
   category?: string[],
   /** Quality levels this junk can actually roll for the contributing equipment. */

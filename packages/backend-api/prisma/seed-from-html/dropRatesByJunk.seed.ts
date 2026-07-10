@@ -1,11 +1,11 @@
 import { Prisma, PrismaClient } from '@local-prisma/generated/client';
 
-import { FiveTierRates } from './dropRatesByJunk.models';
+import { FiveRankRates } from './dropRatesByJunk.models';
 import { ParseDropRatesByJunkResult } from './dropRatesByJunk.parser';
 import { upsertNamesGetIds } from './seedUtils';
 
-/** Highest 1-based tier index (★ or grade) with a nonzero rate, or undefined if all zero. */
-function highestNonZeroTier(rates: FiveTierRates): number | undefined {
+/** Highest 1-based rank index (★ or grade) with a nonzero rate, or undefined if all zero. */
+function highestNonZeroRank(rates: FiveRankRates): number | undefined {
   let highest: number | undefined;
   rates.forEach((rate, index) => {
     if (rate > 0) {
@@ -90,8 +90,8 @@ export async function seedDropRatesByJunk(
       }
     };
     for (const row of rows) {
-      const maxQuality = highestNonZeroTier(row.qualityRates);
-      const maxGrade = highestNonZeroTier(row.gradeRates);
+      const maxQuality = highestNonZeroRank(row.qualityRates);
+      const maxGrade = highestNonZeroRank(row.gradeRates);
       accumulate(maxQualityByEquipment, row.equipmentName, maxQuality);
       accumulate(maxGradeByEquipment, row.equipmentName, maxGrade);
       accumulate(maxQualityByJunk, row.junkName, maxQuality);

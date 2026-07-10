@@ -16,12 +16,12 @@ export interface IconMultiSelectIcon {
   icon: IconComponent,
   /** Defaults to a dimmed neutral colour when omitted. */
   color?: string,
-  /** Extra class for the glyph, e.g. the tier legibility rim (`.wizda-icon-outline`). */
+  /** Extra class for the glyph, e.g. the rank legibility rim (`.wizda-icon-outline`). */
   className?: string,
 }
 
 export interface IconMultiSelectGrouping<T> {
-  /** Group label for an item, e.g. its tier or category type name. */
+  /** Group label for an item, e.g. its rank or category type name. */
   getGroup: (item: T) => string,
   /** Group display order, top to bottom, keyed by the label {@link getGroup} returns. */
   order: string[],
@@ -45,7 +45,7 @@ interface IconMultiSelectProps<T> {
   isUnavailable?: (item: T) => boolean,
   /** Explains the greyed-out options, shown in the dropdown footer while any is. */
   unavailableHint?: string,
-  /** Groups dropdown options (e.g. by tier or type) instead of a flat list. */
+  /** Groups dropdown options (e.g. by rank or type) instead of a flat list. */
   grouping?: IconMultiSelectGrouping<T>,
   /** Match cap when {@link grouping} isn't set. */
   optionLimit?: number,
@@ -65,7 +65,7 @@ const DEFAULT_OPTION_LIMIT = 50;
  * order and under aliasing, so "silver axe", "axe silver" and "2h silver axe"
  * all find "Silver Two-Handed Axe" (see `createSearchMatcher`) —
  * (b) show an optionally colour-tinted icon on each pill and option, and (c)
- * optionally group dropdown options (e.g. by tier), each with its own match
+ * optionally group dropdown options (e.g. by rank), each with its own match
  * cap so a broad search doesn't bury one group under another. Also gives the
  * dropdown a full-width close button (with an Esc hint), since it isn't
  * obvious how to dismiss the menu after picking.

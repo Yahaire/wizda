@@ -3,12 +3,12 @@ import type {
   MatchedOutcome,
 } from '@shared/api/endpoints/junkToGuarantee.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
-import type { EquipmentTierKind } from '@shared/domain/tier';
+import type { EquipmentRankKind } from '@shared/domain/rank';
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
 import { GRADES } from '@shared/domain/grade';
 import { QUALITIES } from '@shared/domain/quality';
+import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { BLESSINGS } from '@shared/domain/stats';
-import { EQUIPMENT_TIERS } from '@shared/domain/tier';
 import { TsUtilities } from '@shared/tsUtilities';
 
 /** Grade 5 (Red) unlocks 4 active blessing slots — no piece can hold more. */
@@ -35,9 +35,9 @@ export const FILTER_DESCRIPTIONS = {
     "I'll rank every junk that can drop any piece you choose — so you can chase a few at once.",
   ]),
   quality: TsUtilities.stringJoin([
-    "Quality is the star rank, 1★ up to 5★.",
+    "Quality is the star count, 1★ up to 5★.",
     "Higher quality means bigger blessing values on the piece.",
-    "Set the lowest star rank you'd be happy to walk away with — I'll count everything from there up.",
+    "Set the lowest you'd be happy to walk away with — I'll count everything from there up.",
   ]),
   grade: TsUtilities.stringJoin([
     "Grade shows in-game as a colour: White, Green, Blue, Purple, then Red.",
@@ -56,9 +56,10 @@ export const FILTER_DESCRIPTIONS = {
     "Pick any categories you'd take, and I'll only count junk that drops them.",
     "I only list the kinds junk hands out at all, so you won't find Tools here.",
   ]),
-  tier: TsUtilities.stringJoin([
-    "A gear's tier — its material, from Bronze up to Silver.",
-    "Pick every tier you'd be happy with.",
+  rank: TsUtilities.stringJoin([
+    "A gear's rank — its material, from Bronze up to Silver.",
+    "Some folks call it \"tier\" — just don't mix it up with your adventurer rank!",
+    "Pick every rank you'd be happy with.",
     "I leave out Worn, since no amount of junk will ever hand you one.",
   ]),
   certainty: TsUtilities.stringJoin([
@@ -73,8 +74,8 @@ export interface OracleFilters {
   equipment: string[],
   /** Equipment category codes (OR set). */
   category: string[],
-  /** Equipment tier kinds (OR set). */
-  tier: string[],
+  /** Equipment rank kinds (OR set). */
+  rank: string[],
   /** Lowest acceptable quality star level, 1–5. {@link MIN_LEVEL} accepts any. */
   minQuality: number,
   /** Lowest acceptable grade, 1–5. {@link MIN_LEVEL} accepts any. */
@@ -162,7 +163,7 @@ export function activeFilters(filters: OracleFilters): GuaranteeFilters {
   return {
     ...(filters.equipment.length ? { equipment: filters.equipment } : {}),
     ...(filters.category.length ? { category: filters.category } : {}),
-    ...(filters.tier.length ? { tier: filters.tier as EquipmentTierKind[] } : {}),
+    ...(filters.rank.length ? { rank: filters.rank as EquipmentRankKind[] } : {}),
     ...(quality.length ? { quality } : {}),
     ...(grade.length ? { grade } : {}),
     ...(filters.blessings.length ? { blessings: filters.blessings } : {}),
@@ -173,7 +174,7 @@ export function activeFilters(filters: OracleFilters): GuaranteeFilters {
 export const EMPTY_FILTERS: OracleFilters = {
   equipment: [],
   category: [],
-  tier: [],
+  rank: [],
   minQuality: MIN_LEVEL,
   minGrade: MIN_LEVEL,
   blessings: [],
@@ -199,7 +200,7 @@ export function hasAnyFilter(filters: OracleFilters): boolean {
   return Boolean(
     filters.equipment.length
     || filters.category.length
-    || filters.tier.length
+    || filters.rank.length
     || filters.minQuality > MIN_LEVEL
     || filters.minGrade > MIN_LEVEL
     || filters.blessings.length,
@@ -263,7 +264,7 @@ export function joinHuman(items: string[], conjunction: 'and' | 'or' = 'and'): s
 // falling back to the raw filters when the curve request hasn't landed or failed.
 // ---------------------------------------------------------------------------
 
-const TIER_NAME_BY_KIND = new Map(EQUIPMENT_TIERS.map((tier) => [tier.kind as string, tier.name]));
+const RANK_NAME_BY_KIND = new Map(EQUIPMENT_RANKS.map((rank) => [rank.kind as string, rank.name]));
 const CATEGORY_NAME_BY_CODE = new Map(
   EQUIPMENT_CATEGORIES.map((category) => [category.code, category.name]),
 );
@@ -274,7 +275,7 @@ export const SUBJECT_EQUIPMENT_CAP = 3;
 /** The axes of a query, after narrowing to a junk where that's known. */
 export interface ResolvedQuery {
   equipment: string[],
-  tier: string[],
+  rank: string[],
   category: string[],
   quality: number[],
   grade: number[],
@@ -294,7 +295,7 @@ export function resolveQuery(
 ): ResolvedQuery {
   return {
     equipment: matched?.equipment ?? filters.equipment,
-    tier: matched?.tier ?? filters.tier,
+    rank: matched?.rank ?? filters.rank,
     category: matched?.category ?? filters.category,
     quality: matched?.quality ?? levelsFrom(filters.minQuality),
     grade: matched?.grade ?? levelsFrom(filters.minGrade),
@@ -311,7 +312,7 @@ export function wasNarrowed(matched: MatchedOutcome | null, filters: OracleFilte
   const resolved = resolveQuery(matched, filters);
   return (
     resolved.equipment.length < filters.equipment.length
-    || resolved.tier.length < filters.tier.length
+    || resolved.rank.length < filters.rank.length
     || resolved.category.length < filters.category.length
     || resolved.quality.length < levelsFrom(filters.minQuality).length
     || resolved.grade.length < levelsFrom(filters.minGrade).length
@@ -328,11 +329,11 @@ export interface QuerySubject {
 /**
  * The player's query as a noun phrase — the thing they're hunting.
  *
- * Named equipment speaks for itself, and tier/category are dropped there: they can
+ * Named equipment speaks for itself, and rank/category are dropped there: they can
  * only have narrowed *which* names survive, which the list already shows. With
- * nothing named, tier becomes an adjective on the category ("Any Silver Odachi").
+ * nothing named, rank becomes an adjective on the category ("Any Silver Odachi").
  * That reads badly once both axes are plural — "Any Silver or Ebonsteel Odachi or
- * Katana" parses several ways — so the tiers move into a trailing parenthetical.
+ * Katana" parses several ways — so the ranks move into a trailing parenthetical.
  */
 export function subjectOf(query: ResolvedQuery): QuerySubject {
   if (query.equipment.length > 0) {
@@ -345,17 +346,17 @@ export function subjectOf(query: ResolvedQuery): QuerySubject {
     };
   }
 
-  const tiers = query.tier.map((kind) => TIER_NAME_BY_KIND.get(kind) ?? kind);
+  const ranks = query.rank.map((kind) => RANK_NAME_BY_KIND.get(kind) ?? kind);
   const categories = query.category.map((code) => CATEGORY_NAME_BY_CODE.get(code) ?? code);
   const noun = categories.length > 0 ? joinHuman(categories, 'or') : 'equipment';
 
-  if (tiers.length === 0) {
+  if (ranks.length === 0) {
     return { text: `Any ${noun}`, hidden: [] };
   }
-  if (tiers.length === 1 || categories.length <= 1) {
-    return { text: `Any ${joinHuman(tiers, 'or')} ${noun}`, hidden: [] };
+  if (ranks.length === 1 || categories.length <= 1) {
+    return { text: `Any ${joinHuman(ranks, 'or')} ${noun}`, hidden: [] };
   }
-  return { text: `Any ${noun} (${joinHuman(tiers, 'or')})`, hidden: [] };
+  return { text: `Any ${noun} (${joinHuman(ranks, 'or')})`, hidden: [] };
 }
 
 /** What the subject line's icon should depict, and what colour(s) to tint it. */
@@ -365,18 +366,18 @@ export interface SubjectIdentity {
    * known — an icon can only stand for the subject if the subject has one shape.
    */
   categoryCode: string | null,
-  /** Distinct tiers across the candidates, ascending. Empty when unconstrained. */
-  tierKinds: string[],
+  /** Distinct ranks across the candidates, ascending. Empty when unconstrained. */
+  rankKinds: string[],
 }
 
-const TIER_ORDER = new Map(EQUIPMENT_TIERS.map((tier) => [tier.kind as string, tier.orderIndex]));
+const RANK_ORDER = new Map(EQUIPMENT_RANKS.map((rank) => [rank.kind as string, rank.orderIndex]));
 
 /**
  * The shape and colour the query's subject has, if it has just one of each.
  *
- * Named equipment is authoritative: a piece knows its own category and tier, so the
- * tier filter (which can only have narrowed *which* pieces survive) is ignored. With
- * nothing named we fall back to the queried category/tier axes. A piece missing its
+ * Named equipment is authoritative: a piece knows its own category and rank, so the
+ * rank filter (which can only have narrowed *which* pieces survive) is ignored. With
+ * nothing named we fall back to the queried category/rank axes. A piece missing its
  * taxonomy (a handful aren't enriched) forfeits the category — we can't claim the
  * candidates share one shape when we don't know one of their shapes.
  */
@@ -384,8 +385,8 @@ export function subjectIdentity(
   query: ResolvedQuery,
   equipmentByName: Map<string, EquipmentListItem>,
 ): SubjectIdentity {
-  const ascendingTiers = (kinds: string[]): string[] => (
-    [...new Set(kinds)].sort((left, right) => (TIER_ORDER.get(left) ?? 0) - (TIER_ORDER.get(right) ?? 0))
+  const ascendingRanks = (kinds: string[]): string[] => (
+    [...new Set(kinds)].sort((left, right) => (RANK_ORDER.get(left) ?? 0) - (RANK_ORDER.get(right) ?? 0))
   );
 
   const named = query.equipment
@@ -395,7 +396,7 @@ export function subjectIdentity(
   if (named.length === 0) {
     return {
       categoryCode: query.category.length === 1 ? query.category[0]! : null,
-      tierKinds: ascendingTiers(query.tier),
+      rankKinds: ascendingRanks(query.rank),
     };
   }
 
@@ -403,7 +404,7 @@ export function subjectIdentity(
   const shared = categories.size === 1 ? [...categories][0]! : null;
   return {
     categoryCode: shared,
-    tierKinds: ascendingTiers(named.flatMap((item) => (item.tier ? [item.tier] : []))),
+    rankKinds: ascendingRanks(named.flatMap((item) => (item.rank ? [item.rank] : []))),
   };
 }
 

@@ -10,12 +10,12 @@
 
 import { MatchedOutcome } from '@shared/api/endpoints/junkToGuarantee.models';
 import { DropRateRow, matchProbabilityForJunk, MatchQuery } from '@shared/domain/dropRateMath';
-import { EquipmentTierKind } from '@shared/domain/tier';
+import { EquipmentRankKind } from '@shared/domain/rank';
 
 /** One equipment's drop rows for a single junk, with the identity used to describe it. */
 export interface MatchedCandidate {
   name: string,
-  tier: string | null,
+  rank: string | null,
   categoryCode: string | null,
   rows: DropRateRow[],
 }
@@ -23,7 +23,7 @@ export interface MatchedCandidate {
 /** The queried axes {@link buildMatchedOutcome} can narrow. Wildcards are absent. */
 export interface MatchedOutcomeFilters {
   equipment?: string[] | undefined,
-  tier?: string[] | undefined,
+  rank?: string[] | undefined,
   category?: string[] | undefined,
 }
 
@@ -63,15 +63,15 @@ export function buildMatchedOutcome(
 
   const rows = contributing.flatMap((candidate) => candidate.rows);
   const names = new Set(contributing.map((candidate) => candidate.name));
-  const tiers = new Set(contributing.map((candidate) => candidate.tier));
+  const ranks = new Set(contributing.map((candidate) => candidate.rank));
   const codes = new Set(contributing.map((candidate) => candidate.categoryCode));
 
   const matched: MatchedOutcome = {};
   if (filters.equipment?.length) {
     matched.equipment = unique(filters.equipment).filter((name) => names.has(name));
   }
-  if (filters.tier?.length) {
-    matched.tier = unique(filters.tier).filter((kind) => tiers.has(kind)) as EquipmentTierKind[];
+  if (filters.rank?.length) {
+    matched.rank = unique(filters.rank).filter((kind) => ranks.has(kind)) as EquipmentRankKind[];
   }
   if (filters.category?.length) {
     matched.category = unique(filters.category).filter((code) => codes.has(code));

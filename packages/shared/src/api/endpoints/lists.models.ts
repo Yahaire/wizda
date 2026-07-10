@@ -4,7 +4,7 @@
  * valid equipment/junk names that the guarantee endpoints expect as input.
  */
 
-import { EquipmentTierKind } from '../../domain/tier';
+import { EquipmentRankKind } from '../../domain/rank';
 
 /** One entry of `GET /junks`. */
 export interface JunkListItem {
@@ -47,8 +47,8 @@ export interface EquipmentListItem {
   name: string,
   /** Category, or null when the taxonomy enrichment couldn't match it (see the seed). */
   category: EquipmentCategoryRef | null,
-  /** Equipment tier, or null when it couldn't be derived (enrichment — see schema). */
-  tier: EquipmentTierKind | null,
+  /** Equipment rank, or null when it couldn't be derived (enrichment — see schema). */
+  rank: EquipmentRankKind | null,
   /** Highest quality (★1–5) this equipment is known to drop at; null if unknown. */
   maxDropQuality: number | null,
   /** Highest grade (1–5) this equipment is known to drop at; null if unknown. */

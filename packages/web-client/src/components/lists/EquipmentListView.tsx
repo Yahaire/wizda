@@ -4,25 +4,25 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { CategoryIcon } from '@/components/CategoryIcon';
 import { DetailProvider, useDetail } from '@/components/detail/DetailProvider';
-import { getTierColor, GradeBadge, QualityStars, TierBadge } from '@/components/gear/gearDisplays';
+import { getRankColor, GradeBadge, QualityStars, RankBadge } from '@/components/gear/gearDisplays';
 import { Column, DataTable } from '@/components/table/DataTable';
 import { TruncatedText } from '@/components/TruncatedText';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 import { Alert, Center, Group, Loader, Select, Stack, Text, Title } from '@mantine/core';
-import { EQUIPMENT_TIERS } from '@shared/domain/tier';
+import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { TsUtilities } from '@shared/tsUtilities';
 import { IconInfoCircle } from '@tabler/icons-react';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
-const TIER_OPTIONS = [
-  { value: '', label: 'All tiers' },
-  ...[...EQUIPMENT_TIERS]
+const RANK_OPTIONS = [
+  { value: '', label: 'All ranks' },
+  ...[...EQUIPMENT_RANKS]
     .sort((left, right) => left.orderIndex - right.orderIndex)
-    .map((tier) => ({ value: tier.kind as string, label: tier.name })),
+    .map((rank) => ({ value: rank.kind as string, label: rank.name })),
 ];
 
-/** Tier kind → strength order, for sorting the Tier column meaningfully. */
-const TIER_ORDER = new Map(EQUIPMENT_TIERS.map((tier) => [tier.kind as string, tier.orderIndex]));
+/** Rank kind → strength order, for sorting the Rank column meaningfully. */
+const RANK_ORDER = new Map(EQUIPMENT_RANKS.map((rank) => [rank.kind as string, rank.orderIndex]));
 
 const columns: Column<EquipmentListItem>[] = [
   {
@@ -36,7 +36,7 @@ const columns: Column<EquipmentListItem>[] = [
         <CategoryIcon
           size={16}
           categoryCode={row.category?.code}
-          color={getTierColor(row.tier) ?? 'var(--mantine-color-dimmed)'}
+          color={getRankColor(row.rank) ?? 'var(--mantine-color-dimmed)'}
           style={{ flexShrink: 0 }}
         />
         <TruncatedText>{row.name}</TruncatedText>
@@ -54,15 +54,15 @@ const columns: Column<EquipmentListItem>[] = [
       : <Text c="dimmed">—</Text>),
   },
   {
-    key: 'tier',
-    header: 'Tier',
+    key: 'rank',
+    header: 'Rank',
     width: '1fr',
     minWidth: 110,
-    // Sort by the tier's strength order, not the enum string, so it reads
+    // Sort by the rank's strength order, not the enum string, so it reads
     // Worn → Silver rather than alphabetically.
-    sortValue: (row) => TIER_ORDER.get(row.tier ?? '') ?? -1,
-    render: (row) => (row.tier
-      ? <TierBadge kind={row.tier} />
+    sortValue: (row) => RANK_ORDER.get(row.rank ?? '') ?? -1,
+    render: (row) => (row.rank
+      ? <RankBadge kind={row.rank} />
       : <Text c="dimmed">—</Text>),
   },
   {
@@ -104,7 +104,7 @@ function EquipmentListContent() {
     maintenanceMessage,
     openEquipment,
   } = useDetail();
-  const [tier, setTier] = useState<string>('');
+  const [rank, setRank] = useState<string>('');
 
   useEffect(() => {
     const visited = localStorage.getItem('equipment-list-visited');
@@ -128,8 +128,8 @@ function EquipmentListContent() {
     if (!equipment) {
       return [];
     }
-    return tier ? equipment.filter((item) => item.tier === tier) : equipment;
-  }, [equipment, tier]);
+    return rank ? equipment.filter((item) => item.rank === rank) : equipment;
+  }, [equipment, rank]);
 
   return (
     <Stack gap="md">
@@ -159,12 +159,12 @@ function EquipmentListContent() {
           onRowClick={(row) => openEquipment(row.name)}
           toolbar={(
             <Select
-              data={TIER_OPTIONS}
-              value={tier}
-              onChange={(value) => setTier(value ?? '')}
+              data={RANK_OPTIONS}
+              value={rank}
+              onChange={(value) => setRank(value ?? '')}
               w={150}
               allowDeselect={false}
-              aria-label="Filter by tier"
+              aria-label="Filter by rank"
             />
           )}
         />

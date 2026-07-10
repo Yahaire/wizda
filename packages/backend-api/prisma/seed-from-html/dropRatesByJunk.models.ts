@@ -1,5 +1,5 @@
 /** 1★-5★ quality drop rates, or grade 1-5 drop rates, as fractions in [0, 1]. */
-export type FiveTierRates = [number, number, number, number, number];
+export type FiveRankRates = [number, number, number, number, number];
 
 /**
  * One row of the "Drop Rates by Junk" table: a single (junk, group, equipment)
@@ -13,6 +13,6 @@ export interface ParsedJunkDropRow {
   equipmentName: string;
   /** P(equipment | group), as a fraction in [0, 1]. */
   dropRate: number;
-  qualityRates: FiveTierRates;
-  gradeRates: FiveTierRates;
+  qualityRates: FiveRankRates;
+  gradeRates: FiveRankRates;
 }

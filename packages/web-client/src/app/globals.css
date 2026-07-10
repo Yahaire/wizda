@@ -30,14 +30,14 @@ a {
 
 /* Clickable table/list rows: pointer + a subtle hover highlight. */
 /*
- * Tier-tinted equipment glyphs need an edge to read against the dark UI. A
+ * Rank-tinted equipment glyphs need an edge to read against the dark UI. A
  * *dark* rim is the fix — the game's own "always outlined" treatment (dark
  * outline under bright metal): black is darker than the (not-quite-black)
  * background, so it frames every icon, and because `drop-shadow` is a blur halo
  * rather than a path-following stroke, a dark halo bleeding into an icon's
  * interior gaps just blends into the background instead of glowing there the way
  * a light one would. Two stacked low-blur shadows read as a thin outline. The
- * small tier dots get the same job done with a border (see TierSwatch).
+ * small rank dots get the same job done with a border (see RankSwatch).
  */
 .wizda-icon-outline {
   filter:

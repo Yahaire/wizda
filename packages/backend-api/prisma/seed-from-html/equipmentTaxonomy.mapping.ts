@@ -1,11 +1,11 @@
-import { EquipmentTierKind } from '@shared/domain/tier';
+import { EquipmentRankKind } from '@shared/domain/rank';
 
 import type { CsvRow } from './loadCsv';
 
 /**
  * Pure mappings from the Fasterthoughts CSV taxonomy columns to our own
- * `EquipmentCategory` codes and `EquipmentTierKind` tiers, plus the builder that
- * turns parsed CSV rows into a `name -> { categoryCode, tier }` lookup. Kept free
+ * `EquipmentCategory` codes and `EquipmentRankKind` ranks, plus the builder that
+ * turns parsed CSV rows into a `name -> { categoryCode, rank }` lookup. Kept free
  * of I/O and Prisma so it's unit-testable (see the sibling `.test.ts`). Unknown
  * source values throw, so a new/renamed Type/Rank in the upstream data fails the
  * seed loudly instead of silently mis-tagging items.
@@ -18,30 +18,30 @@ const RANK_COLUMN = 'Rank';
 const ARMOR_TYPE_COLUMN = 'Armor Type';
 
 /**
- * The item's derived category + tier. `categoryCode` is nullable because the
+ * The item's derived category + rank. `categoryCode` is nullable because the
  * source occasionally omits an item's weight class (e.g. a couple of gloves with
- * a blank Armor Type) — those still get a tier, just no category. A non-empty but
+ * a blank Armor Type) — those still get a rank, just no category. A non-empty but
  * *unrecognised* Type/Armor-Type still throws (real drift), only genuinely blank
  * fields are tolerated.
  */
 export interface EquipmentTaxonomyEntry {
   categoryCode: string | null,
-  tier: EquipmentTierKind,
+  rank: EquipmentRankKind,
 }
 
 /**
- * CSV `Rank` -> our tier. Covers all 6 ranks the source uses. Note: some rows
+ * CSV `Rank` -> our rank. Covers all 6 ranks the source uses. Note: some rows
  * carry an "Ex." marker, but it lives in the `Compendium Number` column, not
  * `Rank` — those items still have a normal `Rank` (e.g. Silver, Ebonsteel).
- * There is no separate "Ex" tier.
+ * There is no separate "Ex" rank.
  */
-export const RANK_TO_TIER: Readonly<Record<string, EquipmentTierKind>> = {
-  Worn: EquipmentTierKind.WORN,
-  Bronze: EquipmentTierKind.BRONZE,
-  Iron: EquipmentTierKind.IRON,
-  Steel: EquipmentTierKind.STEEL,
-  Ebonsteel: EquipmentTierKind.EBONSTEEL,
-  Silver: EquipmentTierKind.SILVER,
+export const RANK_TO_KIND: Readonly<Record<string, EquipmentRankKind>> = {
+  Worn: EquipmentRankKind.WORN,
+  Bronze: EquipmentRankKind.BRONZE,
+  Iron: EquipmentRankKind.IRON,
+  Steel: EquipmentRankKind.STEEL,
+  Ebonsteel: EquipmentRankKind.EBONSTEEL,
+  Silver: EquipmentRankKind.SILVER,
 };
 
 /** Weapon CSV `Type` -> our category code. */
@@ -78,13 +78,13 @@ export const ARMOR_TYPE_TO_CATEGORY: Readonly<Record<string, Readonly<Record<str
   Accessories: { Accessory: 'ACCESSORIES' },
 };
 
-/** CSV `Rank` -> tier; throws on an unrecognised rank. */
-export function rankToTier(rank: string): EquipmentTierKind {
-  const tier = RANK_TO_TIER[rank];
-  if (!tier) {
+/** CSV `Rank` label -> our rank kind; throws on an unrecognised rank. */
+export function rankToKind(rank: string): EquipmentRankKind {
+  const kind = RANK_TO_KIND[rank];
+  if (!kind) {
     throw new Error(`Unknown equipment rank in taxonomy CSV: "${rank}"`);
   }
-  return tier;
+  return kind;
 }
 
 /** Weapon `Type` -> category code; throws on an unrecognised type. */
@@ -110,7 +110,7 @@ export function armorCategoryCode(type: string, armorType: string): string {
 }
 
 /**
- * Build the `name -> { categoryCode, tier }` lookup from parsed weapon + armor
+ * Build the `name -> { categoryCode, rank }` lookup from parsed weapon + armor
  * CSV rows. Rows without an item name (blank separator lines) are skipped. A name
  * appearing twice keeps the last occurrence.
  */
@@ -128,7 +128,7 @@ export function buildTaxonomyByName(
     const type = (row[TYPE_COLUMN] ?? '').trim();
     byName.set(name, {
       categoryCode: type ? weaponCategoryCode(type) : null,
-      tier: rankToTier((row[RANK_COLUMN] ?? '').trim()),
+      rank: rankToKind((row[RANK_COLUMN] ?? '').trim()),
     });
   }
 
@@ -141,7 +141,7 @@ export function buildTaxonomyByName(
     const armorType = (row[ARMOR_TYPE_COLUMN] ?? '').trim();
     byName.set(name, {
       categoryCode: type && armorType ? armorCategoryCode(type, armorType) : null,
-      tier: rankToTier((row[RANK_COLUMN] ?? '').trim()),
+      rank: rankToKind((row[RANK_COLUMN] ?? '').trim()),
     });
   }
 

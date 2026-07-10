@@ -2,7 +2,7 @@
 
 import { Badge, ColorSwatch, Group, Text } from '@mantine/core';
 import { GRADES } from '@shared/domain/grade';
-import { EQUIPMENT_TIERS } from '@shared/domain/tier';
+import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { IconStarFilled } from '@tabler/icons-react';
 
 /** In-game grade colours (White…Red) as Mantine palette names, for badges. */
@@ -66,26 +66,26 @@ export function GradeBadge({ value }: { value: number }) {
     : null;
 }
 
-const TIER_BY_KIND = new Map(EQUIPMENT_TIERS.map((tier) => [tier.kind as string, tier]));
+const RANK_BY_KIND = new Map(EQUIPMENT_RANKS.map((rank) => [rank.kind as string, rank]));
 
-/** A tier's in-game tint, or undefined for an unknown/absent tier. */
-export function getTierColor(kind?: string | null): string | undefined {
-  return kind ? TIER_BY_KIND.get(kind)?.color : undefined;
+/** A rank's in-game tint, or undefined for an unknown/absent rank. */
+export function getRankColor(kind?: string | null): string | undefined {
+  return kind ? RANK_BY_KIND.get(kind)?.color : undefined;
 }
 
 /**
- * A small colour dot for an equipment tier, tinted to its in-game colour. Many
- * tiers are gray/near-white, so it carries a theme-aware border to stay visible
+ * A small colour dot for an equipment rank, tinted to its in-game colour. Many
+ * ranks are gray/near-white, so it carries a theme-aware border to stay visible
  * on any background.
  */
-export function TierSwatch({ kind, size = 12 }: { kind: string, size?: number }) {
-  const tier = TIER_BY_KIND.get(kind);
-  if (!tier) {
+export function RankSwatch({ kind, size = 12 }: { kind: string, size?: number }) {
+  const rank = RANK_BY_KIND.get(kind);
+  if (!rank) {
     return null;
   }
   return (
     <ColorSwatch
-      color={tier.color}
+      color={rank.color}
       size={size}
       withShadow={false}
       style={{ border: '1px solid var(--mantine-color-default-border)' }}
@@ -93,16 +93,16 @@ export function TierSwatch({ kind, size = 12 }: { kind: string, size?: number })
   );
 }
 
-/** Tier as a swatch + name ("● Ebonsteel"). Null for an unknown/absent tier. */
-export function TierBadge({ kind }: { kind: string | null | undefined }) {
-  const tier = kind ? TIER_BY_KIND.get(kind) : undefined;
-  if (!tier) {
+/** Rank as a swatch + name ("● Ebonsteel"). Null for an unknown/absent rank. */
+export function RankBadge({ kind }: { kind: string | null | undefined }) {
+  const rank = kind ? RANK_BY_KIND.get(kind) : undefined;
+  if (!rank) {
     return null;
   }
   return (
     <Group gap={6} wrap="nowrap" component="span" style={{ display: 'inline-flex' }}>
-      <TierSwatch kind={tier.kind} size={12} />
-      <Text span fz="sm">{tier.name}</Text>
+      <RankSwatch kind={rank.kind} size={12} />
+      <Text span fz="sm">{rank.name}</Text>
     </Group>
   );
 }

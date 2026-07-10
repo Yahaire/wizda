@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EquipmentTierKind } from '@shared/domain/tier';
+import { EquipmentRankKind } from '@shared/domain/rank';
 
 import {
     availableBlessings, availableOn, candidateEquipment, computeFacets, detectConflict,
@@ -24,7 +24,7 @@ function gear(
   return {
     name,
     category: null,
-    tier: null,
+    rank: null,
     maxDropQuality: MAX_LEVEL,
     maxDropGrade: MAX_LEVEL,
     blessings: [],
@@ -34,23 +34,23 @@ function gear(
 }
 
 // A sword never rolls DEF; plate never rolls ATK. The two mail pieces differ only
-// in tier, which is what the equipment-vs-tier interdependency turns on.
+// in rank, which is what the equipment-vs-rank interdependency turns on.
 const SWORD_BLESSINGS = ['ATK', 'ATK_PER', 'ACC', 'SUR'];
 const BRONZE_SWORD = gear('Bronze Sword', {
   category: SWORD,
-  tier: EquipmentTierKind.BRONZE,
+  rank: EquipmentRankKind.BRONZE,
   maxDropGrade: 4,
   maxDropQuality: 4,
   blessings: SWORD_BLESSINGS,
 });
 const SILVER_SWORD = gear('Silver Sword', {
   category: SWORD,
-  tier: EquipmentTierKind.SILVER,
+  rank: EquipmentRankKind.SILVER,
   blessings: SWORD_BLESSINGS,
 });
 const SILVER_MAIL = gear('Silver Mail', {
   category: HEAVY_ARMOR,
-  tier: EquipmentTierKind.SILVER,
+  rank: EquipmentRankKind.SILVER,
   blessings: ['DEF', 'MDEF', 'SUR'],
 });
 const NAMELESS = gear('Nameless Thing', { blessings: ['ATK', 'DEF'] });
@@ -65,7 +65,7 @@ describe('candidateEquipment', () => {
   it('ANDs the three axes, as the API does', () => {
     const narrowed = candidateEquipment(CATALOG, filters({
       category: ['SWORD'],
-      tier: [EquipmentTierKind.SILVER],
+      rank: [EquipmentRankKind.SILVER],
     }));
 
     expect(narrowed).toEqual([SILVER_SWORD]);
@@ -74,13 +74,13 @@ describe('candidateEquipment', () => {
   it('is empty for the contradiction the greying-out exists to prevent', () => {
     expect(candidateEquipment(CATALOG, filters({
       equipment: ['Bronze Sword'],
-      tier: [EquipmentTierKind.SILVER],
+      rank: [EquipmentRankKind.SILVER],
     }))).toEqual([]);
   });
 
-  it('drops an unclassified piece the moment tier or category is asked for', () => {
+  it('drops an unclassified piece the moment rank or category is asked for', () => {
     // Prisma can't match `null` against an `IN` list either, so this mirrors the API.
-    expect(candidateEquipment(CATALOG, filters({ tier: [EquipmentTierKind.SILVER] })))
+    expect(candidateEquipment(CATALOG, filters({ rank: [EquipmentRankKind.SILVER] })))
       .not.toContain(NAMELESS);
     expect(candidateEquipment(CATALOG, filters())).toContain(NAMELESS);
   });
@@ -88,27 +88,27 @@ describe('candidateEquipment', () => {
 
 describe('availableOn', () => {
   it('offers every value while nothing else is picked', () => {
-    expect(availableOn(CATALOG, filters(), 'tier'))
-      .toEqual(new Set([EquipmentTierKind.BRONZE, EquipmentTierKind.SILVER]));
+    expect(availableOn(CATALOG, filters(), 'rank'))
+      .toEqual(new Set([EquipmentRankKind.BRONZE, EquipmentRankKind.SILVER]));
   });
 
-  it('withholds a tier no picked piece comes in — and the piece no picked tier admits', () => {
-    expect(availableOn(CATALOG, filters({ equipment: ['Bronze Sword'] }), 'tier'))
-      .toEqual(new Set([EquipmentTierKind.BRONZE]));
-    expect(availableOn(CATALOG, filters({ tier: [EquipmentTierKind.SILVER] }), 'equipment'))
+  it('withholds a rank no picked piece comes in — and the piece no picked rank admits', () => {
+    expect(availableOn(CATALOG, filters({ equipment: ['Bronze Sword'] }), 'rank'))
+      .toEqual(new Set([EquipmentRankKind.BRONZE]));
+    expect(availableOn(CATALOG, filters({ rank: [EquipmentRankKind.SILVER] }), 'equipment'))
       .toEqual(new Set(['Silver Sword', 'Silver Mail']));
   });
 
   it('judges an axis against the others only, so a second pick on it always widens', () => {
     // Silver is already asked for; Bronze must stay offered, since taking it can
     // only add candidates back — the OR within an axis never narrows.
-    const withSilver = filters({ tier: [EquipmentTierKind.SILVER] });
+    const withSilver = filters({ rank: [EquipmentRankKind.SILVER] });
 
-    expect(availableOn(CATALOG, withSilver, 'tier')).toContain(EquipmentTierKind.BRONZE);
+    expect(availableOn(CATALOG, withSilver, 'rank')).toContain(EquipmentRankKind.BRONZE);
   });
 
-  it('withholds a category once the tier rules its every piece out', () => {
-    expect(availableOn(CATALOG, filters({ tier: [EquipmentTierKind.BRONZE] }), 'category'))
+  it('withholds a category once the rank rules its every piece out', () => {
+    expect(availableOn(CATALOG, filters({ rank: [EquipmentRankKind.BRONZE] }), 'category'))
       .toEqual(new Set(['SWORD']));
   });
 });
@@ -159,13 +159,13 @@ describe('detectConflict', () => {
     expect(conflictFor({ equipment: ['Silver Sword'], minGrade: 5, blessings: ['ATK'] })).toBeNull();
   });
 
-  it('rescues an identity contradiction by dropping the category and tier', () => {
+  it('rescues an identity contradiction by dropping the category and rank', () => {
     const conflict = conflictFor({
       equipment: ['Bronze Sword'],
-      tier: [EquipmentTierKind.SILVER],
+      rank: [EquipmentRankKind.SILVER],
     });
 
-    expect(conflict?.fix).toEqual({ category: [], tier: [] });
+    expect(conflict?.fix).toEqual({ category: [], rank: [] });
   });
 
   it('names the blessing the chosen gear never rolls, and trims it away', () => {
@@ -220,7 +220,7 @@ describe('computeFacets', () => {
 
   it('caps the grade slider at what the surviving gear drops', () => {
     expect(computeFacets(CATALOG, filters({ equipment: ['Bronze Sword'] })).maxGrade).toBe(4);
-    expect(computeFacets(CATALOG, filters({ tier: [EquipmentTierKind.SILVER] })).maxGrade)
+    expect(computeFacets(CATALOG, filters({ rank: [EquipmentRankKind.SILVER] })).maxGrade)
       .toBe(MAX_LEVEL);
   });
 
@@ -233,7 +233,7 @@ describe('computeFacets', () => {
   it('offers only the categories the catalog actually has, whatever the picks narrow to', () => {
     // Nothing in the catalog is a Dagger, so a Dagger is never worth offering —
     // that's how Tools stay off the real menu without being named anywhere.
-    const facets = computeFacets(CATALOG, filters({ tier: [EquipmentTierKind.BRONZE] }));
+    const facets = computeFacets(CATALOG, filters({ rank: [EquipmentRankKind.BRONZE] }));
 
     expect(facets.catalogCategory).toEqual(new Set(['SWORD', 'HEAVY_ARMOR']));
     // ...while `category` still narrows to what the Bronze pick leaves.
@@ -245,11 +245,11 @@ describe('computeFacets', () => {
     const facets = computeFacets(CATALOG, filters({ equipment: ['Gear From A Past Scrape'] }));
 
     expect(facets.conflict).toBeNull();
-    expect(facets.tier).toEqual(new Set([EquipmentTierKind.BRONZE, EquipmentTierKind.SILVER]));
+    expect(facets.rank).toEqual(new Set([EquipmentRankKind.BRONZE, EquipmentRankKind.SILVER]));
   });
 
-  it('greys out the gear that fits neither the category nor the tier picks', () => {
-    const facets = computeFacets(CATALOG, filters({ tier: [EquipmentTierKind.BRONZE] }));
+  it('greys out the gear that fits neither the category nor the rank picks', () => {
+    const facets = computeFacets(CATALOG, filters({ rank: [EquipmentRankKind.BRONZE] }));
 
     expect(facets.equipment).toEqual(new Set(['Bronze Sword']));
   });

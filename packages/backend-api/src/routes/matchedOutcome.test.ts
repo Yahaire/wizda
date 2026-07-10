@@ -28,11 +28,11 @@ function row(
 
 function candidate(
   name: string,
-  tier: string | null,
+  rank: string | null,
   categoryCode: string | null,
   rows: DropRateRow[],
 ): MatchedCandidate {
-  return { name, tier, categoryCode, rows, };
+  return { name, rank, categoryCode, rows, };
 }
 
 describe('buildMatchedOutcome', () => {
@@ -74,17 +74,17 @@ describe('buildMatchedOutcome', () => {
     expect(matched.equipment).toEqual(['Silver Axe']);
   });
 
-  it('collapses tier and category to those the contributing equipment actually have', () => {
+  it('collapses rank and category to those the contributing equipment actually have', () => {
     const silver = candidate('Silver Axe', 'SILVER', 'TWO_HANDED_AXE', [row([4], [5])]);
     const ebon = candidate('Earthrend Axe', 'EBONSTEEL', 'ONE_HANDED_AXE', [row([1], [5])]);
 
     const matched = buildMatchedOutcome(
       [silver, ebon],
       { quality: [4] },
-      { tier: ['SILVER', 'EBONSTEEL'], category: ['TWO_HANDED_AXE', 'ONE_HANDED_AXE'] },
+      { rank: ['SILVER', 'EBONSTEEL'], category: ['TWO_HANDED_AXE', 'ONE_HANDED_AXE'] },
     );
 
-    expect(matched.tier).toEqual(['SILVER']);
+    expect(matched.rank).toEqual(['SILVER']);
     expect(matched.category).toEqual(['TWO_HANDED_AXE']);
   });
 

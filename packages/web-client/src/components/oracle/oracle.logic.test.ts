@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EquipmentTierKind } from '@shared/domain/tier';
+import { EquipmentRankKind } from '@shared/domain/rank';
 
 import {
     activeFilters, DEFAULT_FILTERS, EMPTY_FILTERS, gradeFloorFor, hasAnyFilter, levelsFrom,
@@ -19,7 +19,7 @@ function equipmentList(...items: Partial<EquipmentListItem>[]): Map<string, Equi
     map.set(item.name!, {
       name: item.name!,
       category: item.category ?? null,
-      tier: item.tier ?? null,
+      rank: item.rank ?? null,
       maxDropQuality: null,
       maxDropGrade: null,
       blessings: [],
@@ -55,40 +55,40 @@ describe('subjectOf', () => {
     expect(subject.hidden).toEqual(['Gale Axe', 'Tide Staff']);
   });
 
-  it('ignores tier and category once equipment is named — narrowing already reflects them', () => {
+  it('ignores rank and category once equipment is named — narrowing already reflects them', () => {
     expect(subjectFor({
       equipment: ['Frost Dagger'],
-      tier: [EquipmentTierKind.SILVER],
+      rank: [EquipmentRankKind.SILVER],
       category: ['DAGGER'],
     })).toBe('Frost Dagger');
   });
 
-  it('describes an unnamed query as "Any <tier> <category>"', () => {
-    expect(subjectFor({ tier: [EquipmentTierKind.SILVER] })).toBe('Any Silver equipment');
+  it('describes an unnamed query as "Any <rank> <category>"', () => {
+    expect(subjectFor({ rank: [EquipmentRankKind.SILVER] })).toBe('Any Silver equipment');
     expect(subjectFor({ category: ['ONE_HANDED_AXE'] })).toBe('Any One-Handed Axe');
-    expect(subjectFor({ tier: [EquipmentTierKind.SILVER], category: ['ONE_HANDED_AXE'] }))
+    expect(subjectFor({ rank: [EquipmentRankKind.SILVER], category: ['ONE_HANDED_AXE'] }))
       .toBe('Any Silver One-Handed Axe');
   });
 
-  it('treats a lone tier as an adjective even across several categories', () => {
+  it('treats a lone rank as an adjective even across several categories', () => {
     expect(subjectFor({
-      tier: [EquipmentTierKind.SILVER],
+      rank: [EquipmentRankKind.SILVER],
       category: ['ONE_HANDED_AXE', 'TWO_HANDED_AXE'],
     })).toBe('Any Silver One-Handed Axe or Two-Handed Axe');
   });
 
-  it('keeps several tiers inline while there is at most one category', () => {
-    expect(subjectFor({ tier: [EquipmentTierKind.SILVER, EquipmentTierKind.EBONSTEEL] }))
+  it('keeps several ranks inline while there is at most one category', () => {
+    expect(subjectFor({ rank: [EquipmentRankKind.SILVER, EquipmentRankKind.EBONSTEEL] }))
       .toBe('Any Silver or Ebonsteel equipment');
     expect(subjectFor({
-      tier: [EquipmentTierKind.SILVER, EquipmentTierKind.EBONSTEEL],
+      rank: [EquipmentRankKind.SILVER, EquipmentRankKind.EBONSTEEL],
       category: ['ODACHI'],
     })).toBe('Any Silver or Ebonsteel Odachi');
   });
 
-  it('parenthesises the tiers when both axes are plural, which would otherwise be ambiguous', () => {
+  it('parenthesises the ranks when both axes are plural, which would otherwise be ambiguous', () => {
     expect(subjectFor({
-      tier: [EquipmentTierKind.SILVER, EquipmentTierKind.EBONSTEEL],
+      rank: [EquipmentRankKind.SILVER, EquipmentRankKind.EBONSTEEL],
       category: ['ODACHI', 'KATANA'],
     })).toBe('Any Odachi or Katana (Silver or Ebonsteel)');
   });
@@ -189,30 +189,30 @@ describe('wasNarrowed', () => {
 
 describe('subjectIdentity', () => {
   const known = equipmentList(
-    { name: 'Silver Axe', category: AXE, tier: EquipmentTierKind.SILVER },
-    { name: 'Earthrend Axe', category: AXE, tier: EquipmentTierKind.EBONSTEEL },
-    { name: 'Blackwing Robe', category: ROBE, tier: EquipmentTierKind.SILVER },
-    { name: 'Nameless Thing', category: null, tier: null },
+    { name: 'Silver Axe', category: AXE, rank: EquipmentRankKind.SILVER },
+    { name: 'Earthrend Axe', category: AXE, rank: EquipmentRankKind.EBONSTEEL },
+    { name: 'Blackwing Robe', category: ROBE, rank: EquipmentRankKind.SILVER },
+    { name: 'Nameless Thing', category: null, rank: null },
   );
 
-  it('reads a named piece\'s own category and tier, ignoring the filter axes', () => {
+  it('reads a named piece\'s own category and rank, ignoring the filter axes', () => {
     const query = resolveQuery(null, filters({
       equipment: ['Silver Axe'],
-      tier: [EquipmentTierKind.EBONSTEEL],
+      rank: [EquipmentRankKind.EBONSTEEL],
     }));
 
     expect(subjectIdentity(query, known)).toEqual({
       categoryCode: 'TWO_HANDED_AXE',
-      tierKinds: [EquipmentTierKind.SILVER],
+      rankKinds: [EquipmentRankKind.SILVER],
     });
   });
 
-  it('keeps the shared category across several pieces, collecting their tiers ascending', () => {
+  it('keeps the shared category across several pieces, collecting their ranks ascending', () => {
     const query = resolveQuery(null, filters({ equipment: ['Earthrend Axe', 'Silver Axe'] }));
 
     expect(subjectIdentity(query, known)).toEqual({
       categoryCode: 'TWO_HANDED_AXE',
-      tierKinds: [EquipmentTierKind.EBONSTEEL, EquipmentTierKind.SILVER],
+      rankKinds: [EquipmentRankKind.EBONSTEEL, EquipmentRankKind.SILVER],
     });
   });
 
@@ -231,13 +231,13 @@ describe('subjectIdentity', () => {
   it('falls back to the queried axes when nothing is named', () => {
     const query = resolveQuery(null, filters({
       category: ['TWO_HANDED_AXE'],
-      tier: [EquipmentTierKind.SILVER, EquipmentTierKind.BRONZE],
+      rank: [EquipmentRankKind.SILVER, EquipmentRankKind.BRONZE],
     }));
 
     expect(subjectIdentity(query, known)).toEqual({
       categoryCode: 'TWO_HANDED_AXE',
-      // Ascending by tier strength, not by the order the filter listed them.
-      tierKinds: [EquipmentTierKind.BRONZE, EquipmentTierKind.SILVER],
+      // Ascending by rank strength, not by the order the filter listed them.
+      rankKinds: [EquipmentRankKind.BRONZE, EquipmentRankKind.SILVER],
     });
   });
 
@@ -246,7 +246,7 @@ describe('subjectIdentity', () => {
     expect(subjectIdentity(several, known).categoryCode).toBeNull();
 
     const wildcard = resolveQuery(null, filters({ minQuality: 5 }));
-    expect(subjectIdentity(wildcard, known)).toEqual({ categoryCode: null, tierKinds: [] });
+    expect(subjectIdentity(wildcard, known)).toEqual({ categoryCode: null, rankKinds: [] });
   });
 });
 

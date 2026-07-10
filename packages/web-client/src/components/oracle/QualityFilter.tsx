@@ -10,7 +10,7 @@ import { clampLevel, MAX_LEVEL, MIN_LEVEL } from './oracle.logic';
 interface QualityLevelProps {
   /** The stored minimum. {@link MIN_LEVEL} accepts any. */
   value: number,
-  /** Best star rank the selected equipment can drop. Unbounded by default. */
+  /** Best star count the selected equipment can drop. Unbounded by default. */
   max?: number,
 }
 

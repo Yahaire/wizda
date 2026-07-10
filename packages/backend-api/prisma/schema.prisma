@@ -61,8 +61,8 @@ model Blessing {
 // Equipment taxonomy (static reference data)
 //
 // Seeded lookup tables: the 7 broad equipment types, the equipment categories
-// within each, and the equipment tiers. Single source of truth + copy lives in
-// packages/shared (src/domain/equipment.ts, tier.ts); the seed reads from there.
+// within each, and the equipment ranks. Single source of truth + copy lives in
+// packages/shared (src/domain/equipment.ts, rank.ts); the seed reads from there.
 // ---------------------------------------------------------------------------
 
 /// The 7 broad equipment types. Stable set; used as the readable PK of
@@ -107,10 +107,11 @@ model EquipmentCategory {
 // modelled as M2M join tables next.
 // ---------------------------------------------------------------------------
 
-/// Equipment tier — the base strength band tied to a material (a.k.a. an item's
-/// "rank"; see docs/domain.md). Grows rarely (a migration when the game adds a
-/// tier). Nullable on `Equipment` when it can't be derived from the item name.
-enum EquipmentTierKind {
+/// Equipment rank — the base strength band tied to a material. The game calls
+/// this an item's "Rank" (some players say "Tier"); not the adventurer rank. See
+/// docs/domain.md. Grows rarely (a migration when the game adds a rank). Nullable
+/// on `Equipment` when it can't be derived from the item name.
+enum EquipmentRankKind {
   WORN
   BRONZE
   IRON
@@ -119,11 +120,11 @@ enum EquipmentTierKind {
   SILVER
 }
 
-/// Equipment tiers — static reference data (6 rows). `orderIndex` is the
+/// Equipment ranks — static reference data (6 rows). `orderIndex` is the
 /// authoritative strength ordering; only `Worn` is not obtainable by reversing
-/// junk. Mirrors packages/shared/src/domain/tier.ts.
-model EquipmentTier {
-  kind                    EquipmentTierKind @id
+/// junk. Mirrors packages/shared/src/domain/rank.ts.
+model EquipmentRank {
+  kind                    EquipmentRankKind @id
   name                    String
   orderIndex              Int
   isObtainableThroughJunk Boolean
@@ -131,12 +132,12 @@ model EquipmentTier {
 
 /// A single piece of equipment, as it appears in the drop tables. Deduplicated
 /// by `name` (the same item recurs across junks and groups — see docs/domain.md).
-/// `tier`, `categoryCode`, `maxDropQuality` and `maxDropGrade` are enrichment,
+/// `rank`, `categoryCode`, `maxDropQuality` and `maxDropGrade` are enrichment,
 /// hence nullable: the core "how much junk?" calc doesn't require them.
 model Equipment {
   id           String             @id @default(cuid())
   name         String             @unique
-  tier         EquipmentTierKind?
+  rank         EquipmentRankKind?
   /// FK to the item's category (e.g. "TWO_HANDED_AXE"); null until enriched.
   categoryCode String?
 

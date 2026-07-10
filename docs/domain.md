@@ -21,14 +21,16 @@ tools — back to their prime. Mechanically:
 
 A piece of gear is described by several independent axes:
 
-- **Tier** — the base strength band, tied to a material (also called an item's
-  **rank** — *not* to be confused with *adventurer rank*). Ascending: `Worn` →
-  `Bronze` → `Iron` → `Steel` → `Ebonsteel` → `Silver`. Higher tier = higher base
-  stats; every item belongs to exactly one tier. Only **`Worn`** never drops from
-  junk — the other five are junk-obtainable, which the `EquipmentTier` reference
-  table records as `isObtainableThroughJunk`. (The Fasterthoughts taxonomy CSVs
-  mark some items `"Ex."` — that lives in their `Compendium Number` column, not
-  `Rank`, and isn't a tier: an Ex item still has a normal `Rank`, e.g. Silver.)
+- **Rank** — the base strength band, tied to a material. This is the game's own
+  term (some players also say **tier**); it is *not* the *adventurer rank*, a
+  separate character-level concept the game also labels "Rank". Ascending: `Worn`
+  → `Bronze` → `Iron` → `Steel` → `Ebonsteel` → `Silver`. Higher rank = higher
+  base stats; every item belongs to exactly one rank. Only **`Worn`** never drops
+  from junk — the other five are junk-obtainable, which the `EquipmentRank`
+  reference table records as `isObtainableThroughJunk`. (The Fasterthoughts
+  taxonomy CSVs mark some items `"Ex."` — that lives in their `Compendium Number`
+  column, not `Rank`, and isn't a rank: an Ex item still has a normal `Rank`,
+  e.g. Silver.)
 - **Stats** — start and final (fully-enhanced) stats are fixed per item. 
   Not a source of randomness for our purposes.
 - **Quality** — shown as **stars, 1★–5★**. Higher quality = larger stat values
@@ -47,29 +49,29 @@ So a fully-specified "gear I want" query looks like:
 > *a **★4** **Red-grade** **silver** **two-handed axe** with an **ATK** and an
 > **ATK%** blessing*
 
-…which decomposes into: item identity (tier + type) + quality + grade +
+…which decomposes into: item identity (rank + type) + quality + grade +
 blessing set. The first three come from one data source; the blessings from
 another.
 
-### Item identity vs. category/tier
+### Item identity vs. category/rank
 
 In the drop data an item's identity is just its **name** (e.g. *"Bronze
-Two-Handed Axe"*). That name is usually *descriptive*: it encodes both the tier
-(*Bronze*) and the equipment category (*Two-Handed Axe*), so tier and category
+Two-Handed Axe"*). That name is usually *descriptive*: it encodes both the rank
+(*Bronze*) and the equipment category (*Two-Handed Axe*), so rank and category
 can often be recovered by parsing the name.
 
-But not always. Plenty of named items don't spell out their category or tier —
+But not always. Plenty of named items don't spell out their category or rank —
 e.g. *Mace of Agony*, *Thieves' Boots*, *Rabbit Tail*, *Ring of the Warrior
-Princess*. So rather than parse names, we recover category + tier from an
+Princess*. So rather than parse names, we recover category + rank from an
 explicit, authoritative table: the **Fasterthoughts equipment CSVs** (see
 [Data sources](#data-sources)), matched to our equipment **by name**. Each row
 gives a `Type` (+ armor `Armor Type`) we map to an `EquipmentCategory`, and a
-`Rank` we map to a tier. The enrichment pass only *updates* existing (junk-
+`Rank` we map to our rank enum. The enrichment pass only *updates* existing (junk-
 sourced) equipment; items in the CSV that never drop from junk are ignored here.
 
 Crucially, **the core "how much junk?" calculation does not need the category or
-tier at all.** It works off the item as it appears in the drop table — the
-`(junk, group, item, quality, grade)` tuple carries all the probability. Tier
+rank at all.** It works off the item as it appears in the drop table — the
+`(junk, group, item, quality, grade)` tuple carries all the probability. Rank
 and category are an *enrichment* axis: they power looser, friendlier queries
 (*"any silver two-handed axe"*) and display, but the answer to *"how much junk
 for **this specific item**?"* is computable even when the category is unknown.
@@ -78,8 +80,12 @@ for **this specific item**?"* is computable even when the category is unknown.
 
 The two are interchangeable in-game and in prose (Wizda happily says "gear").
 But for **structural** names — tables, enums, API fields, filter labels — we
-standardise on **"Equipment"** (`Equipment`, `EquipmentType`, `EquipmentTier`,
+standardise on **"Equipment"** (`Equipment`, `EquipmentType`, `EquipmentRank`,
 `EquipmentCategory`). Keep "gear" for flavour text only.
+
+Likewise **"Rank"** (not "Tier") is the structural term for the material strength
+band, matching the game — see the Rank bullet above. "Tier" appears only where we
+tell players *"some folks call it tier"*; code, schema, and API use `rank`.
 
 ## Data sources
 
@@ -100,8 +106,8 @@ Plus an **enrichment** source (not needed by the core calc):
    the [wizardry-daphne-guide](https://github.com/itsnicksia/wizardry-daphne-guide)
    repo (thanks to Fasterthoughts and NRJank). Each row carries an item's `Item
    Name`, `Type` (armor also has `Armor Type`), and `Rank`. We map `Type`
-   (+`Armor Type`) → an `EquipmentCategory` code and `Rank` → an `EquipmentTier`,
-   then match to our equipment **by name** to fill in `categoryCode` + `tier`.
+   (+`Armor Type`) → an `EquipmentCategory` code and `Rank` → an `EquipmentRank`,
+   then match to our equipment **by name** to fill in `categoryCode` + `rank`.
    Pulled via the `WEAPON_TAXONOMY_SOURCE_URL` / `ARMOR_TAXONOMY_SOURCE_URL` env
    vars (raw-GitHub URL or a local file). The mapping tables + name-match live in
    `prisma/seed-from-html/equipmentTaxonomy.*`; the seed logs its match rate and
