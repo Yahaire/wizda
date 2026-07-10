@@ -2,18 +2,17 @@
 
 import { EQUIPMENT_CATEGORIES, EquipmentTypeKind } from '@shared/domain/equipment';
 import {
-    IconBrandRedhat, IconCircle, IconHandStop, IconProps, IconShield, IconShirt, IconShoe,
-    IconSquare, IconSword
+    IconBrandRedhat, IconCircle, IconHandStop, IconProps, IconQuestionMark, IconShield, IconShirt,
+    IconShoe, IconSword
 } from '@tabler/icons-react';
 
 import type { ComponentType } from 'react';
 
 /**
  * Placeholder equipment-category icons. Recolourable (tabler icons take a
- * `color`/`stroke`), so we can later tint them by tier. Keyed by equipment type
- * for now; a per-category map can slot in once the item→category mapping is
- * seeded. A neutral square stands in whenever the category/type is unknown —
- * which, until that backend mapping lands, is every piece.
+ * `color`/`stroke`), so we can tint them by tier. Keyed by equipment type for
+ * now; a per-category map can slot in later. A question mark stands in whenever
+ * the category/type is unknown — a neutral shape read as a failed render.
  */
 const EQUIPMENT_TYPE_ICONS: Record<EquipmentTypeKind, ComponentType<IconProps>> = {
   [EquipmentTypeKind.WEAPON]: IconSword,
@@ -25,9 +24,9 @@ const EQUIPMENT_TYPE_ICONS: Record<EquipmentTypeKind, ComponentType<IconProps>> 
   [EquipmentTypeKind.ACCESSORY]: IconCircle,
 };
 
-/** The icon component for an equipment type, or a neutral square when unknown. */
+/** The icon component for an equipment type, or a question mark when unknown. */
 export function getCategoryIcon(equipmentType?: EquipmentTypeKind | null): ComponentType<IconProps> {
-  return equipmentType ? EQUIPMENT_TYPE_ICONS[equipmentType] : IconSquare;
+  return equipmentType ? EQUIPMENT_TYPE_ICONS[equipmentType] : IconQuestionMark;
 }
 
 /** Category code → its equipment type, so a code alone is enough to pick an icon. */

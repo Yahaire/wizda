@@ -208,12 +208,27 @@ export function IconMultiSelect<T>({
                 placeholder={value.length ? (selectedPlaceholder ?? placeholder) : placeholder}
                 disabled={disabled}
                 onFocus={() => {
+                  // Re-activating the window refocuses this field with the menu
+                  // still up (see onBlur). That focus isn't the player's doing, so
+                  // don't answer it — `selectSearch` would yank focus back off the
+                  // control they clicked, a frame after they clicked it.
+                  if (combobox.dropdownOpened) {
+                    return;
+                  }
                   combobox.openDropdown();
                   // Select on focus-transition (not every click) so re-clicks can
                   // still position the caret and never clobber a manual selection.
                   selectSearch();
                 }}
-                onBlur={() => combobox.closeDropdown()}
+                // Losing the window is not losing the field. Closing here would
+                // reopen on the way back — the restored focus fires before the
+                // click that restored it lands — so the menu would redraw under
+                // the cursor and swallow a click meant for a control behind it.
+                onBlur={() => {
+                  if (document.hasFocus()) {
+                    combobox.closeDropdown();
+                  }
+                }}
                 onChange={(event) => {
                   combobox.openDropdown();
                   combobox.updateSelectedOptionIndex();
