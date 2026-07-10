@@ -8,12 +8,12 @@ import {
     Button, CheckIcon, Combobox, Group, Pill, PillsInput, Stack, Text, useCombobox
 } from '@mantine/core';
 
-import type { IconProps } from '@tabler/icons-react';
+import type { IconComponent } from '@/components/icons/iconComponent';
 
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 export interface IconMultiSelectIcon {
-  icon: ComponentType<IconProps>,
+  icon: IconComponent,
   /** Defaults to a dimmed neutral colour when omitted. */
   color?: string,
 }

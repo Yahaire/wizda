@@ -9,7 +9,6 @@ import { Column, DataTable } from '@/components/table/DataTable';
 import { TruncatedText } from '@/components/TruncatedText';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 import { Alert, Center, Group, Loader, Select, Stack, Text, Title } from '@mantine/core';
-import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
 import { EQUIPMENT_TIERS } from '@shared/domain/tier';
 import { TsUtilities } from '@shared/tsUtilities';
 import { IconInfoCircle } from '@tabler/icons-react';
@@ -21,11 +20,6 @@ const TIER_OPTIONS = [
     .sort((left, right) => left.orderIndex - right.orderIndex)
     .map((tier) => ({ value: tier.kind as string, label: tier.name })),
 ];
-
-/** Category code → its equipment type, so the row icon can reflect the type. */
-const EQUIPMENT_TYPE_BY_CATEGORY = new Map(
-  EQUIPMENT_CATEGORIES.map((category) => [category.code, category.equipmentType]),
-);
 
 /** Tier kind → strength order, for sorting the Tier column meaningfully. */
 const TIER_ORDER = new Map(EQUIPMENT_TIERS.map((tier) => [tier.kind as string, tier.orderIndex]));
@@ -41,7 +35,7 @@ const columns: Column<EquipmentListItem>[] = [
       <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
         <CategoryIcon
           size={16}
-          equipmentType={row.category ? EQUIPMENT_TYPE_BY_CATEGORY.get(row.category.code) ?? null : null}
+          categoryCode={row.category?.code}
           color={getTierColor(row.tier) ?? 'var(--mantine-color-dimmed)'}
           style={{ flexShrink: 0 }}
         />

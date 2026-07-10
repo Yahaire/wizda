@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 
-import { getCategoryIcon, getEquipmentType } from '@/components/CategoryIcon';
+import { getCategoryIcon } from '@/components/CategoryIcon';
 import { useDetail } from '@/components/detail/DetailProvider';
 import {
     getTierColor, GRADE_HEX, QualityStarRow, QualityStars
@@ -61,15 +61,16 @@ const SUBJECT_ICON_SIZE = 18;
  *
  * Falls back to a neutral target whenever the query covers more than one shape, since
  * no single icon can stand for "an axe or a robe". Several tiers still tint, though:
- * Tabler icons paint their stroke from `color`, so an SVG gradient works as a paint
- * server there exactly as `background-clip: text` does for the subject text.
+ * `color` reaches an SVG paint attribute in both icon families (Tabler's stroke, a
+ * game-icon's fill — see `gameIcon`), so an SVG gradient works as a paint server
+ * there exactly as `background-clip: text` does for the subject text.
  */
 function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
   // `useId` embeds colons, which can't appear in a `url(#…)` fragment reference.
   const gradientId = `tier-${useId().replace(/:/g, '')}`;
 
   const Icon = identity.categoryCode
-    ? getCategoryIcon(getEquipmentType(identity.categoryCode))
+    ? getCategoryIcon(identity.categoryCode)
     : IconTarget;
 
   const colors = identity.tierKinds

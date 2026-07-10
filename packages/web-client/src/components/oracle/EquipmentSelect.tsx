@@ -4,7 +4,7 @@ import { EQUIPMENT_TIERS } from '@shared/domain/tier';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 
-import { getCategoryIcon, getEquipmentType } from '@/components/CategoryIcon';
+import { getCategoryIcon } from '@/components/CategoryIcon';
 import { getTierColor } from '@/components/gear/gearDisplays';
 import { IconMultiSelect } from '@/components/select/IconMultiSelect';
 
@@ -50,7 +50,7 @@ export function EquipmentSelect({
       getValue={(item) => item.name}
       getLabel={(item) => item.name}
       getIcon={(item) => ({
-        icon: getCategoryIcon(getEquipmentType(item.category?.code)),
+        icon: getCategoryIcon(item.category?.code),
         color: getTierColor(item.tier),
       })}
       isUnavailable={(item) => !available.has(item.name)}

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { CategoryIcon, getEquipmentType } from '@/components/CategoryIcon';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import { getTierColor, GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
 import { TruncatedText } from '@/components/TruncatedText';
 import { api, MaintenanceError } from '@/services/api';
@@ -274,7 +274,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
             <Group gap="xs" wrap="nowrap">
               <CategoryIcon
                 size={20}
-                equipmentType={getEquipmentType(current.item.category?.code)}
+                categoryCode={current.item.category?.code}
                 color={getTierColor(current.item.tier) ?? 'var(--mantine-color-dimmed)'}
               />
               <Text fw={600} fz="lg">{current.item.name}</Text>
@@ -367,7 +367,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
                         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
                           <CategoryIcon
                             size={14}
-                            equipmentType={getEquipmentType(piece.category?.code)}
+                            categoryCode={piece.category?.code}
                             color={getTierColor(piece.tier) ?? 'var(--mantine-color-dimmed)'}
                             style={{ flexShrink: 0 }}
                           />

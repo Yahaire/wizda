@@ -143,6 +143,29 @@ export function AboutContent() {
         </Button>
       </div>
 
+      <div>
+        <Title order={4} mb="xs">Credits</Title>
+        <Text size="sm">
+          Equipment icons by Lorc, Delapouite and contributors, from{' '}
+          <Anchor href="https://game-icons.net/" target="_blank" rel="noopener noreferrer">
+            game-icons.net
+          </Anchor>
+          , used under{' '}
+          <Anchor
+            href="https://creativecommons.org/licenses/by/3.0/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            CC BY 3.0
+          </Anchor>
+          . Interface icons from{' '}
+          <Anchor href="https://tabler.io/icons" target="_blank" rel="noopener noreferrer">
+            Tabler Icons
+          </Anchor>
+          &nbsp;(MIT).
+        </Text>
+      </div>
+
       <Text size="xs" c="dimmed">
         {APP_NAME} is an unofficial, fan-made tool and isn&apos;t affiliated with or
         endorsed by the makers of Wizardry Variants Daphne.

@@ -54,7 +54,7 @@ export function CategoryFilter({
       onChange={onChange}
       getValue={(category) => category.code}
       getLabel={(category) => category.name}
-      getIcon={(category) => ({ icon: getCategoryIcon(category.equipmentType) })}
+      getIcon={(category) => ({ icon: getCategoryIcon(category.code) })}
       isUnavailable={(category) => !available.has(category.code)}
       unavailableHint="Greyed out: no gear you've picked is that kind."
       grouping={{

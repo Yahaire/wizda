@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
   // The web-client imports runtime values (enums, catalogs) from the sibling
   // `@wizda/shared` package via the `@shared/*` alias. Let Next compile that TS.
   transpilePackages: ['@wizda/shared'],
+  experimental: {
+    // `react-icons/gi` is a ~4000-icon barrel; we import ~32. Rewrite the barrel
+    // import to direct ones so the rest never reaches the bundle.
+    optimizePackageImports: ['react-icons/gi'],
+  },
   async rewrites() {
     const rules = [
       {
