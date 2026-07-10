@@ -14,8 +14,16 @@ import { TsUtilities } from '@shared/tsUtilities';
 /** Grade 5 (Red) unlocks 4 active blessing slots — no piece can hold more. */
 export const MAX_BLESSINGS = 4;
 
+/**
+ * The two ordered axes (quality ★1–5, grade White…Red) share a scale. Both are
+ * filtered as a *minimum* — "this and everything above it" — so {@link MIN_LEVEL}
+ * accepts every level there is, i.e. it means "any".
+ */
+export const MIN_LEVEL = 1;
+export const MAX_LEVEL = 5;
+
 /** localStorage key for the remembered filter selection (bump on shape change). */
-export const FILTERS_STORAGE_KEY = 'wizda.oracle.filters.v2';
+export const FILTERS_STORAGE_KEY = 'wizda.oracle.filters.v3';
 
 /**
  * Plain-language explanations shown in each filter's info modal (the ⓘ next to
@@ -29,12 +37,12 @@ export const FILTER_DESCRIPTIONS = {
   quality: TsUtilities.stringJoin([
     "Quality is the star rank, 1★ up to 5★.",
     "Higher quality means bigger blessing values on the piece.",
-    "Pick every star level you'd be happy to walk away with.",
+    "Set the lowest star rank you'd be happy to walk away with — I'll count everything from there up.",
   ]),
   grade: TsUtilities.stringJoin([
     "Grade shows in-game as a colour: White, Green, Blue, Purple, then Red.",
     "It sets how many blessing slots are active — White has none, and each colour up adds one, so Red holds four.",
-    "Pick every grade you'd be happy to walk away with.",
+    "Set the lowest grade you'd be happy to walk away with — I'll count everything from there up.",
   ]),
   blessings: TsUtilities.stringJoin([
     "Blessings are the bonus stats a piece can roll.",
@@ -64,10 +72,10 @@ export interface OracleFilters {
   category: string[],
   /** Equipment tier kinds (OR set). */
   tier: string[],
-  /** Quality star levels, 1–5. */
-  quality: number[],
-  /** Grade levels, 1–5. */
-  grade: number[],
+  /** Lowest acceptable quality star level, 1–5. {@link MIN_LEVEL} accepts any. */
+  minQuality: number,
+  /** Lowest acceptable grade, 1–5. {@link MIN_LEVEL} accepts any. */
+  minGrade: number,
   /** Blessing codes (AND set). */
   blessings: string[],
   /** Target confidence as a whole percent, 1–99.99. */
@@ -123,29 +131,64 @@ export function formatPercent(probability: number): string {
 }
 
 /**
+ * The levels a minimum accepts: `min` and everything above it. A minimum of
+ * {@link MIN_LEVEL} accepts every level there is, which is what the API already
+ * means by an absent axis — so it yields the empty (wildcard) set rather than a
+ * pointless five-element one.
+ */
+export function levelsFrom(min: number): number[] {
+  if (min <= MIN_LEVEL) {
+    return [];
+  }
+  return Array.from({ length: MAX_LEVEL - min + 1 }, (_unused, index) => min + index);
+}
+
+/** A stored minimum as the slider shows it: inside the bounds the rest of the query allows. */
+export function clampLevel(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(value, max));
+}
+
+/**
  * The active accepted-outcome filters as an API {@link GuaranteeFilters} object,
  * omitting every empty axis (a wildcard). Shared by the guarantee query and the
  * certainty-curve query so they always constrain the junk pool identically.
  */
 export function activeFilters(filters: OracleFilters): GuaranteeFilters {
+  const quality = levelsFrom(filters.minQuality);
+  const grade = levelsFrom(filters.minGrade);
   return {
     ...(filters.equipment.length ? { equipment: filters.equipment } : {}),
     ...(filters.category.length ? { category: filters.category } : {}),
     ...(filters.tier.length ? { tier: filters.tier as EquipmentTierKind[] } : {}),
-    ...(filters.quality.length ? { quality: filters.quality } : {}),
-    ...(filters.grade.length ? { grade: filters.grade } : {}),
+    ...(quality.length ? { quality } : {}),
+    ...(grade.length ? { grade } : {}),
     ...(filters.blessings.length ? { blessings: filters.blessings } : {}),
   };
 }
 
+/** Nothing asked for on any axis — the baseline the filters are built up from. */
 export const EMPTY_FILTERS: OracleFilters = {
   equipment: [],
   category: [],
   tier: [],
-  quality: [],
-  grade: [],
+  minQuality: MIN_LEVEL,
+  minGrade: MIN_LEVEL,
   blessings: [],
   certaintyPct: DEFAULT_CERTAINTY_PCT,
+};
+
+/**
+ * Where a player who has told us nothing yet starts: 3★ Blue and up.
+ *
+ * A blank slate would be a wasted first move — the tool would refuse to run until
+ * they picked something (see the `NO_QUERY` guard). This is the middle of both
+ * scales, which is a plausible thing to want and, more usefully, *demonstrates*
+ * that the axes are minimums the moment they land on the page.
+ */
+export const DEFAULT_FILTERS: OracleFilters = {
+  ...EMPTY_FILTERS,
+  minQuality: 3,
+  minGrade: 3,
 };
 
 /** Whether any accepted-outcome filter is set (certainty alone doesn't count). */
@@ -154,8 +197,8 @@ export function hasAnyFilter(filters: OracleFilters): boolean {
     filters.equipment.length
     || filters.category.length
     || filters.tier.length
-    || filters.quality.length
-    || filters.grade.length
+    || filters.minQuality > MIN_LEVEL
+    || filters.minGrade > MIN_LEVEL
     || filters.blessings.length,
   );
 }
@@ -171,42 +214,39 @@ function maxReachable(
   key: 'maxDropGrade' | 'maxDropQuality',
 ): number {
   if (selected.length === 0) {
-    return 5;
+    return MAX_LEVEL;
   }
-  return selected.reduce((max, item) => Math.max(max, item[key] ?? 5), 1);
+  return selected.reduce((max, item) => Math.max(max, item[key] ?? MAX_LEVEL), 1);
+}
+
+/** The ceiling on the grade axis: the best grade the selected equipment drops. */
+export function maxReachableGrade(selectedEquipment: EquipmentListItem[]): number {
+  return maxReachable(selectedEquipment, 'maxDropGrade');
+}
+
+/** The ceiling on the quality axis: the best star rank the selected equipment drops. */
+export function maxReachableQuality(selectedEquipment: EquipmentListItem[]): number {
+  return maxReachable(selectedEquipment, 'maxDropQuality');
 }
 
 /**
- * The grade levels the current selection allows. Capped above by the selected
- * equipment's reachable grade, and floored by the blessing count: carrying K
- * blessings needs a grade with ≥ K active slots (slots = value − 1), i.e.
- * value ≥ K + 1.
+ * The floor the blessing count puts under the grade axis: carrying K blessings
+ * needs a grade with ≥ K active slots (slots = value − 1), i.e. value ≥ K + 1.
+ *
+ * Asking for *less* than the floor isn't a contradiction — a minimum of White
+ * with four blessings still only ever lands Red — so this narrows the axis
+ * rather than invalidating a pick. It only bites when it climbs past
+ * {@link maxReachableGrade}, where nothing can satisfy the query at all.
  */
-export function allowedGrades(
-  selectedEquipment: EquipmentListItem[],
-  blessingCount: number,
-): Set<number> {
-  const max = maxReachable(selectedEquipment, 'maxDropGrade');
-  const min = Math.min(blessingCount + 1, 5);
-  const set = new Set<number>();
-  for (let grade = 1; grade <= 5; grade += 1) {
-    if (grade >= min && grade <= max) {
-      set.add(grade);
-    }
-  }
-  return set;
+export function gradeFloorFor(blessingCount: number): number {
+  return Math.min(blessingCount + 1, MAX_LEVEL);
 }
 
-/** The quality levels the current selection allows (capped by equipment). */
-export function allowedQualities(selectedEquipment: EquipmentListItem[]): Set<number> {
-  const max = maxReachable(selectedEquipment, 'maxDropQuality');
-  const set = new Set<number>();
-  for (let quality = 1; quality <= 5; quality += 1) {
-    if (quality <= max) {
-      set.add(quality);
-    }
-  }
-  return set;
+/** "3 blessings need Purple or better" — the grade floor, said out loud. */
+export function blessingFloorPhrase(blessingCount: number, floor: number): string {
+  const subject = blessingCount === 1 ? "1 blessing needs" : `${blessingCount} blessings need`;
+  const target = floor >= MAX_LEVEL ? gradeName(floor) : `${gradeName(floor)} or better`;
+  return `${subject} ${target}`;
 }
 
 export function gradeName(value: number): string {
@@ -267,7 +307,9 @@ export interface ResolvedQuery {
 /**
  * The query as it applies to one junk. `matched` omits an axis the query left as a
  * wildcard, so an absent axis falls back to the (empty) filter — and when `matched`
- * is null altogether (request pending or failed) the raw query stands in.
+ * is null altogether (request pending or failed) the raw query stands in. The two
+ * minimum axes are spelled back out as the level sets they stand for, which is what
+ * the junk narrowed and what the summary draws.
  */
 export function resolveQuery(
   matched: MatchedOutcome | null,
@@ -277,8 +319,8 @@ export function resolveQuery(
     equipment: matched?.equipment ?? filters.equipment,
     tier: matched?.tier ?? filters.tier,
     category: matched?.category ?? filters.category,
-    quality: matched?.quality ?? filters.quality,
-    grade: matched?.grade ?? filters.grade,
+    quality: matched?.quality ?? levelsFrom(filters.minQuality),
+    grade: matched?.grade ?? levelsFrom(filters.minGrade),
     // The AND set is required in full, so it never narrows.
     blessings: filters.blessings,
   };
@@ -294,8 +336,8 @@ export function wasNarrowed(matched: MatchedOutcome | null, filters: OracleFilte
     resolved.equipment.length < filters.equipment.length
     || resolved.tier.length < filters.tier.length
     || resolved.category.length < filters.category.length
-    || resolved.quality.length < filters.quality.length
-    || resolved.grade.length < filters.grade.length
+    || resolved.quality.length < levelsFrom(filters.minQuality).length
+    || resolved.grade.length < levelsFrom(filters.minGrade).length
   );
 }
 

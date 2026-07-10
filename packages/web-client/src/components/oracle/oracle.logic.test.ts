@@ -1,19 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import { EquipmentTierKind } from '@shared/domain/tier';
+
 import {
-  EMPTY_FILTERS,
-  OracleFilters,
-  qualityDisplay,
-  resolveQuery,
-  subjectIdentity,
-  subjectOf,
-  wasNarrowed,
+    activeFilters, DEFAULT_FILTERS, EMPTY_FILTERS, gradeFloorFor, hasAnyFilter, levelsFrom,
+    MIN_LEVEL, OracleFilters, qualityDisplay, resolveQuery, subjectIdentity, subjectOf, wasNarrowed
 } from './oracle.logic';
 
 import type { MatchedOutcome } from '@shared/api/endpoints/junkToGuarantee.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
-import { EquipmentTierKind } from '@shared/domain/tier';
-
 function filters(overrides: Partial<OracleFilters> = {}): OracleFilters {
   return { ...EMPTY_FILTERS, ...overrides, };
 }
@@ -98,7 +93,7 @@ describe('subjectOf', () => {
   });
 
   it('falls back to "Any equipment" when only quality/grade/blessings are set', () => {
-    expect(subjectFor({ quality: [5], grade: [5], blessings: ['ATK'] })).toBe('Any equipment');
+    expect(subjectFor({ minQuality: 5, minGrade: 5, blessings: ['ATK'] })).toBe('Any equipment');
   });
 
   it('describes the narrowed equipment, not everything the player asked for', () => {
@@ -109,23 +104,68 @@ describe('subjectOf', () => {
   });
 });
 
+describe('levelsFrom', () => {
+  it('spells a minimum out as itself and everything above it', () => {
+    expect(levelsFrom(4)).toEqual([4, 5]);
+    expect(levelsFrom(5)).toEqual([5]);
+  });
+
+  it('is a wildcard at the bottom of the scale, where every level qualifies', () => {
+    expect(levelsFrom(MIN_LEVEL)).toEqual([]);
+  });
+});
+
+describe('activeFilters', () => {
+  it('sends a minimum as the levels it accepts', () => {
+    expect(activeFilters(filters({ minQuality: 3, minGrade: 4 })))
+      .toEqual({ quality: [3, 4, 5], grade: [4, 5] });
+  });
+
+  it('omits an axis whose minimum accepts everything, so the API sees a wildcard', () => {
+    expect(activeFilters(filters({ minQuality: MIN_LEVEL, minGrade: MIN_LEVEL }))).toEqual({});
+  });
+});
+
+describe('hasAnyFilter', () => {
+  it('does not count a minimum that accepts every level', () => {
+    expect(hasAnyFilter(filters())).toBe(false);
+    expect(hasAnyFilter(filters({ minGrade: MIN_LEVEL }))).toBe(false);
+    expect(hasAnyFilter(filters({ minGrade: 2 }))).toBe(true);
+  });
+
+  // A player who lands and hits Calculate must get an answer, not the NO_QUERY snark.
+  it('counts the filters a first-time player starts with', () => {
+    expect(hasAnyFilter(DEFAULT_FILTERS)).toBe(true);
+    expect(activeFilters(DEFAULT_FILTERS)).toEqual({ quality: [3, 4, 5], grade: [3, 4, 5] });
+  });
+});
+
+describe('gradeFloorFor', () => {
+  it('demands one active blessing slot per blessing — slots being grade − 1', () => {
+    expect(gradeFloorFor(0)).toBe(MIN_LEVEL);
+    expect(gradeFloorFor(1)).toBe(2);
+    expect(gradeFloorFor(4)).toBe(5);
+  });
+});
+
 describe('resolveQuery', () => {
   it('stands in the raw query when no match set arrived', () => {
-    const raw = filters({ equipment: ['Frost Dagger'], quality: [3, 4] });
+    const raw = filters({ equipment: ['Frost Dagger'], minQuality: 3 });
 
-    expect(resolveQuery(null, raw)).toMatchObject({ equipment: ['Frost Dagger'], quality: [3, 4] });
+    expect(resolveQuery(null, raw))
+      .toMatchObject({ equipment: ['Frost Dagger'], quality: [3, 4, 5] });
   });
 
   it('falls back per-axis, since a wildcard axis is absent from the match set', () => {
     // The junk narrowed quality; grade was never filtered, so it stays empty.
-    const resolved = resolveQuery({ quality: [3] }, filters({ quality: [3, 4] }));
+    const resolved = resolveQuery({ quality: [3] }, filters({ minQuality: 3 }));
 
     expect(resolved.quality).toEqual([3]);
     expect(resolved.grade).toEqual([]);
   });
 
   it('never narrows blessings — the AND set is required in full', () => {
-    const resolved = resolveQuery({ quality: [3] }, filters({ quality: [3], blessings: ['ATK', 'CRIT'] }));
+    const resolved = resolveQuery({ quality: [3] }, filters({ minQuality: 3, blessings: ['ATK', 'CRIT'] }));
 
     expect(resolved.blessings).toEqual(['ATK', 'CRIT']);
   });
@@ -133,12 +173,12 @@ describe('resolveQuery', () => {
 
 describe('wasNarrowed', () => {
   it('is false without a match set, and when nothing was dropped', () => {
-    expect(wasNarrowed(null, filters({ quality: [3, 4] }))).toBe(false);
-    expect(wasNarrowed({ quality: [3, 4] }, filters({ quality: [3, 4] }))).toBe(false);
+    expect(wasNarrowed(null, filters({ minQuality: 4 }))).toBe(false);
+    expect(wasNarrowed({ quality: [4, 5] }, filters({ minQuality: 4 }))).toBe(false);
   });
 
   it('is true when any axis lost a value', () => {
-    expect(wasNarrowed({ quality: [3] }, filters({ quality: [3, 4] }))).toBe(true);
+    expect(wasNarrowed({ quality: [4] }, filters({ minQuality: 4 }))).toBe(true);
     expect(wasNarrowed(
       { equipment: ['Beastskin Robe'] },
       filters({ equipment: ['Silver Axe', 'Beastskin Robe'] }),
@@ -204,7 +244,7 @@ describe('subjectIdentity', () => {
     const several = resolveQuery(null, filters({ category: ['TWO_HANDED_AXE', 'CLOTHES'] }));
     expect(subjectIdentity(several, known).categoryCode).toBeNull();
 
-    const wildcard = resolveQuery(null, filters({ quality: [5] }));
+    const wildcard = resolveQuery(null, filters({ minQuality: 5 }));
     expect(subjectIdentity(wildcard, known)).toEqual({ categoryCode: null, tierKinds: [] });
   });
 });
