@@ -16,11 +16,11 @@ export const GRADE_COLORS: Record<number, string> = {
 
 /** In-game grade colours as concrete hex, for swatches. */
 export const GRADE_HEX: Record<number, string> = {
-  1: '#e8e2d6',
-  2: '#4caf50',
-  3: '#3b82f6',
-  4: '#9b59b6',
-  5: '#e02a2d',
+  1: '#efe8da',
+  2: '#61954a',
+  3: '#58a2e6',
+  4: '#b17ad6',
+  5: '#e8492f',
 };
 
 export function gradeName(value: number | null | undefined): string | null {
