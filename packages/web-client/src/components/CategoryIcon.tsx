@@ -112,7 +112,9 @@ interface CategoryIconProps extends IconComponentProps {
   categoryCode?: string | null,
 }
 
-export function CategoryIcon({ categoryCode, ...iconProps }: CategoryIconProps) {
+export function CategoryIcon({ categoryCode, className, ...iconProps }: CategoryIconProps) {
   const Icon = getCategoryIcon(categoryCode);
-  return <Icon {...iconProps} />;
+  // CategoryIcon is only ever a tier-tinted equipment glyph, so it always carries
+  // the legibility rim (see `.wizda-icon-outline`).
+  return <Icon {...iconProps} className={['wizda-icon-outline', className].filter(Boolean).join(' ')} />;
 }

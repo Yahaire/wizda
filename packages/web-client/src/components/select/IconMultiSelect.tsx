@@ -16,6 +16,8 @@ export interface IconMultiSelectIcon {
   icon: IconComponent,
   /** Defaults to a dimmed neutral colour when omitted. */
   color?: string,
+  /** Extra class for the glyph, e.g. the tier legibility rim (`.wizda-icon-outline`). */
+  className?: string,
 }
 
 export interface IconMultiSelectGrouping<T> {
@@ -127,6 +129,7 @@ export function IconMultiSelect<T>({
             <iconInfo.icon
               size={14}
               color={iconInfo.color ?? 'var(--mantine-color-dimmed)'}
+              className={iconInfo.className}
               style={{ flexShrink: 0 }}
             />
           )}
@@ -181,6 +184,7 @@ export function IconMultiSelect<T>({
             <iconInfo.icon
               size={11}
               color={iconInfo.color ?? 'var(--mantine-color-dimmed)'}
+              className={iconInfo.className}
               style={{ flexShrink: 0 }}
             />
           )}

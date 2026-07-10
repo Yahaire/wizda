@@ -79,10 +79,24 @@ function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
 
   const iconStyle = { flexShrink: 0, marginTop: 2 };
   if (colors.length === 0) {
-    return <Icon size={SUBJECT_ICON_SIZE} color="var(--mantine-color-dimmed)" style={iconStyle} />;
+    return (
+      <Icon
+        size={SUBJECT_ICON_SIZE}
+        color="var(--mantine-color-dimmed)"
+        className="wizda-icon-outline"
+        style={iconStyle}
+      />
+    );
   }
   if (colors.length === 1) {
-    return <Icon size={SUBJECT_ICON_SIZE} color={colors[0]} style={iconStyle} />;
+    return (
+      <Icon
+        size={SUBJECT_ICON_SIZE}
+        color={colors[0]}
+        className="wizda-icon-outline"
+        style={iconStyle}
+      />
+    );
   }
   return (
     <>
@@ -96,7 +110,12 @@ function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
           </linearGradient>
         </defs>
       </svg>
-      <Icon size={SUBJECT_ICON_SIZE} color={`url(#${gradientId})`} style={iconStyle} />
+      <Icon
+        size={SUBJECT_ICON_SIZE}
+        color={`url(#${gradientId})`}
+        className="wizda-icon-outline"
+        style={iconStyle}
+      />
     </>
   );
 }

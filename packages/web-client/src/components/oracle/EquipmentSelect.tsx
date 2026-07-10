@@ -52,6 +52,7 @@ export function EquipmentSelect({
       getIcon={(item) => ({
         icon: getCategoryIcon(item.category?.code),
         color: getTierColor(item.tier),
+        className: 'wizda-icon-outline',
       })}
       isUnavailable={(item) => !available.has(item.name)}
       unavailableHint="Greyed out: doesn't fit your category or tier picks."

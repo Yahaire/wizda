@@ -81,7 +81,7 @@ export const EQUIPMENT_TIERS: readonly EquipmentTierInfo[] = [
     name: 'Ebonsteel',
     orderIndex: 5,
     isObtainableThroughJunk: true,
-    color: '#3a4150',
+    color: '#4a5266',
   },
   {
     kind: EquipmentTierKind.SILVER,
