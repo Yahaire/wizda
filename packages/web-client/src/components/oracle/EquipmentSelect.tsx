@@ -12,6 +12,8 @@ interface EquipmentSelectProps {
   data: EquipmentListItem[],
   value: string[],
   onChange: (value: string[]) => void,
+  /** Equipment names that still fit the category/tier picks. */
+  available: ReadonlySet<string>,
   disabled?: boolean,
 }
 
@@ -36,6 +38,7 @@ export function EquipmentSelect({
   data,
   value,
   onChange,
+  available,
   disabled,
 }: EquipmentSelectProps) {
   return (
@@ -50,6 +53,8 @@ export function EquipmentSelect({
         icon: getCategoryIcon(getEquipmentType(item.category?.code)),
         color: getTierColor(item.tier),
       })}
+      isUnavailable={(item) => !available.has(item.name)}
+      unavailableHint="Greyed out: doesn't fit your category or tier picks."
       grouping={{
         getGroup: (item) => (item.tier ? TIER_NAME.get(item.tier)! : UNKNOWN_TIER_GROUP),
         order: TIER_GROUP_ORDER,

@@ -48,15 +48,18 @@ export const FILTER_DESCRIPTIONS = {
     "Blessings are the bonus stats a piece can roll.",
     "I only count gear that carries ALL the blessings you pick.",
     "A single piece holds at most four, so that's the cap.",
+    "Not every piece rolls every blessing — a sword will never carry DEF —",
+    "so I grey out the ones your gear can't reach.",
   ]),
   category: TsUtilities.stringJoin([
     "The kind of gear — daggers, heavy armor, shoes, that sort of thing.",
     "Pick any categories you'd take, and I'll only count junk that drops them.",
+    "I only list the kinds junk hands out at all, so you won't find Tools here.",
   ]),
   tier: TsUtilities.stringJoin([
-    "A gear's tier — from Worn up to Silver.",
-    "I'll only show you the tiers that",
+    "A gear's tier — its material, from Bronze up to Silver.",
     "Pick every tier you'd be happy with.",
+    "I leave out Worn, since no amount of junk will ever hand you one.",
   ]),
   certainty: TsUtilities.stringJoin([
     "How sure you want to be before you stop grinding.",
@@ -201,32 +204,6 @@ export function hasAnyFilter(filters: OracleFilters): boolean {
     || filters.minGrade > MIN_LEVEL
     || filters.blessings.length,
   );
-}
-
-/**
- * Highest level (grade/quality) reachable across the selected equipment. A
- * level is reachable if *any* selected piece can drop it (the guarantee is an
- * OR across equipment), and an item with unknown max (null) is treated as 5 so
- * we never over-constrain on missing data. No equipment selected = no limit (5).
- */
-function maxReachable(
-  selected: EquipmentListItem[],
-  key: 'maxDropGrade' | 'maxDropQuality',
-): number {
-  if (selected.length === 0) {
-    return MAX_LEVEL;
-  }
-  return selected.reduce((max, item) => Math.max(max, item[key] ?? MAX_LEVEL), 1);
-}
-
-/** The ceiling on the grade axis: the best grade the selected equipment drops. */
-export function maxReachableGrade(selectedEquipment: EquipmentListItem[]): number {
-  return maxReachable(selectedEquipment, 'maxDropGrade');
-}
-
-/** The ceiling on the quality axis: the best star rank the selected equipment drops. */
-export function maxReachableQuality(selectedEquipment: EquipmentListItem[]): number {
-  return maxReachable(selectedEquipment, 'maxDropQuality');
 }
 
 /**

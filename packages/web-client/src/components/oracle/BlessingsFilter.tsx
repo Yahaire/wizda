@@ -24,6 +24,11 @@ import {
 interface BlessingsFilterProps {
   value: string[],
   onChange: (value: string[]) => void,
+  /**
+   * Blessing codes some piece in play could roll on top of the ones already
+   * required — see `availableBlessings`. Everything else is greyed out.
+   */
+  available: ReadonlySet<string>,
 }
 
 /**
@@ -31,10 +36,17 @@ interface BlessingsFilterProps {
  * are only 19), and the chosen blessings show as removable pills. AND semantics
  * — the item must carry all selected blessings — so we cap at {@link MAX_BLESSINGS}
  * (no piece holds more). Label/clear/info are provided by the wrapping FilterField.
+ *
+ * A chip is greyed out when no gear the other filters admit could carry it
+ * alongside the current picks — a sword never rolls DEF — but never when it is
+ * already picked, or the player couldn't take it back.
  */
-export function BlessingsFilter({ value, onChange }: BlessingsFilterProps) {
+export function BlessingsFilter({ value, onChange, available }: BlessingsFilterProps) {
   const [opened, { open, close }] = useDisclosure(false);
   const atCap = value.length >= MAX_BLESSINGS;
+  const unreachable = BLESSINGS.some(
+    (blessing) => !available.has(blessing.code) && !value.includes(blessing.code),
+  );
 
   const toggle = (next: string[]) => {
     if (next.length <= MAX_BLESSINGS) {
@@ -90,7 +102,7 @@ export function BlessingsFilter({ value, onChange }: BlessingsFilterProps) {
                 color="crimson"
                 variant="outline"
                 size="sm"
-                disabled={atCap && !value.includes(blessing.code)}
+                disabled={!value.includes(blessing.code) && (atCap || !available.has(blessing.code))}
                 styles={{
                   root: { width: '100%' },
                   label: { width: '100%', justifyContent: 'center', paddingInline: 4 },
@@ -105,6 +117,11 @@ export function BlessingsFilter({ value, onChange }: BlessingsFilterProps) {
         {atCap && (
           <Text c="dimmed" size="xs" mt="sm">
             That&apos;s the most a single piece can hold ({MAX_BLESSINGS}).
+          </Text>
+        )}
+        {!atCap && unreachable && (
+          <Text c="dimmed" size="xs" mt="sm">
+            Greyed out: no gear your other filters allow could carry that one too.
           </Text>
         )}
         <Group justify="flex-end" mt="md">

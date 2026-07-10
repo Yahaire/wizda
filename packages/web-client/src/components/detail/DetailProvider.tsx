@@ -176,7 +176,15 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
 
   const resolveEquipment = (name: string): EquipmentListItem => (
     equipmentByName.get(name)
-    ?? { name, category: null, tier: null, maxDropQuality: null, maxDropGrade: null, sources: [] }
+    ?? {
+      name,
+      category: null,
+      tier: null,
+      maxDropQuality: null,
+      maxDropGrade: null,
+      blessings: [],
+      sources: [],
+    }
   );
   const resolveJunk = (name: string): JunkListItem => (
     junkByName.get(name)

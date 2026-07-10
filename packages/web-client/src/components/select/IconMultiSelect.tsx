@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 
+import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
+import { matchesAllTerms } from '@/utils/search';
 import {
     Button, CheckIcon, Combobox, Group, Pill, PillsInput, Stack, Text, useCombobox
 } from '@mantine/core';
-import type { IconProps } from '@tabler/icons-react';
 
-import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
-import { matchesAllTerms } from '@/utils/search';
+import type { IconProps } from '@tabler/icons-react';
 
 import type { ComponentType, ReactNode } from 'react';
 
@@ -35,6 +35,14 @@ interface IconMultiSelectProps<T> {
   getLabel: (item: T) => string,
   /** Icon shown on each pill and dropdown option. Omit to show no icon. */
   getIcon?: (item: T) => IconMultiSelectIcon,
+  /**
+   * Whether an option can't be picked because it fits none of the other filters.
+   * Never consulted for an already-selected item — the player must always be able
+   * to take a pick back, and taking one back is what un-disables the rest.
+   */
+  isUnavailable?: (item: T) => boolean,
+  /** Explains the greyed-out options, shown in the dropdown footer while any is. */
+  unavailableHint?: string,
   /** Groups dropdown options (e.g. by tier or type) instead of a flat list. */
   grouping?: IconMultiSelectGrouping<T>,
   /** Match cap when {@link grouping} isn't set. */
@@ -66,6 +74,8 @@ export function IconMultiSelect<T>({
   getValue,
   getLabel,
   getIcon,
+  isUnavailable,
+  unavailableHint,
   grouping,
   optionLimit = DEFAULT_OPTION_LIMIT,
   placeholder = 'Search…',
@@ -94,11 +104,21 @@ export function IconMultiSelect<T>({
 
   const matches = data.filter((item) => matchesAllTerms(getLabel(item), search));
 
+  const unavailable = (item: T) => (
+    Boolean(isUnavailable?.(item)) && !selected.has(getValue(item))
+  );
+  const showUnavailableHint = Boolean(unavailableHint) && matches.some(unavailable);
+
   const renderOption = (item: T) => {
     const itemValue = getValue(item);
     const iconInfo = getIcon?.(item);
     return (
-      <Combobox.Option value={itemValue} key={itemValue} active={selected.has(itemValue)}>
+      <Combobox.Option
+        value={itemValue}
+        key={itemValue}
+        active={selected.has(itemValue)}
+        disabled={unavailable(item)}
+      >
         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
           {selected.has(itemValue) && <CheckIcon size={12} />}
           {iconInfo && (
@@ -214,6 +234,9 @@ export function IconMultiSelect<T>({
           {optionsContent}
         </Combobox.Options>
         <Combobox.Footer>
+          {showUnavailableHint && (
+            <Text size="xs" c="dimmed" ta="center" pb={4}>{unavailableHint}</Text>
+          )}
           <Button
             fullWidth
             variant="subtle"

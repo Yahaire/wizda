@@ -22,6 +22,7 @@ function equipmentList(...items: Partial<EquipmentListItem>[]): Map<string, Equi
       tier: item.tier ?? null,
       maxDropQuality: null,
       maxDropGrade: null,
+      blessings: [],
       sources: [],
     });
   }

@@ -32,8 +32,8 @@ export interface EquipmentJunkSource {
 
 /**
  * The equipment category a piece belongs to (e.g. "Two-Handed Axe"). Mirrors an
- * `EquipmentCategory` reference row. Groundwork: the backend does not yet map
- * items to categories, so `EquipmentListItem.category` is currently always null.
+ * `EquipmentCategory` reference row. Null on an item the taxonomy enrichment
+ * couldn't match by name (see the seed).
  */
 export interface EquipmentCategoryRef {
   /** Stable code, e.g. "TWO_HANDED_AXE". */
@@ -45,7 +45,7 @@ export interface EquipmentCategoryRef {
 /** One entry of `GET /equipment`. */
 export interface EquipmentListItem {
   name: string,
-  /** Category, or null when it hasn't been mapped yet (not seeded — see routes). */
+  /** Category, or null when the taxonomy enrichment couldn't match it (see the seed). */
   category: EquipmentCategoryRef | null,
   /** Equipment tier, or null when it couldn't be derived (enrichment — see schema). */
   tier: EquipmentTierKind | null,
@@ -53,6 +53,14 @@ export interface EquipmentListItem {
   maxDropQuality: number | null,
   /** Highest grade (1–5) this equipment is known to drop at; null if unknown. */
   maxDropGrade: number | null,
+  /**
+   * Blessing codes this equipment can roll at all — every code with a nonzero
+   * published rate in any slot, sorted. Weapons never roll DEF, plate never rolls
+   * ATK, and so on, so this is what lets the filter UI grey out a blessing the
+   * chosen gear can't carry. Slot doesn't narrow it: a piece's reachable set is
+   * the same in all four slots (verified against the seeded data).
+   */
+  blessings: string[],
   /** Distinct junks this equipment drops from, sorted by name. */
   sources: EquipmentJunkSource[],
 }

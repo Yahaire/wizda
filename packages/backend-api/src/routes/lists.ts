@@ -53,7 +53,9 @@ async function handleListEquipment(
   // omitted. `sourceMaxes` collapses the drop-rate rows to one (equipment, junk)
   // pair each, carrying the best quality/grade that pair reaches — computed in
   // the DB so we don't ship every rate row to Node just to fold it down.
-  const [equipment, sourceMaxes] = await Promise.all([
+  // `blessingRows` does the same for blessing reachability: the distinct codes a
+  // piece can roll, deduplicated across its four slots (they always agree).
+  const [equipment, sourceMaxes, blessingRows] = await Promise.all([
     prisma.equipment.findMany({
       where: { dropRates: { some: {} } },
       select: {
@@ -94,7 +96,18 @@ async function handleListEquipment(
       JOIN "Junk" j ON j."id" = dr."junkId"
       GROUP BY dr."equipmentId", j."name"
     `,
+    prisma.equipmentBlessingDropRate.groupBy({
+      by: ['equipmentId', 'blessingCode'],
+      where: { rate: { gt: 0 } },
+    }),
   ]);
+
+  const blessingsByEquipmentId = new Map<string, string[]>();
+  for (const row of blessingRows) {
+    const codes = blessingsByEquipmentId.get(row.equipmentId) ?? [];
+    codes.push(row.blessingCode);
+    blessingsByEquipmentId.set(row.equipmentId, codes);
+  }
 
   const sourcesByEquipmentId = new Map<string, EquipmentJunkSource[]>();
   for (const row of sourceMaxes) {
@@ -115,6 +128,7 @@ async function handleListEquipment(
     tier: item.tier as EquipmentTierKind | null,
     maxDropQuality: item.maxDropQuality,
     maxDropGrade: item.maxDropGrade,
+    blessings: (blessingsByEquipmentId.get(item.id) ?? []).sort(),
     sources: (sourcesByEquipmentId.get(item.id) ?? [])
       .sort((left, right) => left.junkName.localeCompare(right.junkName)),
   }));

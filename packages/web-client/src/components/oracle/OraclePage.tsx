@@ -10,7 +10,6 @@ import {
 } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
-import { TsUtilities } from '@shared/tsUtilities';
 import { IconInfoCircle, IconSparkles } from '@tabler/icons-react';
 
 import { BlessingsFilter } from './BlessingsFilter';
@@ -19,10 +18,10 @@ import { CertaintySlider } from './CertaintySlider';
 import { EquipmentSelect } from './EquipmentSelect';
 import { FilterField } from './FilterField';
 import { GradeFilter, GradeReadout } from './GradeFilter';
+import { computeFacets, OracleConflict } from './oracle.facets';
 import {
-    activeFilters, blessingFloorPhrase, DEFAULT_FILTERS, FILTER_DESCRIPTIONS, FILTERS_STORAGE_KEY,
-    gradeFloorFor, gradeName, hasAnyFilter, maxReachableGrade, maxReachableQuality, MIN_LEVEL,
-    OracleFilters, qualityLabel
+    activeFilters, DEFAULT_FILTERS, FILTER_DESCRIPTIONS, FILTERS_STORAGE_KEY, hasAnyFilter,
+    MIN_LEVEL, OracleFilters
 } from './oracle.logic';
 import { QualityFilter, QualityReadout } from './QualityFilter';
 import { ResultsPanel } from './ResultsPanel';
@@ -73,10 +72,10 @@ export function OraclePage() {
   const [resultVersion, setResultVersion] = useState(0);
 
   // A blocking prompt shown when a filter change makes an existing pick
-  // impossible. Confirm → bring the offending picks back into range; cancel →
-  // revert to the last conflict-free selection (undo the change that caused it).
-  // Some contradictions have no in-range answer, and those offer only the undo.
-  const [conflict, setConflict] = useState<{ message: string, fixable: boolean } | null>(null);
+  // impossible. Confirm → apply the conflict's own fix; cancel → revert to the
+  // last conflict-free selection (undo the change that caused it). Some
+  // contradictions have no in-range answer, and those offer only the undo.
+  const [conflict, setConflict] = useState<OracleConflict | null>(null);
   const lastGoodRef = useRef<OracleFilters | null>(null);
 
   // Scroll the results into view after a fresh calculation (not on "show more").
@@ -138,90 +137,49 @@ export function OraclePage() {
     });
   }, [equipmentList, setFilters]);
 
-  const equipmentByName = useMemo(() => {
-    const map = new Map<string, EquipmentListItem>();
-    for (const item of equipmentList ?? []) {
-      map.set(item.name, item);
-    }
-    return map;
-  }, [equipmentList]);
+  // Which options still lead anywhere, what the level sliders top out at, and
+  // whether the selection contradicts itself. See `oracle.facets.ts`.
+  const facets = useMemo(() => computeFacets(equipmentList, filters), [equipmentList, filters]);
 
-  const selectedItems = useMemo(
-    () => filters.equipment
-      .map((name) => equipmentByName.get(name))
-      .filter((item): item is EquipmentListItem => Boolean(item)),
-    [filters.equipment, equipmentByName],
-  );
-
-  const maxGrade = useMemo(() => maxReachableGrade(selectedItems), [selectedItems]);
-  const maxQuality = useMemo(() => maxReachableQuality(selectedItems), [selectedItems]);
-  const gradeFloor = gradeFloorFor(filters.blessings.length);
-
-  // Detect an impossible selection and raise the blocking conflict prompt. Since
-  // both level axes are minimums, only one that sits *above* what the gear drops
-  // can contradict anything: a minimum under the blessing floor merely restates
-  // the floor, which the grade slider shows rather than argues with.
+  // Raise the blocking conflict prompt on an impossible selection. Nothing is
+  // judged (nor banked as a good state) until the catalog is in hand: an
+  // untroubled verdict there only means we hadn't yet loaded the gear to trouble
+  // it. Then one prompt at a time — while it's up the filters are frozen behind
+  // it, so re-deriving would only restate the conflict it's already showing.
+  const catalogLoaded = Boolean(equipmentList?.length);
   useEffect(() => {
-    const noGradeFits = gradeFloor > maxGrade;
-    const gradeTooHigh = filters.minGrade > maxGrade;
-    const qualityTooHigh = filters.minQuality > maxQuality;
-
-    if (!noGradeFits && !gradeTooHigh && !qualityTooHigh) {
+    if (!catalogLoaded) {
+      return;
+    }
+    if (!facets.conflict) {
       lastGoodRef.current = filters;
       if (conflict) {
         setConflict(null);
       }
       return;
     }
-    if (conflict) {
-      return;
+    if (!conflict) {
+      setConflict(facets.conflict);
     }
+  }, [catalogLoaded, filters, facets, conflict]);
 
-    // Nothing to tidy: no grade both carries the blessings and drops from that
-    // gear, whatever the grade filter says. Only taking the pick back can help.
-    if (noGradeFits) {
-      setConflict({
-        message: TsUtilities.stringJoin([
-          `${blessingFloorPhrase(filters.blessings.length, gradeFloor)}, and that gear never drops that high.`,
-          "Ask for fewer blessings, or hunt something else.",
-        ]),
-        fixable: false,
-      });
-      return;
-    }
-
-    let message: string;
-    if (gradeTooHigh && !qualityTooHigh) {
-      message = `I don't think that gear ever drops as high as ${gradeName(filters.minGrade).toLowerCase()}.`;
-    } else if (qualityTooHigh && !gradeTooHigh) {
-      message = `That gear doesn't seem to reach ${qualityLabel(filters.minQuality)}.`;
-    } else {
-      message = "Some of your picks don't fit together anymore.";
-    }
-
-    setConflict({ message, fixable: true });
-  }, [
-    filters,
-    maxGrade,
-    maxQuality,
-    gradeFloor,
-    conflict,
-  ]);
-
-  // Lower each minimum to what the gear actually drops, which keeps the intent
-  // ("the best I can get") where dropping the axis entirely would lose it.
   const tidyConflict = () => {
-    patch({
-      minGrade: Math.min(filters.minGrade, maxGrade),
-      minQuality: Math.min(filters.minQuality, maxQuality),
-    });
+    if (conflict?.fix) {
+      patch(conflict.fix);
+    }
     setConflict(null);
   };
 
+  /**
+   * Take back whatever caused the conflict. Normally that's the last selection we
+   * saw work, but a player who closed the tab while a prompt was up comes back to
+   * a remembered selection that was already impossible — there's no good state
+   * behind it to return to. Rather than bounce them off the same prompt forever,
+   * apply its cleanup, or start them over when it hasn't got one.
+   */
   const undoConflict = () => {
-    if (lastGoodRef.current) {
-      setFilters(lastGoodRef.current);
-    }
+    setFilters(lastGoodRef.current
+      ?? (conflict?.fix ? { ...filters, ...conflict.fix } : DEFAULT_FILTERS));
     setConflict(null);
   };
 
@@ -314,6 +272,7 @@ export function OraclePage() {
             data={equipmentList ?? []}
             value={filters.equipment}
             onChange={(value) => patch({ equipment: value })}
+            available={facets.equipment}
             disabled={!equipmentList}
           />
         </FilterField>
@@ -328,6 +287,8 @@ export function OraclePage() {
             <CategoryFilter
               value={filters.category}
               onChange={(value) => patch({ category: value })}
+              offered={facets.catalogCategory}
+              available={facets.category}
             />
           </FilterField>
 
@@ -340,6 +301,7 @@ export function OraclePage() {
             <TierFilter
               value={filters.tier}
               onChange={(value) => patch({ tier: value })}
+              available={facets.tier}
             />
           </FilterField>
         </SimpleGrid>
@@ -347,14 +309,14 @@ export function OraclePage() {
         <FilterField
           label="Quality"
           description={FILTER_DESCRIPTIONS.quality}
-          readout={<QualityReadout value={filters.minQuality} max={maxQuality} />}
+          readout={<QualityReadout value={filters.minQuality} max={facets.maxQuality} />}
           onClear={() => patch({ minQuality: MIN_LEVEL })}
           canClear={filters.minQuality > MIN_LEVEL}
         >
           <QualityFilter
             value={filters.minQuality}
             onChange={(value) => patch({ minQuality: value })}
-            max={maxQuality}
+            max={facets.maxQuality}
           />
         </FilterField>
 
@@ -364,7 +326,7 @@ export function OraclePage() {
           readout={(
             <GradeReadout
               value={filters.minGrade}
-              max={maxGrade}
+              max={facets.maxGrade}
               blessingCount={filters.blessings.length}
             />
           )}
@@ -374,7 +336,7 @@ export function OraclePage() {
           <GradeFilter
             value={filters.minGrade}
             onChange={(value) => patch({ minGrade: value })}
-            max={maxGrade}
+            max={facets.maxGrade}
             blessingCount={filters.blessings.length}
           />
         </FilterField>
@@ -389,6 +351,7 @@ export function OraclePage() {
             <BlessingsFilter
               value={filters.blessings}
               onChange={(value) => patch({ blessings: value })}
+              available={facets.blessings}
             />
           </FilterField>
 
@@ -491,13 +454,13 @@ export function OraclePage() {
           </Text>
           <Group justify="flex-end" gap="xs">
             <Button
-              variant={conflict?.fixable ? 'subtle' : 'filled'}
-              color={conflict?.fixable ? 'gray' : 'crimson'}
+              variant={conflict?.fix ? 'subtle' : 'filled'}
+              color={conflict?.fix ? 'gray' : 'crimson'}
               onClick={undoConflict}
             >
-              Undo that choice
+              Undo
             </Button>
-            {conflict?.fixable && (
+            {conflict?.fix && (
               <Button color="crimson" onClick={tidyConflict}>
                 Clean up
               </Button>
