@@ -24,7 +24,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
-import { matchesAllTerms } from '@/utils/search';
+import { createSearchMatcher } from '@/utils/search';
 
 export interface Column<T> {
   key: string,
@@ -81,8 +81,9 @@ export function DataTable<T>({
   const { ref: searchRef, selectOnFocus: selectSearch } = useSelectOnFocus<HTMLInputElement>();
 
   const rows = useMemo(() => {
+    const matches = createSearchMatcher(query);
     const filtered = query.trim()
-      ? data.filter((row) => matchesAllTerms(searchText(row), query))
+      ? data.filter((row) => matches(searchText(row)))
       : data;
 
     if (!sortKey) {

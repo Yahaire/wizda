@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
-import { matchesAllTerms } from '@/utils/search';
+import { createSearchMatcher } from '@/utils/search';
 import {
     Button, CheckIcon, Combobox, Group, Pill, PillsInput, Stack, Text, useCombobox
 } from '@mantine/core';
@@ -60,7 +60,8 @@ const DEFAULT_OPTION_LIMIT = 50;
 /**
  * Multi-select built on Combobox so we can (a) match loosely — every
  * whitespace-separated search term must appear somewhere in the label, in any
- * order, so "silver axe" and "axe silver" both find "Silver Two-Handed Axe" —
+ * order and under aliasing, so "silver axe", "axe silver" and "2h silver axe"
+ * all find "Silver Two-Handed Axe" (see `createSearchMatcher`) —
  * (b) show an optionally colour-tinted icon on each pill and option, and (c)
  * optionally group dropdown options (e.g. by tier), each with its own match
  * cap so a broad search doesn't bury one group under another. Also gives the
@@ -102,7 +103,8 @@ export function IconMultiSelect<T>({
     selectSearch();
   };
 
-  const matches = data.filter((item) => matchesAllTerms(getLabel(item), search));
+  const matchesSearch = createSearchMatcher(search);
+  const matches = data.filter((item) => matchesSearch(getLabel(item)));
 
   const unavailable = (item: T) => (
     Boolean(isUnavailable?.(item)) && !selected.has(getValue(item))
