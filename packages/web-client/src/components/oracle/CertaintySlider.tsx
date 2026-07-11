@@ -1,16 +1,11 @@
 'use client';
 
-import {
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-
-import { Group, NumberInput, Slider } from '@mantine/core';
+import { useEffect, useRef, useState } from 'react';
 
 import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
 import { wizda } from '@/mascot/voice';
-import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
+import { WizdaGlyph, wizdaSay } from '@/mascot/wizda';
+import { Group, NumberInput, Slider } from '@mantine/core';
 
 import { MAX_CERTAINTY_PCT, MIN_CERTAINTY_PCT } from './oracle.logic';
 
@@ -57,7 +52,7 @@ export function CertaintySlider({ value, onChange }: CertaintySliderProps) {
     // Only greet the *transition* into the cap, once — the ref flips
     // synchronously so repeat calls in the same drag can't fire again.
     if (atMax && !atMaxRef.current) {
-      wizdaSay(wizda.oracle.agoraLine, { emoji: WizdaEmoji.info });
+      wizdaSay(wizda.oracle.agoraLine, { glyph: WizdaGlyph.snark });
     }
     atMaxRef.current = atMax;
     setLocal(clamped);

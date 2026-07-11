@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Text } from '@mantine/core';
 
 import { wizda } from './voice';
-import { pickGreeting, WizdaEmoji, wizdaSay } from './wizda';
+import { pickGreeting, WizdaGlyph, WizdaMark, wizdaSay } from './wizda';
 
 const WELCOMED_KEY = 'wizda.welcomed';
 const LAST_GREETED_KEY = 'wizda.lastGreeted';
@@ -41,7 +41,7 @@ export function WizdaGreeter() {
       }
       localStorage.setItem(WELCOMED_KEY, '1');
       localStorage.setItem(LAST_GREETED_KEY, stamp);
-      wizdaSay(wizda.greet.welcome, { emoji: WizdaEmoji.welcome, autoClose: 8000 });
+      wizdaSay(wizda.greet.welcome, { glyph: WizdaGlyph.welcome, autoClose: 8000 });
       return;
     }
 
@@ -55,7 +55,7 @@ export function WizdaGreeter() {
     if (isSmall) {
       setBanner(line);
     } else {
-      wizdaSay(line, { emoji: WizdaEmoji.greet, autoClose: 7000 });
+      wizdaSay(line, { glyph: WizdaGlyph.greet, autoClose: 7000 });
     }
   }, [pathname]);
 
@@ -72,7 +72,7 @@ export function WizdaGreeter() {
       mb="md"
     >
       <Text component="span" className="wizda-speech">
-        {WizdaEmoji.greet} {banner}
+        <WizdaMark glyph={WizdaGlyph.greet} />{banner}
       </Text>
     </Alert>
   );

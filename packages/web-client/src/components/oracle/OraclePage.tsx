@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ORACLE_NAME } from '@/app/app.constants';
 import { wizda } from '@/mascot/voice';
-import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
+import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import {
     Alert, Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title
@@ -128,7 +128,7 @@ export function OraclePage() {
           setMaintenance(error.message);
         } else {
           wizdaSay(wizda.oracle.loadError, {
-            emoji: WizdaEmoji.info,
+            glyph: WizdaGlyph.info,
             color: 'red',
           });
         }
@@ -237,12 +237,12 @@ export function OraclePage() {
       return;
     }
     const code = error instanceof ApiError ? error.errorCode : 'INTERNAL_ERROR';
-    wizdaSay(friendlyError(code), { emoji: WizdaEmoji.info, color: 'red' });
+    wizdaSay(friendlyError(code), { glyph: WizdaGlyph.info, color: 'red' });
   };
 
   const calculate = async () => {
     if (!hasAnyFilter(filters)) {
-      wizdaSay(wizda.oracle.snark, { emoji: WizdaEmoji.snark });
+      wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark });
       return;
     }
     setLoading(true);
@@ -393,7 +393,7 @@ export function OraclePage() {
           color="crimson"
           loading={loading}
           leftSection={<IconSparkles size={18} />}
-          onClick={() => (canCalculate ? calculate() : wizdaSay(wizda.oracle.snark, { emoji: WizdaEmoji.snark }))}
+          onClick={() => (canCalculate ? calculate() : wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark }))}
           style={canCalculate ? undefined : {
             opacity: 0.55,
             filter: 'grayscale(0.6)',
@@ -473,7 +473,7 @@ export function OraclePage() {
       >
         <Stack gap="md">
           <Text className="wizda-speech">
-            {WizdaEmoji.confirm} {conflict?.message}
+            <WizdaMark glyph={WizdaGlyph.confirm} />{conflict?.message}
           </Text>
           <Group justify="flex-end" gap="xs">
             <Button

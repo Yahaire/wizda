@@ -15,7 +15,7 @@ import { IconSparkles } from '@tabler/icons-react';
 import { BLESSINGS } from '@shared/domain/stats';
 
 import { wizda } from '@/mascot/voice';
-import { WizdaEmoji } from '@/mascot/wizda';
+import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
 
 import {
   blessingLabel,
@@ -88,7 +88,7 @@ export function BlessingsFilter({ value, onChange, available }: BlessingsFilterP
         centered
       >
         <Text className="wizda-speech" size="sm" mb="sm">
-          {WizdaEmoji.info} {wizda.oracle.blessingsHelp}
+          <WizdaMark glyph={WizdaGlyph.info} />{wizda.oracle.blessingsHelp}
         </Text>
         <Chip.Group multiple value={value} onChange={toggle}>
           {/* 2 columns on mobile, 4 from xs up. Each chip fills its cell with a

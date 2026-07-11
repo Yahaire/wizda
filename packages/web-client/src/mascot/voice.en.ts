@@ -103,8 +103,8 @@ export const wizdaLinesEn = {
       "I can drop the category and rank and keep the gear you named.",
     ]),
     genericConflict: "Some of your picks don't fit together anymore.",
-    blessingUnrollableOne: (labels) => `Nothing you've picked ever rolls ${labels}.`,
-    blessingUnrollableMany: (labels) => `Nothing you've picked rolls ${labels}.`,
+    blessingUnrollableOne: (labels) => `Nothing you've picked ever rolls a ${labels} blessing.`,
+    blessingUnrollableMany: (labels) => `Nothing you've picked rolls ${labels} blessing.`,
     blessingComboUnrollable: (labels) => TsUtilities.stringJoin([
       `No single piece you've picked carries ${labels} together,`,
       "and a blessing only counts if it's on the piece you're hunting.",

@@ -8,7 +8,7 @@ import { getRankColor, GradeBadge, QualityStars, RankBadge } from '@/components/
 import { Column, DataTable } from '@/components/table/DataTable';
 import { TruncatedText } from '@/components/TruncatedText';
 import { wizda } from '@/mascot/voice';
-import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
+import { WizdaGlyph, wizdaSay } from '@/mascot/wizda';
 import { Alert, Center, Group, Loader, Select, Stack, Text, Title } from '@mantine/core';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { IconInfoCircle } from '@tabler/icons-react';
@@ -110,7 +110,7 @@ function EquipmentListContent() {
     const visited = localStorage.getItem('equipment-list-visited');
     if (!visited) {
       wizdaSay(wizda.credits.thanks, {
-        emoji: WizdaEmoji.welcome,
+        glyph: WizdaGlyph.welcome,
         autoClose: 12000,
       });
       localStorage.setItem('equipment-list-visited', 'true');

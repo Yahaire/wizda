@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CALCULATION_DOC_URL } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { wizda } from '@/mascot/voice';
-import { WizdaEmoji } from '@/mascot/wizda';
+import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
 import {
     ActionIcon, Alert, Anchor, Box, Button, Center, Group, Loader, Modal, Paper, Stack, Text,
     TextInput, ThemeIcon, Tooltip, UnstyledButton
@@ -273,7 +273,7 @@ export function ResultsPanel({
               </Button>
             ) : (
               <Text className="wizda-speech" ta="center">
-                {WizdaEmoji.welcome} {wizda.oracle.endOfList}
+                <WizdaMark glyph={WizdaGlyph.welcome} />{wizda.oracle.endOfList}
               </Text>
             )}
           </Center>
@@ -302,7 +302,7 @@ export function ResultsPanel({
         size="md"
       >
         <Stack gap="sm">
-          <Text className="wizda-speech">{WizdaEmoji.info} {wizda.oracle.estimateNote}</Text>
+          <Text className="wizda-speech"><WizdaMark glyph={WizdaGlyph.info} />{wizda.oracle.estimateNote}</Text>
           <Text size="sm" c="dimmed">
             {wizda.oracle.estimateNoteLink}{' '}
             <Anchor

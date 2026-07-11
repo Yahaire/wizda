@@ -1,6 +1,6 @@
 'use client';
 
-import { WizdaEmoji } from '@/mascot/wizda';
+import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
 import { ActionIcon, Anchor, Group, Input, Modal, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconInfoCircle } from '@tabler/icons-react';
@@ -86,7 +86,7 @@ export function FilterField({
         size="md"
         centered
       >
-        <Text className="wizda-speech">{WizdaEmoji.info} {description}</Text>
+        <Text className="wizda-speech"><WizdaMark glyph={WizdaGlyph.info} />{description}</Text>
       </Modal>
     </Input.Wrapper>
   );

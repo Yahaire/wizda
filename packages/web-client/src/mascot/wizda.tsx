@@ -1,26 +1,60 @@
 'use client';
 
+import { GiFairy, GiHyenaHead } from 'react-icons/gi';
+
+import { gameIcon, IconComponent } from '@/components/icons/iconComponent';
 import { Button, Group, Stack, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { IconAlertTriangle, IconInfoCircle, IconSparkles } from '@tabler/icons-react';
 
 import { wizda } from './voice';
 
 /**
  * Wizda's render helpers. Her *words* live in the phrase catalog (`voice.ts` /
- * `voice.en.ts`); this file only turns them into toasts. For this release the
- * mascot is expressed through microcopy + emoji placeholders (real art/avatar
- * comes later) — so keep every player-facing message flowing through here,
- * styled with the shared `.wizda-speech` look.
+ * `voice.en.ts`); this file only turns them into toasts. She's marked with a
+ * small crimson glyph per voice slot (see {@link WizdaGlyph}), rendered in the
+ * shared `.wizda-speech` look — so keep every player-facing message flowing
+ * through here.
  */
 
-/** Emoji placeholders standing in for the mascot until real art lands. */
-export const WizdaEmoji = {
-  welcome: '✨',
-  confirm: '😮',
-  snark: '😩',
-  info: 'ℹ️',
-  greet: '🧚',
-} as const;
+/**
+ * Wizda's glyphs, one per voice slot, all painted her crimson. A sparkle where
+ * she's simply talking, a fairy for her daily hello, a cackling hyena for a
+ * tease, and meaningful marks where the glyph must carry sense — a caution
+ * triangle for a cleanup prompt, the ⓘ info mark for help (the same glyph as
+ * the filter ⓘ buttons). Tabler icons satisfy {@link IconComponent} directly;
+ * game-icons go through the {@link gameIcon} fill adapter.
+ */
+export const WizdaGlyph = {
+  welcome: IconSparkles,
+  greet: gameIcon(GiFairy),
+  snark: gameIcon(GiHyenaHead),
+  confirm: IconAlertTriangle,
+  info: IconInfoCircle,
+} satisfies Record<string, IconComponent>;
+
+/**
+ * One of Wizda's glyphs, sized to ride inline as a leading mark before her words
+ * (scales with the surrounding font-size). It inherits the *text* colour rather
+ * than shouting in crimson: inline it's a supporting mark on her handwriting, so
+ * it stays quiet. The saturated crimson is reserved for the standalone *display*
+ * sparkles (the tagline / empty-results hero), which are focal and earn the pop.
+ */
+export function WizdaMark({ glyph: Glyph }: { glyph: IconComponent }) {
+  return (
+    <Glyph
+      size="1em"
+      color="currentColor"
+      style={{
+        // Centre the glyph on the text's x-height so it sits on the line rather
+        // than dropping toward the descenders (as `text-bottom` did).
+        verticalAlign: 'middle',
+        marginRight: '0.35em',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
 
 export function pickGreeting(): string {
   const daily = wizda.greet.daily;
@@ -28,26 +62,27 @@ export function pickGreeting(): string {
   return daily[index] ?? daily[0]!;
 }
 
-/** A line Wizda "says", rendered in her speech style. */
-function speech(emoji: string, text: string) {
+/** A line Wizda "says", rendered in her speech style with a leading glyph. */
+function speech(glyph: IconComponent, text: React.ReactNode) {
   return (
     <Text component="span" className="wizda-speech">
-      {emoji} {text}
+      <WizdaMark glyph={glyph} />
+      {text}
     </Text>
   );
 }
 
 interface WizdaSayOptions {
-  emoji?: string,
+  glyph?: IconComponent,
   color?: string,
   autoClose?: number | false,
 }
 
 /** Show a passing message from Wizda (auto-dismissing, bottom-anchored toast). */
 export function wizdaSay(text: string, options: WizdaSayOptions = {}): void {
-  const { emoji = WizdaEmoji.welcome, color, autoClose } = options;
+  const { glyph = WizdaGlyph.welcome, color, autoClose } = options;
   notifications.show({
-    message: speech(emoji, text),
+    message: speech(glyph, text),
     color,
     withBorder: true,
     ...(autoClose !== undefined ? { autoClose } : {}),
@@ -55,7 +90,7 @@ export function wizdaSay(text: string, options: WizdaSayOptions = {}): void {
 }
 
 interface WizdaConfirmOptions {
-  emoji?: string,
+  glyph?: IconComponent,
   confirmLabel?: string,
   dismissLabel?: string,
 }
@@ -70,7 +105,7 @@ export function wizdaConfirm(
   options: WizdaConfirmOptions = {},
 ): void {
   const {
-    emoji = WizdaEmoji.confirm,
+    glyph = WizdaGlyph.confirm,
     confirmLabel = wizda.confirm.tidyLabel,
     dismissLabel = wizda.confirm.leaveLabel,
   } = options;
@@ -84,7 +119,7 @@ export function wizdaConfirm(
     withBorder: true,
     message: (
       <Stack gap="xs">
-        {speech(emoji, text)}
+        {speech(glyph, text)}
         <Group gap="xs" justify="flex-end">
           <Button
             size="xs"
