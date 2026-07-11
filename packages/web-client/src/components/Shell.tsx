@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 import { APP_NAME, ORACLE_NAME, SUPPORT_URL } from '@/app/app.constants';
 import { AdSlot } from '@/components/AdSlot';
+import { DataFreshness } from '@/components/DataFreshness';
 import { wizda } from '@/mascot/voice';
 import { WizdaGreeter } from '@/mascot/WizdaGreeter';
 import {
@@ -137,6 +138,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {APP_NAME}
             </Title>
           </Link>
+          <DataFreshness />
         </Group>
       </AppShell.Header>
 

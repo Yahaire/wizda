@@ -57,6 +57,15 @@ export interface WizdaLines {
   readonly credits: {
     readonly thanks: string,
   },
+  /** The data-freshness label + toast: when the DB was last (re)seeded. */
+  readonly data: {
+    /** Her spoken line. `age` is a relative phrase like "2 hours ago". */
+    readonly freshness: (age: string) => string,
+    /** The plain, muted footnote under her line (factual register, not her voice). */
+    readonly freshnessNote: (age: string) => string,
+    /** Cheeky flourish appended to her line only when the update is under a day old. */
+    readonly freshInk: string,
+  },
   /** The reactive-cleanup confirm: its buttons, and the reasons a selection can't stand. */
   readonly confirm: {
     readonly tidyLabel: string,

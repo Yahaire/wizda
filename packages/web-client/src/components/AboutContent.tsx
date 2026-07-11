@@ -104,7 +104,7 @@ export function AboutContent() {
         </Group>
       </div>
 
-      <div>
+      <div id="data-privacy" style={{ scrollMarginTop: '72px' }}>
         <Title order={4} mb="xs">Data &amp; privacy</Title>
         <Text size="sm">
           Drop-rate data is compiled from{' '}

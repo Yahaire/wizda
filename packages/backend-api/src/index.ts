@@ -8,6 +8,7 @@ import { MaintenanceResponse } from '@shared/api/endpoints/endpoint.models';
 import { BUILD_TIME, GIT_COMMIT, VERSION_LABEL } from '@shared/generated/version';
 
 import { sendErrorResponse } from '@app/http';
+import { dataStatusRouter, readDataUpdatedAt } from '@app/routes/dataStatus';
 import { junkToGuaranteeRouter } from '@app/routes/junkToGuarantee';
 import { listsRouter } from '@app/routes/lists';
 
@@ -44,15 +45,25 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.get('/', (_req, res) => {
-  res.json({
-    message: 'API is running',
-    commit: GIT_COMMIT,
-    buildTime: BUILD_TIME,
-  });
+app.get('/', (_req, res, next) => {
+  // Keep the root a lightweight liveness signal: if the data-status read fails
+  // (e.g. DB down), still report the app is up with a null timestamp rather than
+  // erroring. The dedicated /data-status endpoint surfaces such failures.
+  readDataUpdatedAt()
+    .catch(() => null)
+    .then((dataUpdatedAt) => {
+      res.json({
+        message: 'API is running',
+        commit: GIT_COMMIT,
+        buildTime: BUILD_TIME,
+        dataUpdatedAt,
+      });
+    })
+    .catch(next);
 });
 
 app.use('/junk-to-guarantee', junkToGuaranteeRouter);
+app.use(dataStatusRouter);
 app.use(listsRouter);
 
 // Catch-all error handler for anything thrown/rejected in a route.

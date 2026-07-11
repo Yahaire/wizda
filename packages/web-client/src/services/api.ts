@@ -1,4 +1,5 @@
 import type {
+  DataStatusResponse,
   MaintenanceResponse,
   RequestErrorInfo,
 } from '@shared/api/endpoints/endpoint.models';
@@ -89,6 +90,10 @@ class ApiService {
       await throwForError(response);
     }
     return response.json();
+  }
+
+  dataStatus(): Promise<DataStatusResponse> {
+    return this.get<DataStatusResponse>('/data-status');
   }
 
   listJunks(): Promise<JunkListItem[]> {

@@ -8,6 +8,21 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
+// App metadata (not tied to any scraped entity)
+// ---------------------------------------------------------------------------
+
+/// Singleton (exactly one row, id = 1): app-level metadata. Currently just the
+/// completion time of the last successful seed, surfaced to players as "data
+/// last updated". Deliberately separate from the scraped tables so the seed's
+/// wipe-and-rebuild never truncates it.
+model DataStatus {
+  id           Int      @id @default(1)
+  /// When the most recent successful seed finished. Written as the final step of
+  /// a seed run, so a failed or partial seed never bumps it.
+  lastSeededAt DateTime
+}
+
+// ---------------------------------------------------------------------------
 // Stats & blessings (static reference data)
 //
 // Two seeded lookup tables. Single source of truth for the values + copy lives

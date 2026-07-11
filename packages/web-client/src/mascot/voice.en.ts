@@ -95,6 +95,14 @@ export const wizdaLinesEn = {
       "the gear lists — your work makes this possible!",
     ]),
   },
+  data: {
+    freshness: (age) => TsUtilities.stringJoin([
+      `I refreshed my notes ${age} from the royal library at Luknalia`,
+      "and the local community scribes.",
+    ]),
+    freshnessNote: (age) => `Updated ${age} from official and community sources.`,
+    freshInk: "You can still smell the fresh ink!",
+  },
   confirm: {
     tidyLabel: "Tidy up",
     leaveLabel: "Leave it",

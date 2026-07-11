@@ -127,7 +127,15 @@ async function main(): Promise<void> {
       }
     }
 
-    console.log('[seed] done.');
+    // Stamp the completion time as the final DB write, so a failed or partial
+    // seed above never bumps it. Surfaced to players as "data last updated".
+    const seededAt = new Date();
+    await prisma.dataStatus.upsert({
+      where: { id: 1 },
+      update: { lastSeededAt: seededAt },
+      create: { id: 1, lastSeededAt: seededAt },
+    });
+    console.log(`[seed] done. Stamped data update time: ${seededAt.toISOString()}`);
   } finally {
     await prisma.$disconnect();
   }
