@@ -304,8 +304,49 @@ export function resolveQuery(
   };
 }
 
-/** Whether narrowing to the junk dropped anything the player asked for. */
-export function wasNarrowed(matched: MatchedOutcome | null, filters: OracleFilters): boolean {
+/**
+ * The best level each minimum axis can reach across the whole selection — the
+ * ceiling the quality/grade sliders' upper bound showed the player. Computed from
+ * the gear the query admits; see `maxReachableQuality`/`maxReachableGrade` in
+ * `oracle.facets.ts`.
+ */
+export interface OutcomeCeilings {
+  quality: number,
+  grade: number,
+}
+
+/**
+ * The top level in a set, or {@link MAX_LEVEL} for an empty (wildcard) axis. A
+ * wildcard reaches everything, so it never reads as having been capped.
+ */
+function levelCeiling(levels: number[]): number {
+  return levels.length === 0 ? MAX_LEVEL : Math.max(...levels);
+}
+
+/**
+ * Returns true when this junk drops less than the query asked for in a way the
+ * on-screen filters didn't already make plain — the test for whether to show the
+ * "narrowed" note under the summary. (When the shortfall was already visible from
+ * the filters, returns false: the note would only repeat them.)
+ *
+ * Two kinds of narrowing, judged differently:
+ *
+ * - Identity (a named equipment / category / rank this junk doesn't drop) is always
+ *   worth flagging: the subject line quietly shows only the survivors, so nothing
+ *   else on the card reveals it.
+ *
+ * - Quality/grade are minimums ("3★ and up"), so the junk caps them almost every
+ *   time — next to nothing rolls 5★ Red. Capping to the *selection's* ceiling isn't
+ *   news: the slider's upper bound already showed that ceiling ({@link OutcomeCeilings}),
+ *   and the summary chips show where this junk lands. It's only worth a note when this
+ *   junk falls *below* that ceiling — a Bronze dagger some junks drop at 5★ Red but
+ *   this one caps at 4★ Purple is a real loss the slider implied was on the table.
+ */
+export function wasNarrowed(
+  matched: MatchedOutcome | null,
+  filters: OracleFilters,
+  ceilings: OutcomeCeilings,
+): boolean {
   if (!matched) {
     return false;
   }
@@ -314,8 +355,8 @@ export function wasNarrowed(matched: MatchedOutcome | null, filters: OracleFilte
     resolved.equipment.length < filters.equipment.length
     || resolved.rank.length < filters.rank.length
     || resolved.category.length < filters.category.length
-    || resolved.quality.length < levelsFrom(filters.minQuality).length
-    || resolved.grade.length < levelsFrom(filters.minGrade).length
+    || levelCeiling(resolved.quality) < ceilings.quality
+    || levelCeiling(resolved.grade) < ceilings.grade
   );
 }
 

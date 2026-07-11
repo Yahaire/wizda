@@ -11,8 +11,11 @@ import { Divider, Group, Paper, Pill, Stack, Text, Tooltip, UnstyledButton } fro
 import { IconTarget } from '@tabler/icons-react';
 
 import {
-    blessingLabel, gradeName, joinHuman, OracleFilters, qualityDisplay, resolveQuery, subjectIdentity,
-    SubjectIdentity, subjectOf, wasNarrowed
+    candidateEquipment, maxReachableGrade, maxReachableQuality, satisfyingEquipment
+} from './oracle.facets';
+import {
+    blessingLabel, gradeName, joinHuman, MIN_LEVEL, OracleFilters, OutcomeCeilings, qualityDisplay,
+    resolveQuery, subjectIdentity, SubjectIdentity, subjectOf, wasNarrowed
 } from './oracle.logic';
 
 import type { MatchedOutcome } from '@shared/api/endpoints/junkToGuarantee.models';
@@ -175,7 +178,27 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
 
   const query = resolveQuery(matched, filters);
   const subject = subjectOf(query);
-  const narrowed = wasNarrowed(matched, filters);
+
+  // The ceiling the quality/grade sliders showed for this query — the best any
+  // junk could reach across the admitted gear. A result junk that falls short of
+  // it lost the player real headroom; one that hits it only tells them what the
+  // sliders already did. Read off junk-droppable gear (the picker's own set), so a
+  // non-junk piece's unknown ceiling can't inflate it.
+  const ceilings = useMemo<OutcomeCeilings>(() => {
+    const junkGear = (equipment ?? []).filter((item) => item.sources.length > 0);
+    // No catalog yet ⇒ we can't know the ceiling, so don't infer a level cap
+    // (MIN_LEVEL suppresses it); identity narrowing still stands on its own.
+    if (junkGear.length === 0) {
+      return { quality: MIN_LEVEL, grade: MIN_LEVEL };
+    }
+    const candidates = candidateEquipment(junkGear, filters);
+    const satisfying = satisfyingEquipment(candidates, filters.blessings);
+    return {
+      quality: maxReachableQuality(satisfying),
+      grade: maxReachableGrade(satisfying),
+    };
+  }, [equipment, filters]);
+  const narrowed = wasNarrowed(matched, filters, ceilings);
 
   // A named piece knows its own category/rank, so the icon reads them off the
   // reference list rather than off the (coarser) filter axes.
@@ -271,7 +294,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
 
         {narrowed && (
           <Text c="dimmed" fz="xs">
-            Trimmed to what this junk actually drops.
+            Narrowed to the pieces this junk actually drops.
           </Text>
         )}
       </Stack>

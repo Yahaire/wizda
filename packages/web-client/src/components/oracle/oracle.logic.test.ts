@@ -173,16 +173,31 @@ describe('resolveQuery', () => {
 });
 
 describe('wasNarrowed', () => {
+  // The best each level axis reaches across the whole selection — what the sliders showed.
+  const ceilings = (quality = 5, grade = 5) => ({ quality, grade });
+
   it('is false without a match set, and when nothing was dropped', () => {
-    expect(wasNarrowed(null, filters({ minQuality: 4 }))).toBe(false);
-    expect(wasNarrowed({ quality: [4, 5] }, filters({ minQuality: 4 }))).toBe(false);
+    expect(wasNarrowed(null, filters({ minQuality: 4 }), ceilings())).toBe(false);
+    expect(wasNarrowed({ quality: [4, 5] }, filters({ minQuality: 4 }), ceilings())).toBe(false);
   });
 
-  it('is true when any axis lost a value', () => {
-    expect(wasNarrowed({ quality: [4] }, filters({ minQuality: 4 }))).toBe(true);
+  it('ignores a junk that hits the selection\'s own ceiling — the sliders already showed it', () => {
+    // The gear only ever reaches 3★ Blue, and this junk drops it there: no news.
+    expect(wasNarrowed({ quality: [3] }, filters({ minQuality: 3 }), ceilings(3, 5))).toBe(false);
+    expect(wasNarrowed({ grade: [3] }, filters({ minGrade: 3 }), ceilings(5, 3))).toBe(false);
+  });
+
+  it('flags a junk that falls below what the rest of the selection can reach', () => {
+    // Some junks drop this at 5★ Red (ceiling 5), but this one caps at 4★.
+    expect(wasNarrowed({ quality: [3, 4] }, filters({ minQuality: 3 }), ceilings(5, 5))).toBe(true);
+    expect(wasNarrowed({ grade: [3, 4] }, filters({ minGrade: 3 }), ceilings(5, 5))).toBe(true);
+  });
+
+  it('is true when the junk drops fewer of the pieces the player asked for', () => {
     expect(wasNarrowed(
       { equipment: ['Beastskin Robe'] },
       filters({ equipment: ['Silver Axe', 'Beastskin Robe'] }),
+      ceilings(),
     )).toBe(true);
   });
 });
