@@ -55,4 +55,14 @@ export const wizdaTheme = createTheme({
     fontFamily: 'var(--font-display), Georgia, serif',
   },
   defaultRadius: 'md',
+  components: {
+    Modal: {
+      defaultProps: {
+        // Mantine's scroll lock (react-remove-scroll) sets touch-action: none while
+        // a modal is open, which also blocks trackpad pinch-zoom in Chromium unless
+        // this is set — see https://github.com/theKashey/react-remove-scroll#usage.
+        removeScrollProps: { allowPinchZoom: true },
+      },
+    },
+  },
 });
