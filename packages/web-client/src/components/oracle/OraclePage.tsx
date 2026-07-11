@@ -52,6 +52,20 @@ export function OraclePage() {
     key: FILTERS_STORAGE_KEY,
     defaultValue: DEFAULT_FILTERS,
     getInitialValueInEffect: true,
+    // Backfill any axis a stored selection is missing — one saved before a filter
+    // was added or renamed (e.g. the tier→rank rename) otherwise deserializes
+    // without that key and crashes the panel on the first `.length` read. Merging
+    // over the defaults also drops any stale renamed key harmlessly.
+    deserialize: (value) => {
+      if (value === undefined) {
+        return DEFAULT_FILTERS;
+      }
+      try {
+        return { ...DEFAULT_FILTERS, ...JSON.parse(value) };
+      } catch {
+        return DEFAULT_FILTERS;
+      }
+    },
   });
 
   const [equipmentList, setEquipmentList] = useState<EquipmentListItem[] | null>(null);
