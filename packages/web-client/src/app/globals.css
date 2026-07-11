@@ -90,3 +90,26 @@ a {
 .wizda-row-hover:hover .wizda-sticky-cell {
   background-color: var(--mantine-color-dark-6);
 }
+
+/*
+ * Wizda's away-screen animations (see MaintenanceGate). A gentle idle hover
+ * while she's gone, and a one-shot "welcome back" rise-and-grow when she
+ * returns. Both classes render fine with no animation applied — the icon just
+ * sits still — so `prefers-reduced-motion` users lose the motion, not the mark.
+ */
+@keyframes wizda-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes wizda-rise {
+  from { transform: translateY(14px) scale(0.8); opacity: 0.6; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wizda-float {
+    animation: wizda-float 3s ease-in-out infinite;
+  }
+  .wizda-rise {
+    animation: wizda-rise 0.7s ease-out both;
+  }
+}

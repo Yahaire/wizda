@@ -11,7 +11,6 @@ import { wizda } from '@/mascot/voice';
 import { WizdaGlyph, wizdaSay } from '@/mascot/wizda';
 import { Alert, Center, Group, Loader, Select, Stack, Text, Title } from '@mantine/core';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
-import { IconInfoCircle } from '@tabler/icons-react';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 const RANK_OPTIONS = [
@@ -101,7 +100,6 @@ function EquipmentListContent() {
   const {
     equipment,
     status,
-    maintenanceMessage,
     openEquipment,
   } = useDetail();
   const [rank, setRank] = useState<string>('');
@@ -128,11 +126,6 @@ function EquipmentListContent() {
     <Stack gap="md">
       <Title order={2}>Equipment</Title>
 
-      {status === 'maintenance' && (
-        <Alert color="yellow" variant="light" icon={<IconInfoCircle />} title="Updating data">
-          {maintenanceMessage}
-        </Alert>
-      )}
       {status === 'error' && (
         <Alert color="red" variant="light">Couldn&apos;t load the equipment list — try refreshing.</Alert>
       )}

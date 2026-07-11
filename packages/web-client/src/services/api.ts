@@ -38,6 +38,17 @@ export class ApiError extends Error {
   }
 }
 
+// Notified whenever any request discovers maintenance mode (HTTP 503), so a
+// single global gate (MaintenanceGate) can react without every caller wiring
+// its own MaintenanceError handling. Callers that still want the throw (e.g.
+// to bail out of a local loading state) get it too — the two aren't exclusive.
+const maintenanceListeners = new Set<(message: string) => void>();
+
+export function subscribeMaintenance(callback: (message: string) => void): () => void {
+  maintenanceListeners.add(callback);
+  return () => maintenanceListeners.delete(callback);
+}
+
 async function checkForMaintenance(response: Response): Promise<void> {
   if (response.status !== 503) {
     return;
@@ -49,6 +60,9 @@ async function checkForMaintenance(response: Response): Promise<void> {
   } catch { /* ignore parse error */ }
 
   if (body?.maintenance === true) {
+    for (const listener of maintenanceListeners) {
+      listener(body.message);
+    }
     throw new MaintenanceError(body.message);
   }
 }

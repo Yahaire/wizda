@@ -19,6 +19,7 @@ import {
 } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 
+import { MaintenanceGate } from '@/components/MaintenanceGate';
 import { Shell } from '@/components/Shell';
 import { VersionLog } from '@/components/VersionLog';
 
@@ -98,6 +99,7 @@ export default function RootLayout({
             limit={3}
             autoClose={5000}
           />
+          <MaintenanceGate />
           <Shell>{children}</Shell>
           <VersionLog />
         </MantineProvider>

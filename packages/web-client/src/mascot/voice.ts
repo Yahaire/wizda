@@ -51,6 +51,17 @@ export interface WizdaLines {
     readonly unknownBlessing: string,
     readonly generic: string,
   },
+  /**
+   * The full-screen takeover shown while the backend is down for a reseed
+   * (see MaintenanceGate). We never say "maintenance" to the player — she's
+   * just stepped out for a bit.
+   */
+  readonly away: {
+    /** Shown under the floating fairy while she's gone. */
+    readonly title: string,
+    /** Shown briefly, with a welcoming rise-and-grow, right before the page reloads. */
+    readonly back: string,
+  },
   readonly about: {
     readonly intro: string,
   },

@@ -41,7 +41,6 @@ function JunkListContent() {
     junks,
     dropsByJunk,
     status,
-    maintenanceMessage,
     openJunk,
   } = useDetail();
 
@@ -114,11 +113,6 @@ function JunkListContent() {
     <Stack gap="md">
       <Title order={2}>Junk</Title>
 
-      {status === 'maintenance' && (
-        <Alert color="yellow" variant="light" icon={<IconInfoCircle />} title="Updating data">
-          {maintenanceMessage}
-        </Alert>
-      )}
       {status === 'error' && (
         <Alert color="red" variant="light">Couldn&apos;t load the junk list — try refreshing.</Alert>
       )}

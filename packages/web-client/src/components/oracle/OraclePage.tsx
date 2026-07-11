@@ -7,11 +7,11 @@ import { wizda } from '@/mascot/voice';
 import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import {
-    Alert, Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title
+    Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title
 } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
-import { IconInfoCircle, IconSparkles } from '@tabler/icons-react';
+import { IconSparkles } from '@tabler/icons-react';
 
 import { BlessingsFilter } from './BlessingsFilter';
 import { CategoryFilter } from './CategoryFilter';
@@ -67,7 +67,6 @@ export function OraclePage() {
   });
 
   const [equipmentList, setEquipmentList] = useState<EquipmentListItem[] | null>(null);
-  const [maintenance, setMaintenance] = useState<string | null>(null);
 
   const [result, setResult] = useState<JunkToGuaranteeResult | null>(null);
   // The filters that produced `result` — snapshotted when the result is
@@ -124,9 +123,9 @@ export function OraclePage() {
     api.listEquipment()
       .then(setEquipmentList)
       .catch((error) => {
-        if (error instanceof MaintenanceError) {
-          setMaintenance(error.message);
-        } else {
+        // A 503 here is handled by the global MaintenanceGate; anything else
+        // is a genuine load failure.
+        if (!(error instanceof MaintenanceError)) {
           wizdaSay(wizda.oracle.loadError, {
             glyph: WizdaGlyph.info,
             color: 'red',
@@ -232,8 +231,8 @@ export function OraclePage() {
   );
 
   const handleApiError = (error: unknown) => {
+    // A 503 here is handled by the global MaintenanceGate.
     if (error instanceof MaintenanceError) {
-      setMaintenance(error.message);
       return;
     }
     const code = error instanceof ApiError ? error.errorCode : 'INTERNAL_ERROR';
@@ -414,12 +413,6 @@ export function OraclePage() {
           {wizda.oracle.tagline}
         </Text>
       </div>
-
-      {maintenance && (
-        <Alert color="yellow" variant="light" icon={<IconInfoCircle />} title="Updating data">
-          {maintenance}
-        </Alert>
-      )}
 
       <Grid gutter="lg">
         <Grid.Col span={{ base: 12, md: 5 }}>

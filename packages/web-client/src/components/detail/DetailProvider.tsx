@@ -49,14 +49,15 @@ const DETAIL_ROW_GRID: React.CSSProperties = {
 // affordance doesn't steal width from the name/badges on narrow screens.
 const ROW_CHEVRON = <IconChevronRight size={12} style={{ opacity: 0.4, marginInlineStart: -4 }} />;
 
-type LoadStatus = 'loading' | 'ready' | 'maintenance' | 'error';
+// A 503 (maintenance) doesn't reach 'error' — the global MaintenanceGate owns
+// that screen, so the list views just stay in 'loading' until it clears.
+type LoadStatus = 'loading' | 'ready' | 'error';
 
 interface DetailContextValue {
   equipment: EquipmentListItem[] | null,
   junks: JunkListItem[] | null,
   dropsByJunk: Map<string, EquipmentListItem[]>,
   status: LoadStatus,
-  maintenanceMessage: string | null,
   openEquipment: (name: string, backable?: boolean) => void,
   openJunk: (name: string, backable?: boolean) => void,
 }
@@ -110,7 +111,6 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   const [equipment, setEquipment] = useState<EquipmentListItem[] | null>(null);
   const [junks, setJunks] = useState<JunkListItem[] | null>(null);
   const [status, setStatus] = useState<LoadStatus>('loading');
-  const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null);
 
   const [detailStack, setDetailStack] = useState<DetailEntry[]>([]);
 
@@ -134,10 +134,9 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
         if (!alive) {
           return;
         }
-        if (error instanceof MaintenanceError) {
-          setMaintenanceMessage(error.message);
-          setStatus('maintenance');
-        } else {
+        // A 503 here is handled by the global MaintenanceGate; anything else
+        // is a genuine load failure.
+        if (!(error instanceof MaintenanceError)) {
           setStatus('error');
         }
       });
@@ -207,7 +206,6 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     junks,
     dropsByJunk,
     status,
-    maintenanceMessage,
     openEquipment: (name, backable = false) => {
       setDetailStack([{ kind: 'equipment', item: resolveEquipment(name) }]);
       setRootBackable(backable);
@@ -216,7 +214,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
       setDetailStack([{ kind: 'junk', item: resolveJunk(name) }]);
       setRootBackable(backable);
     },
-  }), [equipment, junks, dropsByJunk, status, maintenanceMessage, equipmentByName, junkByName]);
+  }), [equipment, junks, dropsByJunk, status, equipmentByName, junkByName]);
 
   const current = detailStack.at(-1) ?? null;
   const junkDrops = current?.kind === 'junk' ? dropsByJunk.get(current.item.name) ?? [] : [];

@@ -86,6 +86,10 @@ export const wizdaLinesEn = {
     unknownBlessing: "One of those blessings isn't in my notes anymore — try reselecting it.",
     generic: "Something went sideways on my end — give it another go in a moment.",
   },
+  away: {
+    title: "Out to the capital looking for new info — check back in a minute or two!",
+    back: "I'm back!",
+  },
   about: {
     intro: "Hi! I'm Wizda. Let me save you the tedious inventory math.",
   },
