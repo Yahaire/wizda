@@ -66,8 +66,11 @@ Princess*. So rather than parse names, we recover category + rank from an
 explicit, authoritative table: the **Fasterthoughts equipment CSVs** (see
 [Data sources](#data-sources)), matched to our equipment **by name**. Each row
 gives a `Type` (+ armor `Armor Type`) we map to an `EquipmentCategory`, and a
-`Rank` we map to our rank enum. The enrichment pass only *updates* existing (junk-
-sourced) equipment; items in the CSV that never drop from junk are ignored here.
+`Rank` we map to our rank enum. The enrichment pass *updates* the equipment the
+earlier seeds created **and creates** rows for CSV items no junk drops — so the
+catalog covers every Fasterthoughts piece. Those junk-less rows carry only
+name + rank + category (no drop rows): the core calc can't guarantee them and the
+Oracle omits them, but the equipment list still shows them.
 
 Crucially, **the core "how much junk?" calculation does not need the category or
 rank at all.** It works off the item as it appears in the drop table — the
@@ -107,11 +110,13 @@ Plus an **enrichment** source (not needed by the core calc):
    repo (thanks to Fasterthoughts and NRJank). Each row carries an item's `Item
    Name`, `Type` (armor also has `Armor Type`), and `Rank`. We map `Type`
    (+`Armor Type`) → an `EquipmentCategory` code and `Rank` → an `EquipmentRank`,
-   then match to our equipment **by name** to fill in `categoryCode` + `rank`.
-   Pulled via the `WEAPON_TAXONOMY_SOURCE_URL` / `ARMOR_TAXONOMY_SOURCE_URL` env
-   vars (raw-GitHub URL or a local file). The mapping tables + name-match live in
-   `prisma/seed-from-html/equipmentTaxonomy.*`; the seed logs its match rate and
-   any unmatched names. An unrecognised `Rank` fails the seed loudly.
+   then match to our equipment **by name** to fill in `categoryCode` + `rank`,
+   **creating** a row for any CSV item the drop-rate/blessing seeds didn't already
+   produce (equipment no junk drops). Pulled via the `WEAPON_TAXONOMY_SOURCE_URL` /
+   `ARMOR_TAXONOMY_SOURCE_URL` env vars (raw-GitHub URL or a local file). The
+   mapping tables + name-match live in `prisma/seed-from-html/equipmentTaxonomy.*`;
+   the seed logs how many rows it updated vs. created plus any unmatched names. An
+   unrecognised `Rank` fails the seed loudly.
 
 ## "Drop Rates by Junk" structure
 

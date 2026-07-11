@@ -299,9 +299,11 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
                 </Group>
               )}
             </Group>
-            <Divider label={`Drops from ${current.item.sources.length} junk${current.item.sources.length === 1 ? '' : 's'}`} />
+            <Divider label={current.item.sources.length === 0
+              ? 'Junk sources'
+              : `Drops from ${current.item.sources.length} junk${current.item.sources.length === 1 ? '' : 's'}`} />
             {current.item.sources.length === 0 ? (
-              <Text c="dimmed" size="sm">No junk sources on record.</Text>
+              <Text c="dimmed" size="sm">No junk drops this one — so there&apos;s nothing for me to count here yet.</Text>
             ) : (
               <ScrollArea.Autosize mah={360}>
                 <Box style={DETAIL_LIST_GRID}>

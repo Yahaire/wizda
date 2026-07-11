@@ -137,30 +137,39 @@ export function OraclePage() {
       });
   }, []);
 
-  // Drop any remembered equipment names that no longer exist (stale storage).
+  // The Oracle only guarantees junk-farmable gear, so it works off the pieces a
+  // junk can actually drop (non-empty `sources`). `GET /equipment` now also
+  // carries equipment no junk drops — that belongs in the lists, not here.
+  const junkEquipment = useMemo(
+    () => equipmentList?.filter((item) => item.sources.length > 0) ?? null,
+    [equipmentList],
+  );
+
+  // Drop any remembered equipment names that aren't junk-farmable (stale storage,
+  // or a name a later scrape dropped).
   useEffect(() => {
-    if (!equipmentList) {
+    if (!junkEquipment) {
       return;
     }
-    const known = new Set(equipmentList.map((item) => item.name));
+    const known = new Set(junkEquipment.map((item) => item.name));
     setFilters((current) => {
       const pruned = current.equipment.filter((name) => known.has(name));
       return pruned.length === current.equipment.length
         ? current
         : { ...current, equipment: pruned };
     });
-  }, [equipmentList, setFilters]);
+  }, [junkEquipment, setFilters]);
 
   // Which options still lead anywhere, what the level sliders top out at, and
   // whether the selection contradicts itself. See `oracle.facets.ts`.
-  const facets = useMemo(() => computeFacets(equipmentList, filters), [equipmentList, filters]);
+  const facets = useMemo(() => computeFacets(junkEquipment, filters), [junkEquipment, filters]);
 
   // Raise the blocking conflict prompt on an impossible selection. Nothing is
   // judged (nor banked as a good state) until the catalog is in hand: an
   // untroubled verdict there only means we hadn't yet loaded the gear to trouble
   // it. Then one prompt at a time — while it's up the filters are frozen behind
   // it, so re-deriving would only restate the conflict it's already showing.
-  const catalogLoaded = Boolean(equipmentList?.length);
+  const catalogLoaded = Boolean(junkEquipment?.length);
   useEffect(() => {
     if (!catalogLoaded) {
       return;
@@ -283,11 +292,11 @@ export function OraclePage() {
           canClear={filters.equipment.length > 0}
         >
           <EquipmentSelect
-            data={equipmentList ?? []}
+            data={junkEquipment ?? []}
             value={filters.equipment}
             onChange={(value) => patch({ equipment: value })}
             available={facets.equipment}
-            disabled={!equipmentList}
+            disabled={!junkEquipment}
           />
         </FilterField>
 

@@ -34,9 +34,9 @@ export interface EquipmentRankInfo {
   orderIndex: number,
   /**
    * Whether items of this rank can be obtained by reversing junk. Only `Worn`
-   * cannot — the other five all drop. Forward-looking for the non-junk equipment
-   * work, and a validation aid: a junk-sourced item enriched to a non-obtainable
-   * rank is a data anomaly.
+   * cannot — the other five all drop. Distinguishes catalogued-but-unfarmable gear
+   * (the seed creates non-junk equipment too), and is a validation aid: a
+   * junk-sourced item enriched to a non-obtainable rank is a data anomaly.
    */
   isObtainableThroughJunk: boolean,
   /**

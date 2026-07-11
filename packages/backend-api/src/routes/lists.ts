@@ -48,16 +48,17 @@ async function handleListEquipment(
 ): Promise<void> {
   const prisma = getPrisma();
 
-  // Only equipment with a known junk source is a meaningful filter target for
-  // this tool — equipment obtainable solely via Remains/Bonus (no drop rows) is
-  // omitted. `sourceMaxes` collapses the drop-rate rows to one (equipment, junk)
+  // The whole catalogue — every `Equipment` row, including pieces no junk drops
+  // (they simply have empty `sources`, so the guarantee calc can't answer for
+  // them and the Oracle filters them out; the list views still show them). A
+  // piece's junk-droppability is thus read off `sources.length`, not a filter
+  // here. `sourceMaxes` collapses the drop-rate rows to one (equipment, junk)
   // pair each, carrying the best quality/grade that pair reaches — computed in
   // the DB so we don't ship every rate row to Node just to fold it down.
   // `blessingRows` does the same for blessing reachability: the distinct codes a
   // piece can roll, deduplicated across its four slots (they always agree).
   const [equipment, sourceMaxes, blessingRows] = await Promise.all([
     prisma.equipment.findMany({
-      where: { dropRates: { some: {} } },
       select: {
         id: true,
         name: true,

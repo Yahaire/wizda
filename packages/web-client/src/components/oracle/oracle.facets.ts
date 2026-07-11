@@ -329,11 +329,12 @@ export interface OracleFacets {
   equipment: Set<string>,
   /**
    * Every category some catalogued piece belongs to, whatever the current picks —
-   * the categories worth putting on the menu at all. `GET /equipment` lists only
-   * gear a junk can drop, so a category missing here is one junk never yields:
-   * Tools, today. Offering it greyed-out would be a riddle ("why?"); leaving it
-   * off says the same thing and asks nothing. Derived, not hardcoded, so the day
-   * a junk starts dropping Tools they appear on their own.
+   * the categories worth putting on the menu at all. The Oracle works off only
+   * junk-droppable gear (its input is pre-filtered to pieces with junk sources),
+   * so a category missing here is one no junk yields: Tools, today. Offering it
+   * greyed-out would be a riddle ("why?"); leaving it off says the same thing and
+   * asks nothing. Derived, not hardcoded, so the day a junk starts dropping Tools
+   * they appear on their own.
    */
   catalogCategory: Set<string>,
   /** Category codes some candidate still has, given the equipment/rank picks. */

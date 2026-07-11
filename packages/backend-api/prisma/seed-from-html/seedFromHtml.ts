@@ -106,11 +106,11 @@ async function main(): Promise<void> {
       EQUIPMENT_RANKS.filter((rank) => rank.isObtainableThroughJunk).map((rank) => rank.kind),
     );
     const taxonomy = await seedEquipmentTaxonomy(prisma, taxonomyByName, obtainableRanks);
-    console.log(`[seed] taxonomy: enriched ${taxonomy.matched}/${taxonomy.totalEquipment} `
-      + 'equipment with category + rank.');
-    if (taxonomy.matchedWithoutCategory.length > 0) {
-      console.log(`[seed] taxonomy: ${taxonomy.matchedWithoutCategory.length} matched item(s) got a rank but `
-        + `no category (source lacked a weight class): ${taxonomy.matchedWithoutCategory.join(', ')}`);
+    console.log(`[seed] taxonomy: enriched ${taxonomy.updated} existing + created ${taxonomy.created} new `
+      + `equipment (from ${taxonomy.totalTaxonomyEntries} taxonomy entry/entries).`);
+    if (taxonomy.withoutCategory.length > 0) {
+      console.log(`[seed] taxonomy: ${taxonomy.withoutCategory.length} item(s) got a rank but `
+        + `no category (source lacked a weight class): ${taxonomy.withoutCategory.join(', ')}`);
     }
     if (taxonomy.unmatchedNames.length > 0) {
       console.log(`[seed] taxonomy: ${taxonomy.unmatchedNames.length} equipment not found in the CSVs `
