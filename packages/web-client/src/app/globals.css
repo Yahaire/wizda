@@ -17,15 +17,28 @@ a {
 
 /*
  * "Wizda speech" — the reusable style for anything the mascot says (tool intro,
- * tooltips, toast bodies). Grayish, italic, in the softer speech font so her
- * voice reads consistently everywhere. See src/mascot/.
+ * tooltips, toast bodies), so her voice reads consistently everywhere. The
+ * speech font (Patrick Hand, a friendly print-hand) carries the character;
+ * it's set a touch larger with loose tracking + leading and a bright-ish tint
+ * so multi-line copy stays easy to read against the dark UI. See src/mascot/.
  */
 .wizda-speech {
-  font-family: var(--font-speech), Georgia, serif;
-  /* font-style: italic; */
-  color: var(--mantine-color-dark-2);
-  font-size: 1.05rem;
-  line-height: 1.4;
+  font-family: var(--font-speech), sans-serif;
+  color: var(--mantine-color-dark-1);
+  font-size: 1.18rem;
+  line-height: 1.65;
+  letter-spacing: 0.02em;
+}
+
+/*
+ * Quieter register for when Wizda isn't actively speaking but narrating in the
+ * margins — a page subtitle/tagline under a heading, where the full-size voice
+ * would compete with the title. Same voice, less presence. Compound selector so
+ * it reliably overrides `.wizda-speech`'s own `font-size` (equal specificity
+ * would otherwise leave it to source order). Pair with `c="dimmed"` for the tint.
+ */
+.wizda-speech.wizda-speech-muted {
+  font-size: 1rem;
 }
 
 /* Clickable table/list rows: pointer + a subtle hover highlight. */

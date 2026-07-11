@@ -72,7 +72,7 @@ export const wizdaLinesEn = {
         "A gear's rank — its material, from Bronze up to Silver.",
         "Some folks call it \"tier\" — just don't mix it up with your adventurer rank!",
         "Pick every rank you'd be happy with.",
-        "I leave out Worn, since no amount of junk will ever hand you one.",
+        "I leave out Worn, since since it's so bad not even junk can hand you one.",
       ]),
       certainty: TsUtilities.stringJoin([
         "How sure you want to be before you stop grinding.",

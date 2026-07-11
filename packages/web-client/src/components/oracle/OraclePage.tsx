@@ -410,7 +410,9 @@ export function OraclePage() {
     <Stack gap="lg">
       <div>
         <Title order={2}>{ORACLE_NAME}</Title>
-        <Text className="wizda-speech">{wizda.oracle.tagline}</Text>
+        <Text className="wizda-speech wizda-speech-muted" c="dimmed">
+          {wizda.oracle.tagline}
+        </Text>
       </div>
 
       {maintenance && (

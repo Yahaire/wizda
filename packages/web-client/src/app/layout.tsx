@@ -5,7 +5,7 @@ import type {
 import {
   Cinzel,
   Inter,
-  Caveat,
+  Patrick_Hand,
 } from 'next/font/google';
 
 import '@mantine/core/styles.css';
@@ -40,9 +40,11 @@ const body = Inter({
   display: 'swap',
 });
 
-const speech = Caveat({
+// Wizda's speaking voice — Patrick Hand, a friendly print-hand. See
+// `.wizda-speech` in globals.css.
+const speech = Patrick_Hand({
   subsets: ['latin'],
-  weight: ['400', '700'],
+  weight: '400',
   variable: '--font-speech',
   display: 'swap',
 });
