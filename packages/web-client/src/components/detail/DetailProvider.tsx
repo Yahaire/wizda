@@ -251,7 +251,6 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
       <Modal
         opened={detailStack.length > 0}
         onClose={closeDetail}
-        centered
         size="lg"
         // Sits above any modal that opened it (e.g. the per-result summary, which
         // stays mounted behind at Mantine's default z-index of 200).
