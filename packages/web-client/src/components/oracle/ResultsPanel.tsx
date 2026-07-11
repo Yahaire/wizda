@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CALCULATION_DOC_URL } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
+import { wizda } from '@/mascot/voice';
 import { WizdaEmoji } from '@/mascot/wizda';
 import {
     ActionIcon, Alert, Anchor, Box, Button, Center, Group, Loader, Modal, Paper, Stack, Text,
     TextInput, ThemeIcon, Tooltip, UnstyledButton
 } from '@mantine/core';
-import { TsUtilities } from '@shared/tsUtilities';
 import {
     IconAlertTriangle, IconChevronRight, IconInfoCircle, IconSearch
 } from '@tabler/icons-react';
@@ -32,16 +32,6 @@ const CHEVRON_COL = 16;
 // Tap affordance on each result row (there's no hover on touch). The header
 // reserves an equal-width empty slot so the number columns stay aligned with it.
 const ROW_CHEVRON = <IconChevronRight size={CHEVRON_COL} style={{ opacity: 0.4, flexShrink: 0 }} />;
-
-// Wizda's in-character version of the API's `BLESSING_ESTIMATE_NOTE`. Same
-// claim, different register — keep the two in step.
-const ESTIMATE_NOTE = TsUtilities.stringJoin([
-  "Blessings fill one slot at a time, and no piece ever gets the same one twice.",
-  "The devs publish each slot's odds, but never say what happens exactly after the first slot is sfilled.",
-  "I assume the game simply rerolls that slot.",
-  "If it starts the whole piece over instead, my numbers drift a little — usually by",
-  "well under 1%, and at worst by about a tenth. Everything else here is exact.",
-]);
 
 interface ResultsPanelProps {
   result: JunkToGuaranteeResult | null,
@@ -145,7 +135,7 @@ export function ResultsPanel({
     return (
       <Alert color="crimson" variant="light" icon={<IconInfoCircle />}>
         <Text className="wizda-speech">
-          No junk can get you that one — try loosening the filters a little.
+          {wizda.oracle.noResults}
         </Text>
       </Alert>
     );
@@ -283,7 +273,7 @@ export function ResultsPanel({
               </Button>
             ) : (
               <Text className="wizda-speech" ta="center">
-                {WizdaEmoji.welcome} That&apos;s all I got!
+                {WizdaEmoji.welcome} {wizda.oracle.endOfList}
               </Text>
             )}
           </Center>
@@ -312,9 +302,9 @@ export function ResultsPanel({
         size="md"
       >
         <Stack gap="sm">
-          <Text className="wizda-speech">{WizdaEmoji.info} {ESTIMATE_NOTE}</Text>
+          <Text className="wizda-speech">{WizdaEmoji.info} {wizda.oracle.estimateNote}</Text>
           <Text size="sm" c="dimmed">
-            Want to check my calculations — or know how the game really rolls?{' '}
+            {wizda.oracle.estimateNoteLink}{' '}
             <Anchor
               href={CALCULATION_DOC_URL}
               target="_blank"

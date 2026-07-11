@@ -4,12 +4,12 @@ import type {
 } from '@shared/api/endpoints/junkToGuarantee.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 import type { EquipmentRankKind } from '@shared/domain/rank';
+import { wizda } from '@/mascot/voice';
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
 import { GRADES } from '@shared/domain/grade';
 import { QUALITIES } from '@shared/domain/quality';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { BLESSINGS } from '@shared/domain/stats';
-import { TsUtilities } from '@shared/tsUtilities';
 
 /** Grade 5 (Red) unlocks 4 active blessing slots — no piece can hold more. */
 export const MAX_BLESSINGS = 4;
@@ -24,50 +24,6 @@ export const MAX_LEVEL = 5;
 
 /** localStorage key for the remembered filter selection (bump on shape change). */
 export const FILTERS_STORAGE_KEY = 'wizda.oracle.filters.v3';
-
-/**
- * Plain-language explanations shown in each filter's info modal (the ⓘ next to
- * the label). Written in Wizda's warm, casual voice.
- */
-export const FILTER_DESCRIPTIONS = {
-  equipment: TsUtilities.stringJoin([
-    "Pick the gear you're hunting.",
-    "I'll rank every junk that can drop any piece you choose — so you can chase a few at once.",
-  ]),
-  quality: TsUtilities.stringJoin([
-    "Quality is the star count, 1★ up to 5★.",
-    "Higher quality means bigger blessing values on the piece.",
-    "Set the lowest you'd be happy to walk away with — I'll count everything from there up.",
-  ]),
-  grade: TsUtilities.stringJoin([
-    "Grade shows in-game as a colour: White, Green, Blue, Purple, then Red.",
-    "It sets how many blessing slots are active — White has none, and each colour up adds one, so Red holds four.",
-    "Set the lowest grade you'd be happy to walk away with — I'll count everything from there up.",
-  ]),
-  blessings: TsUtilities.stringJoin([
-    "Blessings are the bonus stats a piece can roll.",
-    "I only count gear that carries ALL the blessings you pick.",
-    "A single piece holds at most four, so that's the cap.",
-    "Not every piece rolls every blessing — a sword will never carry DEF —",
-    "so I grey out the ones your gear can't reach.",
-  ]),
-  category: TsUtilities.stringJoin([
-    "The kind of gear — daggers, heavy armor, shoes, that sort of thing.",
-    "Pick any categories you'd take, and I'll only count junk that drops them.",
-    "I only list the kinds junk hands out at all, so you won't find Tools here.",
-  ]),
-  rank: TsUtilities.stringJoin([
-    "A gear's rank — its material, from Bronze up to Silver.",
-    "Some folks call it \"tier\" — just don't mix it up with your adventurer rank!",
-    "Pick every rank you'd be happy with.",
-    "I leave out Worn, since no amount of junk will ever hand you one.",
-  ]),
-  certainty: TsUtilities.stringJoin([
-    "How sure you want to be before you stop grinding.",
-    "90% means that, nine times out of ten, you'd have the item by the number I show.",
-    "Just know, not even GREAT Agora can promise you 100%!",
-  ]),
-} as const;
 
 export interface OracleFilters {
   /** Equipment names (public key). */
@@ -220,11 +176,12 @@ export function gradeFloorFor(blessingCount: number): number {
   return Math.min(blessingCount + 1, MAX_LEVEL);
 }
 
-/** "3 blessings need Purple or better" — the grade floor, said out loud. */
+/**
+ * "3 blessings need Purple or better" — the grade floor, said out loud. The
+ * words are Wizda's (in the phrase catalog); this adapter feeds her the data.
+ */
 export function blessingFloorPhrase(blessingCount: number, floor: number): string {
-  const subject = blessingCount === 1 ? "1 blessing needs" : `${blessingCount} blessings need`;
-  const target = floor >= MAX_LEVEL ? gradeName(floor) : `${gradeName(floor)} or better`;
-  return `${subject} ${target}`;
+  return wizda.confirm.blessingFloorPhrase(blessingCount, gradeName(floor), floor >= MAX_LEVEL);
 }
 
 export function gradeName(value: number): string {

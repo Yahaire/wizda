@@ -4,6 +4,7 @@ import {
     APP_NAME, CALCULATION_DOC_URL, DATA_SOURCE_URL, DOMAIN_DOC_URL, ISSUES_URL, ORACLE_NAME,
     REPO_URL, SUPPORT_URL
 } from '@/app/app.constants';
+import { wizda } from '@/mascot/voice';
 import { Anchor, Button, Code, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
 import { IconBrandGithub, IconHeartFilled } from '@tabler/icons-react';
 
@@ -21,7 +22,7 @@ export function AboutContent() {
       <div>
         <Title order={2}>About {APP_NAME}</Title>
         <Text className="wizda-speech">
-          Hi! I&apos;m Wizda. Let me save you the tedious inventory math.
+          {wizda.about.intro}
         </Text>
       </div>
 

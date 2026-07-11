@@ -7,10 +7,10 @@ import { DetailProvider, useDetail } from '@/components/detail/DetailProvider';
 import { getRankColor, GradeBadge, QualityStars, RankBadge } from '@/components/gear/gearDisplays';
 import { Column, DataTable } from '@/components/table/DataTable';
 import { TruncatedText } from '@/components/TruncatedText';
+import { wizda } from '@/mascot/voice';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 import { Alert, Center, Group, Loader, Select, Stack, Text, Title } from '@mantine/core';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
-import { TsUtilities } from '@shared/tsUtilities';
 import { IconInfoCircle } from '@tabler/icons-react';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
@@ -109,17 +109,10 @@ function EquipmentListContent() {
   useEffect(() => {
     const visited = localStorage.getItem('equipment-list-visited');
     if (!visited) {
-      wizdaSay(
-        TsUtilities.stringJoin([
-          'Special thanks to NRJank and the Fasterthoughts team for compiling and maintaining',
-          'the gear lists — your work makes this possible!',
-        ]),
-        
-        {
-          emoji: WizdaEmoji.welcome,
-          autoClose: 12000,
-        }
-      );
+      wizdaSay(wizda.credits.thanks, {
+        emoji: WizdaEmoji.welcome,
+        autoClose: 12000,
+      });
       localStorage.setItem('equipment-list-visited', 'true');
     }
   }, []);

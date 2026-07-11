@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { ORACLE_NAME, ORACLE_TAGLINE } from '@/app/app.constants';
+import { ORACLE_NAME } from '@/app/app.constants';
+import { wizda } from '@/mascot/voice';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import {
@@ -20,30 +21,27 @@ import { FilterField } from './FilterField';
 import { GradeFilter, GradeReadout } from './GradeFilter';
 import { computeFacets, OracleConflict } from './oracle.facets';
 import {
-    activeFilters, DEFAULT_FILTERS, FILTER_DESCRIPTIONS, FILTERS_STORAGE_KEY, hasAnyFilter,
-    MIN_LEVEL, OracleFilters
+    activeFilters, DEFAULT_FILTERS, FILTERS_STORAGE_KEY, hasAnyFilter, MIN_LEVEL, OracleFilters
 } from './oracle.logic';
 import { QualityFilter, QualityReadout } from './QualityFilter';
-import { ResultsPanel } from './ResultsPanel';
 import { RankFilter } from './RankFilter';
+import { ResultsPanel } from './ResultsPanel';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 import type {
   JunkToGuaranteeQuery,
   JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
-const SNARK = "I'm not showing all that! Pick a filter or two and save me some work?";
-
 function friendlyError(errorCode: string): string {
   switch (errorCode) {
     case 'UNKNOWN_EQUIPMENT':
-      return "Some of that gear isn't in my notes anymore — try reselecting it.";
+      return wizda.errors.unknownEquipment;
     case 'UNKNOWN_BLESSING':
-      return "One of those blessings isn't in my notes anymore — try reselecting it.";
+      return wizda.errors.unknownBlessing;
     case 'NO_QUERY':
-      return SNARK;
+      return wizda.oracle.snark;
     default:
-      return "Something went sideways on my end — give it another go in a moment.";
+      return wizda.errors.generic;
   }
 }
 
@@ -129,7 +127,7 @@ export function OraclePage() {
         if (error instanceof MaintenanceError) {
           setMaintenance(error.message);
         } else {
-          wizdaSay("I couldn't load the gear list — refresh and I'll try again.", {
+          wizdaSay(wizda.oracle.loadError, {
             emoji: WizdaEmoji.info,
             color: 'red',
           });
@@ -244,7 +242,7 @@ export function OraclePage() {
 
   const calculate = async () => {
     if (!hasAnyFilter(filters)) {
-      wizdaSay(SNARK, { emoji: WizdaEmoji.snark });
+      wizdaSay(wizda.oracle.snark, { emoji: WizdaEmoji.snark });
       return;
     }
     setLoading(true);
@@ -287,7 +285,7 @@ export function OraclePage() {
       <Stack gap="lg">
         <FilterField
           label="Equipment"
-          description={FILTER_DESCRIPTIONS.equipment}
+          description={wizda.oracle.filterHelp.equipment}
           onClear={() => patch({ equipment: [] })}
           canClear={filters.equipment.length > 0}
         >
@@ -303,7 +301,7 @@ export function OraclePage() {
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
           <FilterField
             label="Category"
-            description={FILTER_DESCRIPTIONS.category}
+            description={wizda.oracle.filterHelp.category}
             onClear={() => patch({ category: [] })}
             canClear={filters.category.length > 0}
           >
@@ -317,7 +315,7 @@ export function OraclePage() {
 
           <FilterField
             label="Rank"
-            description={FILTER_DESCRIPTIONS.rank}
+            description={wizda.oracle.filterHelp.rank}
             onClear={() => patch({ rank: [] })}
             canClear={filters.rank.length > 0}
           >
@@ -331,7 +329,7 @@ export function OraclePage() {
 
         <FilterField
           label="Quality"
-          description={FILTER_DESCRIPTIONS.quality}
+          description={wizda.oracle.filterHelp.quality}
           readout={<QualityReadout value={filters.minQuality} max={facets.maxQuality} />}
           onClear={() => patch({ minQuality: MIN_LEVEL })}
           canClear={filters.minQuality > MIN_LEVEL}
@@ -345,7 +343,7 @@ export function OraclePage() {
 
         <FilterField
           label="Grade"
-          description={FILTER_DESCRIPTIONS.grade}
+          description={wizda.oracle.filterHelp.grade}
           readout={(
             <GradeReadout
               value={filters.minGrade}
@@ -367,7 +365,7 @@ export function OraclePage() {
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
           <FilterField
             label="Blessings"
-            description={FILTER_DESCRIPTIONS.blessings}
+            description={wizda.oracle.filterHelp.blessings}
             onClear={() => patch({ blessings: [] })}
             canClear={filters.blessings.length > 0}
           >
@@ -380,7 +378,7 @@ export function OraclePage() {
 
           <FilterField
             label="Certainty"
-            description={FILTER_DESCRIPTIONS.certainty}
+            description={wizda.oracle.filterHelp.certainty}
           >
             <CertaintySlider
               value={filters.certaintyPct}
@@ -395,7 +393,7 @@ export function OraclePage() {
           color="crimson"
           loading={loading}
           leftSection={<IconSparkles size={18} />}
-          onClick={() => (canCalculate ? calculate() : wizdaSay(SNARK, { emoji: WizdaEmoji.snark }))}
+          onClick={() => (canCalculate ? calculate() : wizdaSay(wizda.oracle.snark, { emoji: WizdaEmoji.snark }))}
           style={canCalculate ? undefined : {
             opacity: 0.55,
             filter: 'grayscale(0.6)',
@@ -412,7 +410,7 @@ export function OraclePage() {
     <Stack gap="lg">
       <div>
         <Title order={2}>{ORACLE_NAME}</Title>
-        <Text className="wizda-speech">{ORACLE_TAGLINE}</Text>
+        <Text className="wizda-speech">{wizda.oracle.tagline}</Text>
       </div>
 
       {maintenance && (
@@ -455,7 +453,7 @@ export function OraclePage() {
                 <Stack align="center" justify="center" h="100%" gap="xs" mih={200}>
                   <IconSparkles size={32} color="var(--mantine-color-crimson-5)" />
                   <Text className="wizda-speech" ta="center">
-                    Pick what you&apos;re after, then hit Calculate and I&apos;ll count the junk for you.
+                    {wizda.oracle.emptyPrompt}
                   </Text>
                 </Stack>
               </Paper>

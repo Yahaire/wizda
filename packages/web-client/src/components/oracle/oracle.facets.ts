@@ -14,10 +14,10 @@
  * outcome axes then read off that set — see {@link candidateEquipment}.
  */
 
+import { wizda } from '@/mascot/voice';
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { BLESSINGS } from '@shared/domain/stats';
-import { TsUtilities } from '@shared/tsUtilities';
 
 import {
     blessingFloorPhrase, blessingLabel, EMPTY_FILTERS, gradeFloorFor, gradeName, joinHuman,
@@ -230,18 +230,14 @@ function blessingConflictMessage(
 ): string {
   const rollableAtAll = availableBlessings(candidates, []);
   const unrollable = blessings.filter((code) => !rollableAtAll.has(code));
-  const labels = joinHuman(unrollable.map(blessingLabel), 'or');
 
   if (unrollable.length === 1) {
-    return `Nothing you've picked ever rolls ${labels}.`;
+    return wizda.confirm.blessingUnrollableOne(joinHuman(unrollable.map(blessingLabel), 'or'));
   }
   if (unrollable.length > 1) {
-    return `Nothing you've picked rolls ${labels}.`;
+    return wizda.confirm.blessingUnrollableMany(joinHuman(unrollable.map(blessingLabel), 'or'));
   }
-  return TsUtilities.stringJoin([
-    `No single piece you've picked carries ${joinHuman(blessings.map(blessingLabel))} together,`,
-    "and a blessing only counts if it's on the piece you're hunting.",
-  ]);
+  return wizda.confirm.blessingComboUnrollable(joinHuman(blessings.map(blessingLabel)));
 }
 
 /**
@@ -262,10 +258,7 @@ export function detectConflict(
 ): OracleConflict | null {
   if (candidates.length === 0) {
     return {
-      message: TsUtilities.stringJoin([
-        "Your gear, category, and rank picks don't overlap — nothing is all three at once.",
-        "I can drop the category and rank and keep the gear you named.",
-      ]),
+      message: wizda.confirm.identityNoOverlap,
       fix: { category: [], rank: [] },
     };
   }
@@ -285,10 +278,9 @@ export function detectConflict(
   // gear, whatever the grade filter says. Only taking a pick back can help.
   if (gradeFloor > maxGrade) {
     return {
-      message: TsUtilities.stringJoin([
-        `${blessingFloorPhrase(filters.blessings.length, gradeFloor)}, and that gear never drops that high.`,
-        "Ask for fewer blessings, or grind something else.",
-      ]),
+      message: wizda.confirm.gradeFloorTooHigh(
+        blessingFloorPhrase(filters.blessings.length, gradeFloor),
+      ),
       fix: null,
     };
   }
@@ -301,11 +293,11 @@ export function detectConflict(
 
   let message: string;
   if (gradeTooHigh && !qualityTooHigh) {
-    message = `I don't think that gear ever drops as high as ${gradeName(filters.minGrade).toLowerCase()}.`;
+    message = wizda.confirm.gradeTooHigh(gradeName(filters.minGrade).toLowerCase());
   } else if (qualityTooHigh && !gradeTooHigh) {
-    message = `Selected gear doesn't seem to reach ${qualityLabel(filters.minQuality)}.`;
+    message = wizda.confirm.qualityTooHigh(qualityLabel(filters.minQuality));
   } else {
-    message = "Some of your picks don't fit together anymore.";
+    message = wizda.confirm.genericConflict;
   }
 
   // Lower each minimum to what the gear actually drops, which keeps the intent

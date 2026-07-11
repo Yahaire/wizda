@@ -9,6 +9,7 @@ import {
 import { Group, NumberInput, Slider } from '@mantine/core';
 
 import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
+import { wizda } from '@/mascot/voice';
 import { WizdaEmoji, wizdaSay } from '@/mascot/wizda';
 
 import { MAX_CERTAINTY_PCT, MIN_CERTAINTY_PCT } from './oracle.logic';
@@ -18,7 +19,6 @@ interface CertaintySliderProps {
   onChange: (value: number) => void,
 }
 
-const AGORA_LINE = "Remember — not even GREAT Agora can guarantee you'll get it!";
 const COMMIT_DELAY_MS = 500;
 
 export function CertaintySlider({ value, onChange }: CertaintySliderProps) {
@@ -57,7 +57,7 @@ export function CertaintySlider({ value, onChange }: CertaintySliderProps) {
     // Only greet the *transition* into the cap, once — the ref flips
     // synchronously so repeat calls in the same drag can't fire again.
     if (atMax && !atMaxRef.current) {
-      wizdaSay(AGORA_LINE, { emoji: WizdaEmoji.info });
+      wizdaSay(wizda.oracle.agoraLine, { emoji: WizdaEmoji.info });
     }
     atMaxRef.current = atMax;
     setLocal(clamped);

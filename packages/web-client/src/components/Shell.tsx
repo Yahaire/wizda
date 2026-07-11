@@ -3,37 +3,17 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { APP_NAME, ORACLE_NAME, SUPPORT_URL } from '@/app/app.constants';
+import { AdSlot } from '@/components/AdSlot';
+import { wizda } from '@/mascot/voice';
+import { WizdaGreeter } from '@/mascot/WizdaGreeter';
 import {
-  AppShell,
-  Box,
-  Burger,
-  Button,
-  Divider,
-  Group,
-  NavLink,
-  ScrollArea,
-  Stack,
-  Text,
-  Title,
-  Tooltip,
+    AppShell, Box, Burger, Button, Divider, Group, NavLink, ScrollArea, Stack, Text, Title, Tooltip
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
-  IconBox,
-  IconHeartFilled,
-  IconInfoCircle,
-  IconSparkles,
-  IconSword,
+    IconBox, IconHeartFilled, IconInfoCircle, IconSparkles, IconSword
 } from '@tabler/icons-react';
-
-import {
-  APP_NAME,
-  ORACLE_NAME,
-  ORACLE_TAGLINE,
-  SUPPORT_URL,
-} from '@/app/app.constants';
-import { AdSlot } from '@/components/AdSlot';
-import { WizdaGreeter } from '@/mascot/WizdaGreeter';
 
 interface NavItem {
   href: string,
@@ -46,7 +26,7 @@ const PRIMARY: NavItem = {
   href: '/',
   label: ORACLE_NAME,
   icon: <IconSparkles size={20} />,
-  tooltip: ORACLE_TAGLINE,
+  tooltip: wizda.oracle.tagline,
 };
 
 const LISTS: NavItem[] = [

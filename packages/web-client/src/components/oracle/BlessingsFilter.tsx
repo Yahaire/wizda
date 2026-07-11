@@ -14,6 +14,7 @@ import { IconSparkles } from '@tabler/icons-react';
 
 import { BLESSINGS } from '@shared/domain/stats';
 
+import { wizda } from '@/mascot/voice';
 import { WizdaEmoji } from '@/mascot/wizda';
 
 import {
@@ -87,8 +88,7 @@ export function BlessingsFilter({ value, onChange, available }: BlessingsFilterP
         centered
       >
         <Text className="wizda-speech" size="sm" mb="sm">
-          {WizdaEmoji.info} Pick every blessing the item must carry — I&apos;ll only count
-          pieces that have all of them.
+          {WizdaEmoji.info} {wizda.oracle.blessingsHelp}
         </Text>
         <Chip.Group multiple value={value} onChange={toggle}>
           {/* 2 columns on mobile, 4 from xs up. Each chip fills its cell with a

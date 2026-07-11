@@ -6,9 +6,6 @@ export const PAGE_TITLE_SUFFIX = ` — ${APP_NAME}`;
 /** The junk-guarantee tool's display name (the app itself stays "Wizda"). */
 export const ORACLE_NAME = 'Junk Oracle';
 
-/** Wizda's one-line, in-character intro for the tool (and its menu tooltip). */
-export const ORACLE_TAGLINE = "Want to know how much junk you need for that shiny 4★ axe?";
-
 export const APP_DESCRIPTION = TsUtilities.stringJoin([
   "Work out how much junk to farm to guarantee the item you want in",
   "Wizardry Variants Daphne.",

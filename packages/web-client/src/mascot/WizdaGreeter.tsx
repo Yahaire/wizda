@@ -1,23 +1,12 @@
 'use client';
 
-import {
-  useEffect,
-  useState,
-} from 'react';
-
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
-import {
-  Alert,
-  Text,
-} from '@mantine/core';
+import { Alert, Text } from '@mantine/core';
 
-import {
-  WIZDA_WELCOME,
-  WizdaEmoji,
-  pickGreeting,
-  wizdaSay,
-} from './wizda';
+import { wizda } from './voice';
+import { pickGreeting, WizdaEmoji, wizdaSay } from './wizda';
 
 const WELCOMED_KEY = 'wizda.welcomed';
 const LAST_GREETED_KEY = 'wizda.lastGreeted';
@@ -52,7 +41,7 @@ export function WizdaGreeter() {
       }
       localStorage.setItem(WELCOMED_KEY, '1');
       localStorage.setItem(LAST_GREETED_KEY, stamp);
-      wizdaSay(WIZDA_WELCOME, { emoji: WizdaEmoji.welcome, autoClose: 8000 });
+      wizdaSay(wizda.greet.welcome, { emoji: WizdaEmoji.welcome, autoClose: 8000 });
       return;
     }
 
