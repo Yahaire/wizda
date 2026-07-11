@@ -20,6 +20,10 @@ const app = express();
 app.set('trust proxy', 'loopback');
 app.use(express.json());
 const port = process.env.PORT ?? 3001;
+// Bind loopback-only by default. In production the API is reached solely through
+// Apache's reverse proxy over localhost — never directly from the internet (see
+// DEPLOY.md "Security: network exposure"). Overridable via HOST if ever needed.
+const host = process.env.HOST ?? '127.0.0.1';
 
 const maintenanceFlagPaths = [
   path.resolve(__dirname, '../../../.maintenance'),       // dev:  packages/backend-api/src
@@ -62,6 +66,6 @@ app.use((
   );
 });
 
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
+app.listen(Number(port), host, () => {
+  console.log(`Server listening at http://${host}:${port}`);
 });
