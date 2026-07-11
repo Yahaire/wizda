@@ -14,6 +14,7 @@
         "dev:db": "docker compose up -d db",
         "db:setup": "npx prisma migrate deploy && node scripts/seed-with-maintenance.mjs",
         "db:seed:maintenance": "node scripts/seed-with-maintenance.mjs",
+        "generate:version": "node scripts/generate-version.mjs",
         "build": "npm run build:shared && npx prisma generate && npm run build:backend-api && npm run build:web-client",
         "build:shared": "cd packages/shared && npm run build",
         "build:backend-api": "cd packages/backend-api && npm run build",

@@ -4,6 +4,10 @@ dist/
 .maintenance
 *.log
 
+# Build-time version stamp (scripts/generate-version.mjs) — regenerated on every
+# dev/build, so the hash never churns git.
+packages/shared/src/generated/
+
 # AI assistant helper files — kept local, never committed (repo is public)
 CLAUDE.md
 **/CLAUDE.md

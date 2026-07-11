@@ -5,6 +5,7 @@ import path from 'path';
 
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
 import { MaintenanceResponse } from '@shared/api/endpoints/endpoint.models';
+import { BUILD_TIME, GIT_COMMIT, VERSION_LABEL } from '@shared/generated/version';
 
 import { sendErrorResponse } from '@app/http';
 import { junkToGuaranteeRouter } from '@app/routes/junkToGuarantee';
@@ -44,7 +45,11 @@ app.use((_req, res, next) => {
 });
 
 app.get('/', (_req, res) => {
-  res.json({ message: 'API is running' });
+  res.json({
+    message: 'API is running',
+    commit: GIT_COMMIT,
+    buildTime: BUILD_TIME,
+  });
 });
 
 app.use('/junk-to-guarantee', junkToGuaranteeRouter);
@@ -67,5 +72,5 @@ app.use((
 });
 
 app.listen(Number(port), host, () => {
-  console.log(`Server listening at http://${host}:${port}`);
+  console.log(`Server listening at http://${host}:${port} — ${VERSION_LABEL}`);
 });

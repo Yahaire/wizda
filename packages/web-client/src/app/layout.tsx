@@ -20,6 +20,7 @@ import {
 import { Notifications } from '@mantine/notifications';
 
 import { Shell } from '@/components/Shell';
+import { VersionLog } from '@/components/VersionLog';
 
 import {
   APP_DESCRIPTION,
@@ -98,6 +99,7 @@ export default function RootLayout({
             autoClose={5000}
           />
           <Shell>{children}</Shell>
+          <VersionLog />
         </MantineProvider>
       </body>
     </html>

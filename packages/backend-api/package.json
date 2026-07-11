@@ -2,7 +2,9 @@
   "name": "@wizda/backend-api",
   "version": "0.1.0",
   "scripts": {
+    "predev": "node ../../scripts/generate-version.mjs",
     "dev": "ts-node-dev -r tsconfig-paths/register src/index.ts",
+    "prebuild": "node ../../scripts/generate-version.mjs",
     "build": "tsc && tsc-alias",
     "start": "node dist/backend-api/src/index.js",
     "seed": "tsx -r tsconfig-paths/register prisma/seed-from-html/seedFromHtml.ts"
