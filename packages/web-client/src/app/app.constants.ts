@@ -28,3 +28,5 @@ const DOCS_URL = `${REPO_URL}/blob/HEAD/docs`;
 export const CALCULATION_DOC_URL = `${DOCS_URL}/calculation.md`;
 /** The game model + how the source's drop tables are shaped. */
 export const DOMAIN_DOC_URL = `${DOCS_URL}/domain.md`;
+/** What we track, why, and what we deliberately don't (no cookies/accounts). */
+export const ANALYTICS_DOC_URL = `${DOCS_URL}/analytics.md`;

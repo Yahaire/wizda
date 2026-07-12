@@ -11,6 +11,7 @@ import { sendErrorResponse } from '@app/http';
 import { dataStatusRouter, readDataUpdatedAt } from '@app/routes/dataStatus';
 import { junkToGuaranteeRouter } from '@app/routes/junkToGuarantee';
 import { listsRouter } from '@app/routes/lists';
+import { popularRouter } from '@app/routes/popular';
 
 // Load root .env file — path differs between dev (src/) and prod (dist/backend-api/src/)
 dotenv.config({ path: [
@@ -65,6 +66,7 @@ app.get('/', (_req, res, next) => {
 app.use('/junk-to-guarantee', junkToGuaranteeRouter);
 app.use(dataStatusRouter);
 app.use(listsRouter);
+app.use(popularRouter);
 
 // Catch-all error handler for anything thrown/rejected in a route.
 app.use((

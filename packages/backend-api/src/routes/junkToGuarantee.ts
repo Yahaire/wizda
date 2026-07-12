@@ -6,6 +6,7 @@ import { EquipmentRankKind, Prisma } from '@local-prisma/generated/client';
 import { trackGuaranteeQuery } from '@app/analytics';
 import { sendErrorResponse } from '@app/http';
 import { getPrisma } from '@app/prisma';
+import { recordPopularQuery } from '@app/popularQueries';
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
 import {
     BLESSING_ESTIMATE_NOTE,
@@ -467,6 +468,7 @@ async function handleJunkToGuarantee(
     certainty,
     total,
   });
+  recordPopularQuery({ equipment, quality, grade, blessings: blessingCodes, rank, category });
 
   res.status(HttpStatusCode.OK).json(body);
 }

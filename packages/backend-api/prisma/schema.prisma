@@ -270,3 +270,46 @@ model EquipmentBlessingDropRate {
   @@unique([equipmentId, slot, blessingCode])
   @@index([blessingCode])
 }
+
+// ---------------------------------------------------------------------------
+// Popularity tracking (our own, not Umami) — see docs/analytics.md.
+//
+// Umami's `guarantee_query` event (packages/backend-api/src/analytics.ts)
+// stores only counts (filter breadth, certainty), never *which* items were
+// picked — good for a human dashboard, useless for "most searched" at
+// runtime. These tables store that instead: anonymous, no user linkage,
+// independent of the scraped tables so a reseed never touches them. Prefixed
+// per-tool (`JunkOracle`) so a future tool can add its own without colliding.
+// ---------------------------------------------------------------------------
+
+/// One distinct Junk Oracle query (its accepted-outcome filters), counted.
+/// `signature` is canonical JSON of the non-empty filter axes (sorted keys +
+/// sorted values), so logically-identical searches collapse into one counted
+/// row instead of growing an unbounded event log. certainty/limit/offset are
+/// excluded — they're presentation, not the query.
+model PopularJunkOracleQuery {
+  id          String                       @id @default(cuid())
+  signature   String                       @unique
+  count       Int                          @default(1)
+  firstSeenAt DateTime                     @default(now())
+  lastSeenAt  DateTime                     @updatedAt
+  terms       PopularJunkOracleQueryTerm[]
+}
+
+/// One accepted-outcome axis-value of a `PopularJunkOracleQuery` — the
+/// per-axis view, linked back to its combo. `key` is always the STABLE PUBLIC
+/// KEY (equipment name, blessing/category code, rank kind, quality/grade
+/// level) — never an internal equipment id, which regenerates on every
+/// reseed.
+model PopularJunkOracleQueryTerm {
+  id      String                 @id @default(cuid())
+  queryId String
+  /// "equipment" | "blessing" | "rank" | "category" | "quality" | "grade".
+  kind    String
+  key     String
+
+  query PopularJunkOracleQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  @@unique([queryId, kind, key])
+  @@index([kind, key]) // powers per-axis top-N aggregation
+}

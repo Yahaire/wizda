@@ -1,8 +1,8 @@
 'use client';
 
 import {
-    APP_NAME, CALCULATION_DOC_URL, DATA_SOURCE_URL, DOMAIN_DOC_URL, ISSUES_URL, ORACLE_NAME,
-    REPO_URL, SUPPORT_URL
+    ANALYTICS_DOC_URL, APP_NAME, CALCULATION_DOC_URL, DATA_SOURCE_URL, DOMAIN_DOC_URL,
+    ISSUES_URL, ORACLE_NAME, REPO_URL, SUPPORT_URL
 } from '@/app/app.constants';
 import { wizda } from '@/mascot/voice';
 import { Anchor, Button, Code, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
@@ -120,7 +120,13 @@ export function AboutContent() {
         </Text>
         <Text size="sm" mt="md">
           We collect only minimal, anonymous usage stats to see what&apos;s useful — no accounts, and we never
-          sell your data to anyone.
+          sell your data to anyone. There are no cookies and nothing links your visits together, which is why
+          you won&apos;t find a &ldquo;cookie consent&rdquo; popup here — there&apos;s nothing for one to ask
+          permission for. See the{' '}
+          <Anchor href={ANALYTICS_DOC_URL} target="_blank" rel="noopener noreferrer">
+            analytics doc
+          </Anchor>
+          &nbsp;for the full breakdown of what we track.
         </Text>
       </div>
 
