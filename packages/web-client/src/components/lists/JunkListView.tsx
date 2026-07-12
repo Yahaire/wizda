@@ -22,10 +22,7 @@ import {
   Column,
   DataTable,
 } from '@/components/table/DataTable';
-import {
-  DetailProvider,
-  useDetail,
-} from '@/components/detail/DetailProvider';
+import { useDetail } from '@/components/detail/DetailProvider';
 import { TruncatedText } from '@/components/TruncatedText';
 import {
   GradeBadge,
@@ -137,9 +134,5 @@ function JunkListContent() {
 }
 
 export function JunkListView() {
-  return (
-    <DetailProvider>
-      <JunkListContent />
-    </DetailProvider>
-  );
+  return <JunkListContent />;
 }

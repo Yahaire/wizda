@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { CategoryIcon } from '@/components/CategoryIcon';
-import { DetailProvider, useDetail } from '@/components/detail/DetailProvider';
+import { useDetail } from '@/components/detail/DetailProvider';
 import { getRankColor, GradeBadge, QualityStars, RankBadge } from '@/components/gear/gearDisplays';
 import { Column, DataTable } from '@/components/table/DataTable';
 import { TruncatedText } from '@/components/TruncatedText';
@@ -160,9 +160,5 @@ function EquipmentListContent() {
 }
 
 export function EquipmentListView() {
-  return (
-    <DetailProvider>
-      <EquipmentListContent />
-    </DetailProvider>
-  );
+  return <EquipmentListContent />;
 }

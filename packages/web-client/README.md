@@ -36,7 +36,8 @@ lists. A mascot, **Wizda**, guides the experience through friendly microcopy
 ```
 src/
   app/
-    layout.tsx         root: fonts, MantineProvider (dark), Notifications, Umami <script>
+    layout.tsx         root: fonts, MantineProvider (dark), Notifications, Umami <script>,
+                       mounts DetailProvider (see below) around the routed page
     theme.ts           Mantine theme (crimson primary, tuned dark scale, font vars)
     page.tsx           "/"          → Junk Oracle
     junks/page.tsx     "/junks"     → junk list
@@ -55,14 +56,22 @@ src/
                        (EquipmentSelect, FilterField, LevelToggleGroup, BlessingsFilter,
                        CertaintySlider, ResultsPanel)
     lists/             JunkListView, EquipmentListView
-    detail/            DetailProvider — shared, cross-linked junk↔equipment detail modals
+    detail/            DetailProvider — mounted once in the root layout (not per-route): loads
+                       the junk/equipment lists once per session, persists them across client
+                       navigation, and hosts the shared, cross-linked junk↔equipment detail
+                       modals. Skips the load on routes with no list data (e.g. /about). The
+                       Junk Oracle's equipment picker reads from it too, rather than fetching
+                       its own copy.
     gear/              gearDisplays (QualityStars / GradeBadge / grade colours)
     table/DataTable.tsx  reusable virtualized, sortable table (sticky first col, h-scroll)
   mascot/
     wizda.tsx          Wizda's voice: wizdaSay / wizdaConfirm + greeting bank
     WizdaGreeter.tsx   first-visit welcome + once-a-day greeting (mobile-friendly)
   services/
-    api.ts             fetch wrapper (typed errors + MaintenanceError)
+    api.ts             fetch wrapper (typed errors + MaintenanceError); GETs to the same path
+                       made concurrently share one in-flight request rather than each firing
+                       their own (settle-cleared, not cached — a poller like MaintenanceGate
+                       still hits the network on every call)
 ```
 
 ### How it talks to the API
@@ -91,7 +100,9 @@ is in `transpilePackages` so Next compiles its TS (runtime enums/catalogs).
   Virtualized with a sticky first column and horizontal scroll on narrow screens;
   clicking a row opens the **shared detail modals** (`detail/DetailProvider`), which
   cross-link — a junk lists the gear it drops, each piece opens the equipment modal,
-  whose sources open the junk modal, and so on.
+  whose sources open the junk modal, and so on. The underlying junk/equipment data is
+  fetched once per session by the root-mounted `DetailProvider`, not per-view — the
+  Oracle, the two list pages, and the modals all read the same loaded lists.
 - **PWA** — installable; the service worker caches the `/api/junks` and
   `/api/equipment` responses (stale-while-revalidate). Never caches the POST
   guarantee query.

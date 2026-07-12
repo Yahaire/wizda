@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ORACLE_NAME } from '@/app/app.constants';
+import { useDetail } from '@/components/detail/DetailProvider';
 import { wizda } from '@/mascot/voice';
 import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
@@ -27,7 +28,6 @@ import { QualityFilter, QualityReadout } from './QualityFilter';
 import { RankFilter } from './RankFilter';
 import { ResultsPanel } from './ResultsPanel';
 
-import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 import type {
   JunkToGuaranteeQuery,
   JunkToGuaranteeResult,
@@ -66,7 +66,10 @@ export function OraclePage() {
     },
   });
 
-  const [equipmentList, setEquipmentList] = useState<EquipmentListItem[] | null>(null);
+  // Junk + equipment reference lists are owned by the app-wide DetailProvider
+  // (see layout.tsx) — it loads them once and they persist across navigation,
+  // so the Oracle just reads them rather than fetching its own copy.
+  const { equipment: equipmentList, status: listStatus } = useDetail();
 
   const [result, setResult] = useState<JunkToGuaranteeResult | null>(null);
   // The filters that produced `result` — snapshotted when the result is
@@ -118,21 +121,14 @@ export function OraclePage() {
     setFilters((current) => ({ ...current, ...change }));
   }, [setFilters]);
 
-  // Load the equipment names that feed the filter select.
+  // Tell the player if the shared equipment/junk load (DetailProvider) failed —
+  // parity with the toast this page used to raise for its own fetch. Never
+  // fires for a 503; that's handled by the global MaintenanceGate.
   useEffect(() => {
-    api.listEquipment()
-      .then(setEquipmentList)
-      .catch((error) => {
-        // A 503 here is handled by the global MaintenanceGate; anything else
-        // is a genuine load failure.
-        if (!(error instanceof MaintenanceError)) {
-          wizdaSay(wizda.oracle.loadError, {
-            glyph: WizdaGlyph.info,
-            color: 'red',
-          });
-        }
-      });
-  }, []);
+    if (listStatus === 'error') {
+      wizdaSay(wizda.oracle.loadError, { glyph: WizdaGlyph.info, color: 'red' });
+    }
+  }, [listStatus]);
 
   // The Oracle only guarantees junk-farmable gear, so it works off the pieces a
   // junk can actually drop (non-empty `sources`). `GET /equipment` now also

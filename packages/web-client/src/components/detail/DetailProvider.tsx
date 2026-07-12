@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { usePathname } from 'next/navigation';
+
 import { CategoryIcon } from '@/components/CategoryIcon';
 import { getRankColor, GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
 import { TruncatedText } from '@/components/TruncatedText';
@@ -51,7 +53,14 @@ const ROW_CHEVRON = <IconChevronRight size={12} style={{ opacity: 0.4, marginInl
 
 // A 503 (maintenance) doesn't reach 'error' — the global MaintenanceGate owns
 // that screen, so the list views just stay in 'loading' until it clears.
-type LoadStatus = 'loading' | 'ready' | 'error';
+// 'idle' is the pre-fetch state: either the provider hasn't yet reached a route
+// that needs the lists, or a load already failed and is waiting on a full
+// refresh (see the route effect below) rather than retrying itself.
+type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+// Routes that don't use the junk/equipment lists — skip the fetch on them so
+// e.g. the About page doesn't pull data it never renders.
+const ROUTES_WITHOUT_LISTS = new Set(['/about']);
 
 interface DetailContextValue {
   equipment: EquipmentListItem[] | null,
@@ -100,17 +109,24 @@ function pushWithFocus(
 }
 
 /**
- * Loads the junk + equipment reference lists once and hosts a single shared
- * detail modal, so any row (in either list, or inside the modal itself) can open
- * the same detail view. Cross-links between junk and equipment build a
- * navigation stack: following one pushes it on top, and a Back arrow returns to
- * the previous view (rather than closing and reopening), so you can retrace e.g.
- * equipment → junk → equipment. Closing the modal clears the whole stack.
+ * Mounted once at the app layout. Loads the junk + equipment reference lists
+ * and hosts a single shared detail modal, so any row (in either list, or
+ * inside the modal itself, or the Oracle's equipment select) can open the same
+ * detail view. The lists load once per session — the first time a route that
+ * needs them is reached (see `ROUTES_WITHOUT_LISTS`) — and then persist across
+ * client navigation; they are not refetched on every route change. A failed
+ * load stays in `'error'` until a full page refresh remounts this provider —
+ * it does not retry on soft navigation.
+ *
+ * Cross-links between junk and equipment build a navigation stack: following
+ * one pushes it on top, and a Back arrow returns to the previous view (rather
+ * than closing and reopening), so you can retrace e.g. equipment → junk →
+ * equipment. Closing the modal clears the whole stack.
  */
 export function DetailProvider({ children }: { children: React.ReactNode }) {
   const [equipment, setEquipment] = useState<EquipmentListItem[] | null>(null);
   const [junks, setJunks] = useState<JunkListItem[] | null>(null);
-  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [status, setStatus] = useState<LoadStatus>('idle');
 
   const [detailStack, setDetailStack] = useState<DetailEntry[]>([]);
 
@@ -119,8 +135,14 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   // that view — rather than there being nothing to go back to (a list-table open).
   const [rootBackable, setRootBackable] = useState(false);
 
+  const pathname = usePathname();
+
   useEffect(() => {
+    if (status !== 'idle' || ROUTES_WITHOUT_LISTS.has(pathname)) {
+      return;
+    }
     let alive = true;
+    setStatus('loading');
     Promise.all([api.listEquipment(), api.listJunks()])
       .then(([equipmentList, junkList]) => {
         if (!alive) {
@@ -143,7 +165,13 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, []);
+    // `status` deliberately excluded: this effect sets it itself
+    // ('idle' → 'loading'), and re-running on that transition would fire the
+    // cleanup above — flipping `alive` false on the fetch this very call just
+    // started, before it resolves. Re-checking only needs to happen on a route
+    // change; the guard above reads the latest `status` via closure regardless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const equipmentByName = useMemo(() => {
     const map = new Map<string, EquipmentListItem>();

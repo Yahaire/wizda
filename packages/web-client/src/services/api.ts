@@ -84,7 +84,26 @@ class ApiService {
   // Same-origin; Next rewrites `/api/*` to the backend (dodges CORS).
   private readonly baseUrl = '/api';
 
-  private async get<T>(path: string): Promise<T> {
+  // Concurrent callers requesting the same GET path share one in-flight
+  // request instead of each firing their own (e.g. MaintenanceGate and
+  // DataFreshness both probing `/data-status` on mount). Cleared as soon as the
+  // request settles — not cached beyond that — so callers that poll over time
+  // (MaintenanceGate's recovery check) still hit the network on every call.
+  private readonly inflight = new Map<string, Promise<unknown>>();
+
+  private get<T>(path: string): Promise<T> {
+    const pending = this.inflight.get(path);
+    if (pending) {
+      return pending as Promise<T>;
+    }
+    const request = this.fetchJson<T>(path).finally(() => {
+      this.inflight.delete(path);
+    });
+    this.inflight.set(path, request);
+    return request;
+  }
+
+  private async fetchJson<T>(path: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`);
     await checkForMaintenance(response);
     if (!response.ok) {
