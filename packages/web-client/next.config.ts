@@ -19,6 +19,11 @@ if (!apiBaseUrl) {
 // same-origin so ad-blockers don't drop the analytics script/beacon.
 const umamiScriptUrl = process.env.UMAMI_SCRIPT_URL;
 const umamiCollectUrl = process.env.UMAMI_COLLECT_URL;
+// The path the tracker script itself POSTs to is baked in at the Umami
+// instance's own build time (its `COLLECT_API_ENDPOINT`), not something we
+// control — so the rewrite source must mirror whatever that instance uses,
+// not assume Umami's `/api/send` default.
+const umamiCollectPath = process.env.UMAMI_COLLECT_PATH || '/api/send';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -44,7 +49,7 @@ const nextConfig: NextConfig = {
           destination: umamiScriptUrl,
         },
         {
-          source: '/umami/api/send',
+          source: `/umami${umamiCollectPath}`,
           destination: umamiCollectUrl,
         },
       );
