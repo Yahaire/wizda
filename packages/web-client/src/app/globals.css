@@ -92,6 +92,29 @@ a {
 }
 
 /*
+ * Touch devices have no Esc key, so the Combobox close button's "Esc" shortcut
+ * hint is noise there — hide it (the "Close" label stands on its own). Keyed on
+ * pointer, not screen width, on purpose: a narrow desktop window still has Esc;
+ * a wide tablet doesn't. The key still works for anyone who has one — only the
+ * hint is hidden.
+ */
+@media (pointer: coarse) {
+  .wizda-hide-on-touch {
+    display: none;
+  }
+}
+
+/*
+ * Target for scrollIntoView({ block: 'start' }) under the fixed AppShell header
+ * (56px, see Shell.tsx) — the margin keeps the scrolled element from tucking up
+ * beneath it. Used when focusing the equipment select on touch, so its inline
+ * dropdown has room to open above the virtual keyboard.
+ */
+.wizda-scroll-clear-header {
+  scroll-margin-top: 64px;
+}
+
+/*
  * Wizda's away-screen animations (see MaintenanceGate). A gentle idle hover
  * while she's gone, and a one-shot "welcome back" rise-and-grow when she
  * returns. Both classes render fine with no animation applied — the icon just

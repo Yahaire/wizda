@@ -105,6 +105,21 @@ export function IconMultiSelect<T>({
     selectSearch();
   };
 
+  // On touch devices the virtual keyboard covers the lower screen, leaving the
+  // inline dropdown (rendered right below the field) no room to open into — it
+  // clips or flips into the equally-cramped space above. Nudge the field up
+  // toward the header on focus so the menu opens into the space above the
+  // keyboard. Pointer-, not width-gated: only a real touch keyboard steals the
+  // room. No-op on desktop, where an unbidden page jump would just be jarring.
+  const scrollFieldToTopOnTouch = () => {
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      searchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const matchesSearch = createSearchMatcher(search);
   const matches = data.filter((item) => matchesSearch(getLabel(item)));
 
@@ -208,6 +223,7 @@ export function IconMultiSelect<T>({
             <Combobox.EventsTarget>
               <PillsInput.Field
                 ref={searchRef}
+                className="wizda-scroll-clear-header"
                 value={search}
                 placeholder={value.length ? (selectedPlaceholder ?? placeholder) : placeholder}
                 disabled={disabled}
@@ -223,6 +239,7 @@ export function IconMultiSelect<T>({
                   // Select on focus-transition (not every click) so re-clicks can
                   // still position the caret and never clobber a manual selection.
                   selectSearch();
+                  scrollFieldToTopOnTouch();
                 }}
                 // Losing the window is not losing the field. Closing here would
                 // reopen on the way back — the restored focus fires before the
@@ -271,7 +288,7 @@ export function IconMultiSelect<T>({
           >
             <Stack gap={0} align="center">
               <span>Close</span>
-              <Text size="xs" c="dimmed">Esc</Text>
+              <Text size="xs" c="dimmed" className="wizda-hide-on-touch">Esc</Text>
             </Stack>
           </Button>
         </Combobox.Footer>
