@@ -11,8 +11,8 @@ export const APP_DESCRIPTION = TsUtilities.stringJoin([
   "Wizardry Variants Daphne.",
 ]);
 
-/** External "support the project" link — swap for the real Ko-fi/BMAC URL later. */
-export const SUPPORT_URL = 'https://ko-fi.com';
+/** External "support the project" link — the project's Ko-fi tip page. */
+export const SUPPORT_URL = 'https://ko-fi.com/yahaire';
 
 /** Where the drop-rate data is scraped from (credited on the About page). */
 export const DATA_SOURCE_URL = 'https://wizardry.info/daphne/';

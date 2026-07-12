@@ -109,12 +109,6 @@ is in `transpilePackages` so Next compiles its TS (runtime enums/catalogs).
 - **Analytics (Umami)** — fully env-gated and dormant until configured; see the
   `NEXT_PUBLIC_UMAMI_*` / `UMAMI_*` vars in the root `.env.example`.
 
-## Placeholders to swap before/after launch
-
-- `SUPPORT_URL` in `app.constants.ts` — the real Ko-fi / Buy-Me-a-Coffee link.
-- `public/icon.svg` — a temporary "W" mark; replace with real PWA/app icons.
-- Umami env vars — provision the two Umami sites (pageviews + API events).
-
 ## Troubleshooting
 
 **Editor reports `Cannot find module or type declarations for side-effect import of './globals.css'`?**
