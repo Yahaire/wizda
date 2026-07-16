@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { wizda } from '@/mascot/voice';
 import { EquipmentRankKind } from '@shared/domain/rank';
 
 import {
     availableBlessings, availableOn, candidateEquipment, computeFacets, detectConflict,
     longestSatisfiableBlessings, maxReachableGrade, satisfyingEquipment
 } from './oracle.facets';
-import { EMPTY_FILTERS, MAX_LEVEL, OracleFilters } from './oracle.logic';
+import { blessingFloorPhrase, EMPTY_FILTERS, MAX_LEVEL, OracleFilters } from './oracle.logic';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 
@@ -171,7 +172,10 @@ describe('detectConflict', () => {
   it('names the blessing the chosen gear never rolls, and trims it away', () => {
     const conflict = conflictFor({ equipment: ['Bronze Sword'], blessings: ['ATK', 'DEF'] });
 
-    expect(conflict?.message).toContain("ever rolls DEF");
+    // Asserted through the phrase catalog rather than the English it currently
+    // renders: what matters is that Wizda reaches for the one-blessing complaint
+    // (not the combo one) and names DEF — her exact wording is free to change.
+    expect(conflict?.message).toBe(wizda.confirm.blessingUnrollableOne('DEF'));
     expect(conflict?.fix).toEqual({ blessings: ['ATK'] });
   });
 
@@ -189,7 +193,11 @@ describe('detectConflict', () => {
     const conflict = conflictFor({ equipment: ['Bronze Sword'], blessings: SWORD_BLESSINGS });
 
     expect(conflict?.fix).toBeNull();
-    expect(conflict?.message).toContain('never drops that high');
+    // The floor lands on the top grade itself (Red), so the phrase is the flat
+    // "4 blessings need Red" rather than "... or better".
+    expect(conflict?.message).toBe(
+      wizda.confirm.gradeFloorTooHigh(blessingFloorPhrase(SWORD_BLESSINGS.length, MAX_LEVEL)),
+    );
   });
 
   it('lowers a minimum that overshoots what the gear drops', () => {
