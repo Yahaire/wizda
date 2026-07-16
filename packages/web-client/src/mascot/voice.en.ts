@@ -32,11 +32,11 @@ export const wizdaLinesEn = {
       "The devs publish each slot's odds, but never say what happens exactly after the first slot is filled.",
       "I assume the game simply rerolls that slot.",
       "If it starts the whole piece over instead, my numbers drift a little — usually by",
-      "well under 1%, and at worst by about a tenth. Everything else here is exact.",
+      "well under 1%, although at worst by about 10%. Everything else here is exact.",
     ]),
     estimateNoteLink: "Want to check my calculations — or know how the game really rolls?",
     endOfList: "That's all I got!",
-    noResults: "No junk can get you that one — try loosening the filters a little.",
+    noResults: "Oh... no junk can get you that one — try loosening the filters a little!",
     blessingsHelp: TsUtilities.stringJoin([
       "Pick every blessing the item must carry —",
       "I'll only count pieces that have all of them.",
@@ -60,8 +60,8 @@ export const wizdaLinesEn = {
         "Blessings are the bonus stats a piece can roll.",
         "I only count gear that carries ALL the blessings you pick.",
         "A single piece holds at most four, so that's the cap.",
-        "Not every piece rolls every blessing — a sword will never carry DEF —",
-        "so I grey out the ones your gear can't reach.",
+        "Not every piece rolls every blessing — a sword will never carry DEF naturally —",
+        "so I grey out the ones your gear couldn't get.",
       ]),
       category: TsUtilities.stringJoin([
         "The kind of gear — daggers, heavy armor, shoes, that sort of thing.",
@@ -83,7 +83,7 @@ export const wizdaLinesEn = {
   },
   errors: {
     unknownEquipment: "Some of that gear isn't in my notes anymore — try reselecting it.",
-    unknownBlessing: "One of those blessings isn't in my notes anymore — try reselecting it.",
+    unknownBlessing: "Uh... one of those blessings isn't in my notes anymore — try reselecting it.",
     generic: "Something went sideways on my end — give it another go in a moment.",
   },
   away: {
@@ -111,14 +111,14 @@ export const wizdaLinesEn = {
     tidyLabel: "Tidy up",
     leaveLabel: "Leave it",
     identityNoOverlap: TsUtilities.stringJoin([
-      "Your gear, category, and rank picks don't overlap — nothing is all three at once.",
+      "Your gear, category, and rank picks don't overlap.",
       "I can drop the category and rank and keep the gear you named.",
     ]),
     genericConflict: "Some of your picks don't fit together anymore.",
     blessingUnrollableOne: (labels) => `Nothing you've picked ever rolls a ${labels} blessing.`,
-    blessingUnrollableMany: (labels) => `Nothing you've picked rolls ${labels} blessing.`,
+    blessingUnrollableMany: (labels) => `Nothing you've picked rolls ${labels} blessings.`,
     blessingComboUnrollable: (labels) => TsUtilities.stringJoin([
-      `No single piece you've picked carries ${labels} together,`,
+      `Whoops! No single piece you've picked carries ${labels} together,`,
       "and a blessing only counts if it's on the piece you're hunting.",
     ]),
     blessingFloorPhrase: (count, gradeName, atMax) => {
@@ -127,10 +127,10 @@ export const wizdaLinesEn = {
       return `${subject} ${target}`;
     },
     gradeFloorTooHigh: (floorPhrase) => TsUtilities.stringJoin([
-      `${floorPhrase}, and that gear never drops that high.`,
-      "Ask for fewer blessings, or grind something else.",
+      `${floorPhrase}, and that specific gear seems to never drop that high!`,
+      "You'll have to ask for fewer blessings, or grind something else.",
     ]),
-    gradeTooHigh: (gradeName) => `I don't think that gear ever drops as high as ${gradeName}.`,
-    qualityTooHigh: (qualityLabel) => `Selected gear doesn't seem to reach ${qualityLabel}.`,
+    gradeTooHigh: (gradeName) => `Hmm... I don't think that gear ever drops as high as ${gradeName}.`,
+    qualityTooHigh: (qualityLabel) => `Selected gear doesn't seem to reach ${qualityLabel}!`,
   },
 } satisfies WizdaLines;
