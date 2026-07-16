@@ -13,6 +13,7 @@ import type {
   EquipmentListItem,
   JunkListItem,
 } from '@shared/api/endpoints/lists.models';
+import type { PopularResult } from '@shared/api/endpoints/popular.models';
 
 /** Thrown when the API is in maintenance mode (HTTP 503 + `{ maintenance: true }`). */
 export class MaintenanceError extends Error {
@@ -135,6 +136,10 @@ class ApiService {
 
   listEquipment(): Promise<EquipmentListItem[]> {
     return this.get<EquipmentListItem[]>('/equipment');
+  }
+
+  popular(): Promise<PopularResult> {
+    return this.get<PopularResult>('/popular');
   }
 
   junkToGuarantee(query: JunkToGuaranteeQuery): Promise<JunkToGuaranteeResult> {

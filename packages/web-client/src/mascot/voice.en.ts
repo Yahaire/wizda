@@ -27,6 +27,8 @@ export const wizdaLinesEn = {
     agoraLine: "Remember — not even GREAT Agora can guarantee you'll get it!",
     loadError: "Wait! Don't look! I couldn't load the gear list — refresh and I'll try again.",
     emptyPrompt: "Pick what you're after, then hit Calculate and I'll count the junk for you.",
+    emptyPromptWithPicks: "Your picks are still here — hit Calculate whenever you're ready.",
+    popularHeading: "Or borrow someone else's picks:",
     estimateNote: TsUtilities.stringJoin([
       "Blessings fill one slot at a time, and no piece ever gets the same one twice.",
       "The devs publish each slot's odds, but never say what happens exactly after the first slot is filled.",

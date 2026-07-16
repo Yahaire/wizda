@@ -7,9 +7,7 @@ import { useDetail } from '@/components/detail/DetailProvider';
 import { wizda } from '@/mascot/voice';
 import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
-import {
-    Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title
-} from '@mantine/core';
+import { Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
 import { IconSparkles } from '@tabler/icons-react';
@@ -22,16 +20,29 @@ import { FilterField } from './FilterField';
 import { GradeFilter, GradeReadout } from './GradeFilter';
 import { computeFacets, OracleConflict } from './oracle.facets';
 import {
-    activeFilters, DEFAULT_FILTERS, FILTERS_STORAGE_KEY, hasAnyFilter, MIN_LEVEL, OracleFilters
+    activeFilters, DEFAULT_FILTERS, FILTERS_STORAGE_KEY, filtersFromGuarantee, hasAnyFilter,
+    MIN_LEVEL, OracleFilters
 } from './oracle.logic';
+import { PopularQueries } from './PopularQueries';
 import { QualityFilter, QualityReadout } from './QualityFilter';
 import { RankFilter } from './RankFilter';
 import { ResultsPanel } from './ResultsPanel';
 
 import type {
+  GuaranteeFilters,
   JunkToGuaranteeQuery,
   JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
+/**
+ * Scroll margin for anything we send to the top of the viewport. The AppShell header
+ * is fixed, so `block: 'start'` alone would tuck the target underneath it — this
+ * clears the header's own offset, plus a little air.
+ *
+ * Read off Mantine's var rather than the 56px in `Shell.tsx`: it can't drift from the
+ * real header, and it collapses to just the air when the header isn't there to duck.
+ */
+const SCROLL_CLEAR_HEADER = 'calc(var(--app-shell-header-offset, 0rem) + var(--mantine-spacing-md))';
+
 function friendlyError(errorCode: string): string {
   switch (errorCode) {
     case 'UNKNOWN_EQUIPMENT':
@@ -79,6 +90,11 @@ export function OraclePage() {
   const [queryFilters, setQueryFilters] = useState<OracleFilters | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Whether the empty state is being *returned* to (via Back) rather than started
+  // from. Not the same question as "are any filters set": DEFAULT_FILTERS already
+  // asks for 3★ Blue and up, so a first-ever visitor has picks without having
+  // picked anything — only stepping back off a result earns the "still here" line.
+  const [steppedBack, setSteppedBack] = useState(false);
   // Bumped on every fresh calculate() (not on showMore's append) and used as
   // ResultsPanel's key, so a new calculation remounts the results list —
   // resetting its internal scroll position — instead of inheriting whatever
@@ -95,6 +111,8 @@ export function OraclePage() {
   // Scroll the results into view after a fresh calculation (not on "show more").
   const resultsRef = useRef<HTMLDivElement>(null);
   const pendingScrollRef = useRef(false);
+  // Where Back sends you. See `clearResult` for why it's the filters and not the top.
+  const filtersRef = useRef<HTMLDivElement>(null);
 
   // Side-by-side (Grid `md`+) only: cap the results panel to whatever vertical
   // space is left below it so a tall row list can't push the page past the
@@ -235,18 +253,25 @@ export function OraclePage() {
     wizdaSay(friendlyError(code), { glyph: WizdaGlyph.info, color: 'red' });
   };
 
-  const calculate = async () => {
-    if (!hasAnyFilter(filters)) {
+  /**
+   * Run the query. `target` defaults to the live selection, but a caller that has
+   * just set new filters passes them explicitly — `setFilters` won't have landed in
+   * this render's `filters` yet, so the closure would otherwise run the *previous*
+   * selection (see `applyPopular`).
+   */
+  const calculate = async (target: OracleFilters = filters) => {
+    if (!hasAnyFilter(target)) {
       wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark });
       return;
     }
     setLoading(true);
     setResult(null);
+    setSteppedBack(false);
     setResultVersion((version) => version + 1);
     pendingScrollRef.current = true;
     try {
-      const fresh = await api.junkToGuarantee(buildQuery(filters, 0));
-      setQueryFilters(filters);
+      const fresh = await api.junkToGuarantee(buildQuery(target, 0));
+      setQueryFilters(target);
       setResult(fresh);
     } catch (error) {
       pendingScrollRef.current = false;
@@ -254,6 +279,41 @@ export function OraclePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Replay one of the most-searched queries: adopt its filters wholesale and run it
+   * on the spot. The player asked a question by picking it, so making them find and
+   * press Calculate as well would only be ceremony.
+   *
+   * Their certainty carries over untouched — it's how sure *they* want to be, not
+   * part of the hunt someone else was on.
+   */
+  const applyPopular = (picked: GuaranteeFilters) => {
+    const next = filtersFromGuarantee(picked, filters.certaintyPct);
+    setFilters(next);
+    calculate(next);
+  };
+
+  /**
+   * Step back from a result to the empty state, leaving the filters as they are, and
+   * ride back up to them.
+   *
+   * The scroll isn't a flourish — it's the fix for a lurch. Stacked (mobile), the tall
+   * results panel is what you're scrolled down to, and dropping it shrinks the document
+   * out from under you; the browser then clamps your scroll position, and *that* is the
+   * jerk. Moving deliberately to the filters pre-empts it, and they're the one thing
+   * that can't move while it happens: they sit above the results, so the collapse never
+   * touches their offset. Side-by-side there's nothing to scroll and this is a no-op —
+   * the panel is already capped to the viewport (see `resultsMaxHeight`).
+   *
+   * It lands where it should, too: the way back from an answer is the question.
+   */
+  const clearResult = () => {
+    setResult(null);
+    setQueryFilters(null);
+    setSteppedBack(true);
+    filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const showMore = async () => {
@@ -412,10 +472,12 @@ export function OraclePage() {
 
       <Grid gutter="lg">
         <Grid.Col span={{ base: 12, md: 5 }}>
-          {filterPanel}
+          <div ref={filtersRef} style={{ scrollMarginTop: SCROLL_CLEAR_HEADER }}>
+            {filterPanel}
+          </div>
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 7 }}>
-          <div ref={resultsRef} style={{ scrollMarginTop: 12 }}>
+          <div ref={resultsRef} style={{ scrollMarginTop: SCROLL_CLEAR_HEADER }}>
             {result || loading ? (
               <Paper
                 withBorder
@@ -437,15 +499,17 @@ export function OraclePage() {
                   queryFilters={queryFilters ?? filters}
                   onRequestCurve={requestCurve}
                   fillHeight={Boolean(resultsMaxHeight)}
+                  onBack={clearResult}
                 />
               </Paper>
             ) : (
-              <Paper withBorder p="xl" radius="md" h="100%">
+              <Paper withBorder p="lg" radius="md" h="100%">
                 <Stack align="center" justify="center" h="100%" gap="xs" mih={200}>
                   <IconSparkles size={32} color="var(--mantine-color-crimson-5)" />
                   <Text className="wizda-speech" ta="center">
-                    {wizda.oracle.emptyPrompt}
+                    {steppedBack ? wizda.oracle.emptyPromptWithPicks : wizda.oracle.emptyPrompt}
                   </Text>
+                  <PopularQueries onPick={applyPopular} />
                 </Stack>
               </Paper>
             )}

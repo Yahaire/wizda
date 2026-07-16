@@ -136,3 +136,23 @@ a {
     animation: wizda-rise 0.7s ease-out both;
   }
 }
+
+/*
+ * The popular searches arriving under Wizda's empty prompt (see PopularQueries).
+ * The rows fade up one after another; the height animation that makes room for
+ * them is Mantine's Collapse, and it's that growing block — not anything here —
+ * that lets the centred prompt above glide up instead of snapping.
+ *
+ * `both` holds each row invisible through its stagger delay, so a late row doesn't
+ * flash into place before its turn. Unanimated this renders fine: reduced-motion
+ * gets every row where it belongs, just without the entrance.
+ */
+@keyframes wizda-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wizda-fade-up {
+    animation: wizda-fade-up 0.32s ease-out both;
+  }
+}

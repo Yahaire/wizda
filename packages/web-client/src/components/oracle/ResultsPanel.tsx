@@ -11,7 +11,7 @@ import {
     TextInput, ThemeIcon, Tooltip, UnstyledButton
 } from '@mantine/core';
 import {
-    IconAlertTriangle, IconChevronRight, IconInfoCircle, IconSearch
+    IconAlertTriangle, IconArrowLeft, IconChevronRight, IconInfoCircle, IconSearch
 } from '@tabler/icons-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
@@ -51,6 +51,22 @@ interface ResultsPanelProps {
    * (see the `resultsMaxHeight` measurement in {@link OraclePage}).
    */
   fillHeight?: boolean,
+  /** Step back to the empty state. Rides along the header rather than claiming a row of its own. */
+  onBack: () => void,
+}
+
+/**
+ * Retrace to the empty state — an arrow, not an ×: it returns you to where you came
+ * from rather than discarding the answer, the same way the detail modal's Back reads.
+ */
+function BackButton({ onBack }: { onBack: () => void }) {
+  return (
+    <Tooltip label="Back to the start" withArrow openDelay={300}>
+      <ActionIcon variant="subtle" color="gray" onClick={onBack} aria-label="Back">
+        <IconArrowLeft size={18} />
+      </ActionIcon>
+    </Tooltip>
+  );
 }
 
 export function ResultsPanel({
@@ -61,6 +77,7 @@ export function ResultsPanel({
   queryFilters,
   onRequestCurve,
   fillHeight,
+  onBack,
 }: ResultsPanelProps) {
   const [nameFilter, setNameFilter] = useState("");
   const [detail, setDetail] = useState<JunkGuaranteeEntry | null>(null);
@@ -131,13 +148,23 @@ export function ResultsPanel({
     return null;
   }
 
+  // No header to ride along here, so the arrow sits beside the alert rather than
+  // above it — this is the state a way back matters most in, so it can't be skipped.
   if (result.results.length === 0) {
     return (
-      <Alert color="crimson" variant="light" icon={<IconInfoCircle />}>
-        <Text className="wizda-speech">
-          {wizda.oracle.noResults}
-        </Text>
-      </Alert>
+      <Group wrap="nowrap" align="flex-start" gap="xs">
+        <BackButton onBack={onBack} />
+        <Alert
+          color="crimson"
+          variant="light"
+          icon={<IconInfoCircle />}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          <Text className="wizda-speech">
+            {wizda.oracle.noResults}
+          </Text>
+        </Alert>
+      </Group>
     );
   }
 
@@ -147,6 +174,7 @@ export function ResultsPanel({
     <Stack gap="sm" h={fillHeight ? "100%" : undefined} style={fillHeight ? { minHeight: 0 } : undefined}>
       <Group justify="space-between" align="center" gap="xs">
         <Group gap={6} wrap="nowrap">
+          <BackButton onBack={onBack} />
           <Text fw={600}>
             {result.total} {result.total === 1 ? "junk" : "junks"} can get it
           </Text>

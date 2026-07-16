@@ -29,6 +29,14 @@ export interface WizdaLines {
     readonly agoraLine: string,
     readonly loadError: string,
     readonly emptyPrompt: string,
+    /**
+     * {@link emptyPrompt}'s counterpart for a player who already has picks — after
+     * stepping back from a result, telling them to "pick what you're after" would
+     * be describing something they've already done.
+     */
+    readonly emptyPromptWithPicks: string,
+    /** Introduces the most-searched queries offered under the empty prompt. */
+    readonly popularHeading: string,
     /** The one assumption behind blessing-filtered results. */
     readonly estimateNote: string,
     readonly estimateNoteLink: string,

@@ -126,6 +126,57 @@ export function activeFilters(filters: OracleFilters): GuaranteeFilters {
   };
 }
 
+/**
+ * The lowest level in an API level set, or {@link MIN_LEVEL} ("any") for an absent
+ * or empty axis — the inverse of {@link levelsFrom}.
+ */
+function minLevelOf(levels: number[] | undefined): number {
+  return levels?.length ? Math.min(...levels) : MIN_LEVEL;
+}
+
+/**
+ * An API {@link GuaranteeFilters} back as an on-screen selection — the inverse of
+ * {@link activeFilters}, for replaying a stored query (see `PopularQueries`).
+ * Certainty isn't part of the accepted-outcome filters, so the caller supplies
+ * whatever the player currently has set.
+ *
+ * The two minimum axes only round-trip exactly for queries this UI produced, which
+ * is every query worth replaying: the sliders can only ever emit "min and up", so
+ * `levelsFrom` → `minLevelOf` is lossless for them. A hand-rolled API query asking
+ * for, say, quality `[3]` alone would come back as "3★ and up" — wider than what
+ * was stored, but still a sane, honest selection to hand the player.
+ */
+export function filtersFromGuarantee(
+  filters: GuaranteeFilters,
+  certaintyPct: number,
+): OracleFilters {
+  return {
+    equipment: filters.equipment ?? [],
+    category: filters.category ?? [],
+    rank: filters.rank ?? [],
+    minQuality: minLevelOf(filters.quality),
+    minGrade: minLevelOf(filters.grade),
+    blessings: filters.blessings ?? [],
+    certaintyPct,
+  };
+}
+
+/**
+ * An API {@link GuaranteeFilters} as a {@link ResolvedQuery}, for drawing a stored
+ * query with the same vocabulary a result's summary uses. Both are already the
+ * "spelled-out level sets" shape, so an absent axis just becomes its empty wildcard.
+ */
+export function resolvedQueryFrom(filters: GuaranteeFilters): ResolvedQuery {
+  return {
+    equipment: filters.equipment ?? [],
+    rank: filters.rank ?? [],
+    category: filters.category ?? [],
+    quality: filters.quality ?? [],
+    grade: filters.grade ?? [],
+    blessings: filters.blessings ?? [],
+  };
+}
+
 /** Nothing asked for on any axis — the baseline the filters are built up from. */
 export const EMPTY_FILTERS: OracleFilters = {
   equipment: [],
