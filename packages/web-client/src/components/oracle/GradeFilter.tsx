@@ -5,9 +5,7 @@ import { ColorSwatch, Group, Text } from '@mantine/core';
 import { GRADES } from '@shared/domain/grade';
 
 import { AndUp, AnyLevel, LevelSlider } from './LevelSlider';
-import {
-    blessingFloorPhrase, clampLevel, gradeFloorFor, gradeName, MAX_LEVEL, MIN_LEVEL
-} from './oracle.logic';
+import { clampLevel, gradeFloorFor, gradeName, MAX_LEVEL, MIN_LEVEL } from './oracle.logic';
 
 interface GradeLevelProps {
   /** The stored minimum. {@link MIN_LEVEL} (White) accepts any. */
@@ -107,9 +105,7 @@ export function GradeFilter({
       color="crimson"
       thumbColor={GRADE_HEX[shown]!}
       ariaLabel="Lowest acceptable grade"
-      note={blessingCount > 0
-        ? `${blessingFloorPhrase(blessingCount, floor)} — nothing lower has the slots.`
-        : undefined}
+      note={undefined}
       marks={GRADES.map((grade) => ({
         value: grade.value,
         label: <GradeSwatch value={grade.value} size={12} />,
