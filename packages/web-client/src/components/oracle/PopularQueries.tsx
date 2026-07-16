@@ -117,10 +117,10 @@ function PopularRow({ entry, equipmentByName, onPick, index }: PopularRowProps) 
               the content at all), and the cap stops a long blessing list from crowding
               out the subject. */}
           {hasMeta && (
-            <Stack gap={2} align="center" style={{ flex: '0 1 auto', minWidth: 70, maxWidth: '45%' }}>
+            <Stack gap={2} align="flex-end" style={{ flex: '0 1 auto', minWidth: 70, maxWidth: '45%' }}>
               <QualityChips values={query.quality} />
               {query.blessings.length > 0 && (
-                <Text c="dimmed" fz="xs" lh={BLESSINGS_LINE_HEIGHT} truncate ta="center" w="100%">
+                <Text c="dimmed" fz="xs" lh={BLESSINGS_LINE_HEIGHT} truncate ta="right" w="100%">
                   {query.blessings.map(blessingLabel).join(' · ')}
                 </Text>
               )}
