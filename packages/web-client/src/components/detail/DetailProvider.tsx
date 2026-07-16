@@ -12,7 +12,10 @@ import {
     ActionIcon, Alert, Badge, Box, Divider, Group, Modal, ScrollArea, Stack, Text, UnstyledButton
 } from '@mantine/core';
 import { TsUtilities } from '@shared/tsUtilities';
-import { IconArrowLeft, IconChevronRight, IconInfoCircle } from '@tabler/icons-react';
+import {
+    IconArrowLeft, IconArrowsSort, IconChevronRight, IconInfoCircle, IconSortAscending,
+    IconSortDescending
+} from '@tabler/icons-react';
 
 import type {
   EquipmentListItem,
@@ -29,8 +32,9 @@ const MULTI_POOL_NOTE = TsUtilities.stringJoin([
  * Both detail lists (a junk's gear, an equipment's junks) share one grid so
  * their columns line up and can't drift: name (fills) · quality · grade · a
  * chevron. The chevron is a tap affordance — on mobile there's no hover, so
- * without it a clickable row reads as static text. Each row is a subgrid
- * spanning all four tracks, so column widths are measured once across rows.
+ * without it a clickable row reads as static text. Each row (and the header) is
+ * a subgrid spanning all four tracks, so column widths are measured once across
+ * every row.
  */
 const DETAIL_LIST_GRID: React.CSSProperties = {
   display: 'grid',
@@ -50,6 +54,157 @@ const DETAIL_ROW_GRID: React.CSSProperties = {
 // Small and tucked (negative margin eats part of the column gap) so the
 // affordance doesn't steal width from the name/badges on narrow screens.
 const ROW_CHEVRON = <IconChevronRight size={12} style={{ opacity: 0.4, marginInlineStart: -4 }} />;
+
+/** One row of a detail list, flattened so both lists sort through one path. */
+interface DetailListRow {
+  /** Sorted on, and matched against the parent entry's `focusChild`. */
+  name: string,
+  /** The name cell's content — plain text for junks, icon + text for gear. */
+  label: React.ReactNode,
+  quality: number | null,
+  grade: number | null,
+}
+
+type DetailSortKey = 'name' | 'quality' | 'grade';
+type SortDir = 'asc' | 'desc';
+
+// Rows with no recorded quality/grade sort below every row that has one, in
+// both directions — an unknown isn't a low value, and burying it beats letting
+// it head the list on a descending sort.
+function compareRows(left: DetailListRow, right: DetailListRow, key: DetailSortKey): number {
+  if (key === 'name') {
+    return left.name.localeCompare(right.name);
+  }
+  const a = left[key];
+  const b = right[key];
+  if (a === b) {
+    return 0;
+  }
+  if (a === null) {
+    return 1;
+  }
+  if (b === null) {
+    return -1;
+  }
+  return a - b;
+}
+
+function DetailListHeader({
+  label,
+  sortKey,
+  activeKey,
+  dir,
+  onSort,
+}: {
+  label: string,
+  sortKey: DetailSortKey,
+  activeKey: DetailSortKey | null,
+  dir: SortDir,
+  onSort: (key: DetailSortKey) => void,
+}) {
+  const active = activeKey === sortKey;
+  const icon = !active
+    ? <IconArrowsSort size={12} opacity={0.4} />
+    : dir === 'asc' ? <IconSortAscending size={12} /> : <IconSortDescending size={12} />;
+  return (
+    <UnstyledButton
+      onClick={() => onSort(sortKey)}
+      style={{ justifySelf: 'start' }}
+      aria-label={`Sort by ${label.toLowerCase()}`}
+    >
+      <Group gap={4} wrap="nowrap">
+        <Text size="xs" fw={600} c={active ? undefined : 'dimmed'}>{label}</Text>
+        {icon}
+      </Group>
+    </UnstyledButton>
+  );
+}
+
+/**
+ * The scrollable, sortable body shared by both detail views. Sort state lives
+ * here and is deliberately not lifted: each view mounts its own instance, so
+ * navigating a cross-link starts the next list back at its natural (as-recorded)
+ * order rather than inheriting a sort chosen for a different list.
+ */
+function DetailList({
+  rows,
+  focusChild,
+  focusedRowRef,
+  onRowClick,
+}: {
+  rows: DetailListRow[],
+  focusChild: string | null,
+  focusedRowRef: React.Ref<HTMLButtonElement>,
+  onRowClick: (name: string) => void,
+}) {
+  const [sortKey, setSortKey] = useState<DetailSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const toggleSort = (key: DetailSortKey) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+      return;
+    }
+    setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortKey) {
+      return rows;
+    }
+    const direction = sortDir === 'asc' ? 1 : -1;
+    return [...rows].sort((left, right) => direction * compareRows(left, right, sortKey));
+  }, [rows, sortKey, sortDir]);
+
+  const headerProps = { activeKey: sortKey, dir: sortDir, onSort: toggleSort };
+
+  return (
+    <ScrollArea.Autosize mah={360}>
+      <Box style={DETAIL_LIST_GRID}>
+        {/* Sticky so the columns stay labelled while the list scrolls. It's a
+            subgrid row like any other, so it can't drift out of alignment. */}
+        <Box
+          px="xs"
+          pb={4}
+          style={{
+            ...DETAIL_ROW_GRID,
+            position: 'sticky',
+            top: 0,
+            zIndex: 1,
+            background: 'var(--mantine-color-body)',
+          }}
+        >
+          <DetailListHeader label="Name" sortKey="name" {...headerProps} />
+          <DetailListHeader label="Quality" sortKey="quality" {...headerProps} />
+          <DetailListHeader label="Grade" sortKey="grade" {...headerProps} />
+          {/* Empty fourth cell, holding the chevron column's width. */}
+          <Box />
+        </Box>
+
+        {sorted.map((row) => (
+          <UnstyledButton
+            key={row.name}
+            ref={focusChild === row.name ? focusedRowRef : undefined}
+            className={focusChild === row.name ? 'wizda-row-hover wizda-row-focused' : 'wizda-row-hover'}
+            onClick={() => onRowClick(row.name)}
+            p="xs"
+            style={DETAIL_ROW_GRID}
+          >
+            {row.label}
+            <Box style={{ justifySelf: 'start' }}>
+              {row.quality ? <QualityStars value={row.quality} size={11} /> : null}
+            </Box>
+            <Box style={{ justifySelf: 'start' }}>
+              {row.grade ? <GradeBadge value={row.grade} /> : null}
+            </Box>
+            {ROW_CHEVRON}
+          </UnstyledButton>
+        ))}
+      </Box>
+    </ScrollArea.Autosize>
+  );
+}
 
 // A 503 (maintenance) doesn't reach 'error' — the global MaintenanceGate owns
 // that screen, so the list views just stay in 'loading' until it clears.
@@ -245,7 +400,43 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   }), [equipment, junks, dropsByJunk, status, equipmentByName, junkByName]);
 
   const current = detailStack.at(-1) ?? null;
-  const junkDrops = current?.kind === 'junk' ? dropsByJunk.get(current.item.name) ?? [] : [];
+  const junkDrops = useMemo<EquipmentListItem[]>(() => (
+    current?.kind === 'junk' ? dropsByJunk.get(current.item.name) ?? [] : []
+  ), [current, dropsByJunk]);
+
+  // The junks an equipment drops from.
+  const sourceRows = useMemo<DetailListRow[]>(() => (
+    current?.kind !== 'equipment' ? [] : current.item.sources.map((source) => ({
+      name: source.junkName,
+      label: <TruncatedText size="sm" style={{ minWidth: 0 }}>{source.junkName}</TruncatedText>,
+      quality: source.maxDropQuality,
+      grade: source.maxDropGrade,
+    }))
+  ), [current]);
+
+  // The gear a junk drops. Quality/grade are what the piece drops at *from this
+  // junk*, not its global best across every junk (piece.maxDrop*).
+  const dropRows = useMemo<DetailListRow[]>(() => (
+    current?.kind !== 'junk' ? [] : junkDrops.map((piece) => {
+      const here = piece.sources.find((source) => source.junkName === current.item.name);
+      return {
+        name: piece.name,
+        label: (
+          <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+            <CategoryIcon
+              size={14}
+              categoryCode={piece.category?.code}
+              color={getRankColor(piece.rank) ?? 'var(--mantine-color-dimmed)'}
+              style={{ flexShrink: 0 }}
+            />
+            <TruncatedText size="sm" style={{ minWidth: 0 }}>{piece.name}</TruncatedText>
+          </Group>
+        ),
+        quality: here?.maxDropQuality ?? null,
+        grade: here?.maxDropGrade ?? null,
+      };
+    })
+  ), [current, junkDrops]);
 
   // The Back arrow retraces a cross-link when we're deep in the stack, or — at the
   // root — closes back to the view still mounted behind us (e.g. the per-result
@@ -330,29 +521,15 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
             {current.item.sources.length === 0 ? (
               <Text c="dimmed" size="sm">No junk drops this one — so there&apos;s nothing for me to count here yet.</Text>
             ) : (
-              <ScrollArea.Autosize mah={360}>
-                <Box style={DETAIL_LIST_GRID}>
-                  {current.item.sources.map((source) => (
-                    <UnstyledButton
-                      key={source.junkName}
-                      ref={focusChild === source.junkName ? focusedRowRef : undefined}
-                      className={focusChild === source.junkName ? 'wizda-row-hover wizda-row-focused' : 'wizda-row-hover'}
-                      onClick={() => pushJunk(source.junkName)}
-                      p="xs"
-                      style={DETAIL_ROW_GRID}
-                    >
-                      <TruncatedText size="sm" style={{ minWidth: 0 }}>{source.junkName}</TruncatedText>
-                      <Box style={{ justifySelf: 'start' }}>
-                        {source.maxDropQuality ? <QualityStars value={source.maxDropQuality} size={11} /> : null}
-                      </Box>
-                      <Box style={{ justifySelf: 'start' }}>
-                        {source.maxDropGrade ? <GradeBadge value={source.maxDropGrade} /> : null}
-                      </Box>
-                      {ROW_CHEVRON}
-                    </UnstyledButton>
-                  ))}
-                </Box>
-              </ScrollArea.Autosize>
+              <DetailList
+                // Remounts per entry, so each list starts at its own natural
+                // order rather than inheriting the last view's sort.
+                key={current.item.name}
+                rows={sourceRows}
+                focusChild={focusChild}
+                focusedRowRef={focusedRowRef}
+                onRowClick={pushJunk}
+              />
             )}
           </Stack>
         )}
@@ -376,42 +553,13 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
             {junkDrops.length === 0 ? (
               <Text c="dimmed" size="sm">No droppable gear on record.</Text>
             ) : (
-              <ScrollArea.Autosize mah={360}>
-                <Box style={DETAIL_LIST_GRID}>
-                  {junkDrops.map((piece) => {
-                    // Show what this piece drops at *from this junk*, not its
-                    // global best across every junk (piece.maxDrop*).
-                    const here = piece.sources.find((source) => source.junkName === current.item.name);
-                    return (
-                      <UnstyledButton
-                        key={piece.name}
-                        ref={focusChild === piece.name ? focusedRowRef : undefined}
-                        className={focusChild === piece.name ? 'wizda-row-hover wizda-row-focused' : 'wizda-row-hover'}
-                        onClick={() => pushEquipment(piece)}
-                        p="xs"
-                        style={DETAIL_ROW_GRID}
-                      >
-                        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-                          <CategoryIcon
-                            size={14}
-                            categoryCode={piece.category?.code}
-                            color={getRankColor(piece.rank) ?? 'var(--mantine-color-dimmed)'}
-                            style={{ flexShrink: 0 }}
-                          />
-                          <TruncatedText size="sm" style={{ minWidth: 0 }}>{piece.name}</TruncatedText>
-                        </Group>
-                        <Box style={{ justifySelf: 'start' }}>
-                          {here?.maxDropQuality ? <QualityStars value={here.maxDropQuality} size={11} /> : null}
-                        </Box>
-                        <Box style={{ justifySelf: 'start' }}>
-                          {here?.maxDropGrade ? <GradeBadge value={here.maxDropGrade} /> : null}
-                        </Box>
-                        {ROW_CHEVRON}
-                      </UnstyledButton>
-                    );
-                  })}
-                </Box>
-              </ScrollArea.Autosize>
+              <DetailList
+                key={current.item.name}
+                rows={dropRows}
+                focusChild={focusChild}
+                focusedRowRef={focusedRowRef}
+                onRowClick={(name) => pushEquipment(resolveEquipment(name))}
+              />
             )}
           </Stack>
         )}
