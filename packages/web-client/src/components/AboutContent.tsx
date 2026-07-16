@@ -104,7 +104,7 @@ export function AboutContent() {
         </Group>
       </div>
 
-      <div id="data-privacy" style={{ scrollMarginTop: '72px' }}>
+      <div id="data-privacy" className="wizda-scroll-clear-header">
         <Title order={4} mb="xs">Data &amp; privacy</Title>
         <Text size="sm">
           Drop-rate data is compiled from{' '}

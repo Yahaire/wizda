@@ -33,16 +33,6 @@ import type {
   JunkToGuaranteeQuery,
   JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
-/**
- * Scroll margin for anything we send to the top of the viewport. The AppShell header
- * is fixed, so `block: 'start'` alone would tuck the target underneath it — this
- * clears the header's own offset, plus a little air.
- *
- * Read off Mantine's var rather than the 56px in `Shell.tsx`: it can't drift from the
- * real header, and it collapses to just the air when the header isn't there to duck.
- */
-const SCROLL_CLEAR_HEADER = 'calc(var(--app-shell-header-offset, 0rem) + var(--mantine-spacing-md))';
-
 function friendlyError(errorCode: string): string {
   switch (errorCode) {
     case 'UNKNOWN_EQUIPMENT':
@@ -472,12 +462,12 @@ export function OraclePage() {
 
       <Grid gutter="lg">
         <Grid.Col span={{ base: 12, md: 5 }}>
-          <div ref={filtersRef} style={{ scrollMarginTop: SCROLL_CLEAR_HEADER }}>
+          <div ref={filtersRef} className="wizda-scroll-clear-header">
             {filterPanel}
           </div>
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 7 }}>
-          <div ref={resultsRef} style={{ scrollMarginTop: SCROLL_CLEAR_HEADER }}>
+          <div ref={resultsRef} className="wizda-scroll-clear-header">
             {result || loading ? (
               <Paper
                 withBorder
