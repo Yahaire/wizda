@@ -78,6 +78,31 @@ export const ARMOR_TYPE_TO_CATEGORY: Readonly<Record<string, Readonly<Record<str
   Accessories: { Accessory: 'ACCESSORIES' },
 };
 
+/**
+ * CSV item name -> the name the gacha-rate pages use, for items the two sources
+ * spell differently. The taxonomy pass matches by exact name, so drift here costs
+ * twice: the real (junk-sourced) row never gets its rank/category, *and* the CSV
+ * name gets created as a phantom duplicate with no drop rates.
+ *
+ * Every entry below is the same upstream slip — a stray "the" in the CSV. It's a
+ * typo rather than a naming convention: the CSV's own "Cloak of Light Spirit" and
+ * "Light Spirit Amulet", from the same block, omit it and match fine. We alias
+ * toward the gacha-rate spelling because that's what the junk tables (and so the
+ * whole site) show.
+ */
+export const CSV_NAME_ALIASES: Readonly<Record<string, string>> = {
+  'Headcloth of the Light Spirit': 'Headcloth of Light Spirit',
+  'Helm of the Light Spirit': 'Helm of Light Spirit',
+  'Heavy Helm of the Light Spirit': 'Heavy Helm of Light Spirit',
+  'Mail of the Light Spirit': 'Mail of Light Spirit',
+  'Heavy Mail of the Light Spirit': 'Heavy Mail of Light Spirit',
+};
+
+/** A CSV item name mapped through {@link CSV_NAME_ALIASES}; unaliased names pass through. */
+export function canonicalName(csvName: string): string {
+  return CSV_NAME_ALIASES[csvName] ?? csvName;
+}
+
 /** CSV `Rank` label -> our rank kind; throws on an unrecognised rank. */
 export function rankToKind(rank: string): EquipmentRankKind {
   const kind = RANK_TO_KIND[rank];
@@ -111,8 +136,9 @@ export function armorCategoryCode(type: string, armorType: string): string {
 
 /**
  * Build the `name -> { categoryCode, rank }` lookup from parsed weapon + armor
- * CSV rows. Rows without an item name (blank separator lines) are skipped. A name
- * appearing twice keeps the last occurrence.
+ * CSV rows, keyed by the gacha-rate spelling (see {@link CSV_NAME_ALIASES}). Rows
+ * without an item name (blank separator lines) are skipped. A name appearing twice
+ * keeps the last occurrence.
  */
 export function buildTaxonomyByName(
   weaponRows: readonly CsvRow[],
@@ -126,7 +152,7 @@ export function buildTaxonomyByName(
       continue;
     }
     const type = (row[TYPE_COLUMN] ?? '').trim();
-    byName.set(name, {
+    byName.set(canonicalName(name), {
       categoryCode: type ? weaponCategoryCode(type) : null,
       rank: rankToKind((row[RANK_COLUMN] ?? '').trim()),
     });
@@ -139,7 +165,7 @@ export function buildTaxonomyByName(
     }
     const type = (row[TYPE_COLUMN] ?? '').trim();
     const armorType = (row[ARMOR_TYPE_COLUMN] ?? '').trim();
-    byName.set(name, {
+    byName.set(canonicalName(name), {
       categoryCode: type && armorType ? armorCategoryCode(type, armorType) : null,
       rank: rankToKind((row[RANK_COLUMN] ?? '').trim()),
     });

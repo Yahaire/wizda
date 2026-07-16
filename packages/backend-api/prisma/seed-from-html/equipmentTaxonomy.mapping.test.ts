@@ -5,9 +5,11 @@ import { EquipmentRankKind } from '@shared/domain/rank';
 
 import {
   ARMOR_TYPE_TO_CATEGORY,
+  CSV_NAME_ALIASES,
   WEAPON_TYPE_TO_CATEGORY,
   armorCategoryCode,
   buildTaxonomyByName,
+  canonicalName,
   rankToKind,
   weaponCategoryCode,
 } from './equipmentTaxonomy.mapping';
@@ -71,6 +73,26 @@ describe('armorCategoryCode', () => {
   });
 });
 
+describe('canonicalName', () => {
+  it('rewrites the CSV\'s stray-"the" Light Spirit names to the gacha-rate spelling', () => {
+    expect(canonicalName('Headcloth of the Light Spirit')).toBe('Headcloth of Light Spirit');
+    expect(canonicalName('Heavy Mail of the Light Spirit')).toBe('Heavy Mail of Light Spirit');
+  });
+
+  it('passes unaliased names through untouched', () => {
+    expect(canonicalName('Bronze Dagger')).toBe('Bronze Dagger');
+    // Same CSV block, already spelled without the article — must not be touched.
+    expect(canonicalName('Cloak of Light Spirit')).toBe('Cloak of Light Spirit');
+    expect(canonicalName('Light Spirit Amulet')).toBe('Light Spirit Amulet');
+  });
+
+  it('is idempotent — every alias target is itself unaliased', () => {
+    for (const target of Object.values(CSV_NAME_ALIASES)) {
+      expect(canonicalName(target), target).toBe(target);
+    }
+  });
+});
+
 describe('buildTaxonomyByName', () => {
   it('builds a name -> { categoryCode, rank } map from weapon + armor rows, skipping blanks', () => {
     const weaponRows = [
@@ -93,5 +115,24 @@ describe('buildTaxonomyByName', () => {
     expect(byName.get('Cloth Hat')).toEqual({ categoryCode: 'HAT', rank: EquipmentRankKind.WORN });
     expect(byName.get('Grip Gloves')).toEqual({ categoryCode: null, rank: EquipmentRankKind.SILVER });
     expect(byName.size).toBe(4);
+  });
+
+  it('keys aliased rows by the gacha-rate name, so the junk-sourced row matches', () => {
+    const armorRows = [
+      {
+        'Item Name': 'Headcloth of the Light Spirit',
+        Type: 'Head',
+        Rank: 'Ebonsteel',
+        'Armor Type': 'Cloth',
+      },
+    ];
+
+    const byName = buildTaxonomyByName([], armorRows);
+
+    expect(byName.get('Headcloth of Light Spirit')).toEqual({
+      categoryCode: 'HAT',
+      rank: EquipmentRankKind.EBONSTEEL,
+    });
+    expect(byName.has('Headcloth of the Light Spirit')).toBe(false);
   });
 });
