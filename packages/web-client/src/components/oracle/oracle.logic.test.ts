@@ -18,6 +18,7 @@ function equipmentList(...items: Partial<EquipmentListItem>[]): Map<string, Equi
   for (const item of items) {
     map.set(item.name!, {
       name: item.name!,
+      displayName: item.name!,
       category: item.category ?? null,
       rank: item.rank ?? null,
       maxDropQuality: null,

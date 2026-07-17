@@ -5,6 +5,7 @@ import { EquipmentRankKind, Prisma } from '@local-prisma/generated/client';
 
 import { trackGuaranteeQuery } from '@app/analytics';
 import { sendErrorResponse } from '@app/http';
+import { pickLocalizedName } from '@app/localizedNames';
 import { getPrisma } from '@app/prisma';
 import { recordPopularQuery } from '@app/popularQueries';
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
@@ -125,7 +126,7 @@ export const dropRateRowSelect = {
   grade3Rate: true,
   grade4Rate: true,
   grade5Rate: true,
-  junk: { select: { name: true, hasMultiplePools: true } },
+  junk: { select: { name: true, nameJa: true, nameKo: true, nameDe: true, hasMultiplePools: true } },
 } satisfies Prisma.EquipmentDropRateSelect;
 
 /** The exact row shape returned for {@link dropRateRowSelect} — derived from
@@ -407,6 +408,9 @@ async function handleJunkToGuarantee(
   // Group rows by junk (id is internal; only the name is exposed).
   interface JunkAggregate {
     name: string,
+    nameJa: string | null,
+    nameKo: string | null,
+    nameDe: string | null,
     hasMultiplePools: boolean,
     rows: DropRateRow[],
   }
@@ -416,6 +420,9 @@ async function handleJunkToGuarantee(
     if (!aggregate) {
       aggregate = {
         name: row.junk.name,
+        nameJa: row.junk.nameJa,
+        nameKo: row.junk.nameKo,
+        nameDe: row.junk.nameDe,
         hasMultiplePools: row.junk.hasMultiplePools,
         rows: [],
       };
@@ -438,6 +445,7 @@ async function handleJunkToGuarantee(
     }
     results.push({
       junkName: aggregate.name,
+      junkDisplayName: pickLocalizedName(aggregate, req.locale),
       hasMultiplePools: aggregate.hasMultiplePools,
       probabilityPerJunk,
       junkNeeded,
@@ -494,7 +502,7 @@ async function handleCertaintyCurve(
   // filter's 400, this is the single target resource, not a filter value).
   const junk = await getPrisma().junk.findUnique({
     where: { name: junkName },
-    select: { id: true, name: true },
+    select: { id: true, name: true, nameJa: true, nameKo: true, nameDe: true },
   });
   if (!junk) {
     sendErrorResponse(
@@ -567,6 +575,7 @@ async function handleCertaintyCurve(
 
   const body: CertaintyCurveResult = {
     junkName: junk.name,
+    junkDisplayName: pickLocalizedName(junk, req.locale),
     probabilityPerJunk,
     ...(hasBlessings ? { estimated: true, estimatedNote: BLESSING_ESTIMATE_NOTE } : {}),
     points,

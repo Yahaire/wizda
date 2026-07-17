@@ -1,7 +1,7 @@
 import express from 'express';
 
 import { HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
-import { DataStatusResponse } from '@shared/api/endpoints/endpoint.models';
+import { DataStatusResponse, LanguageSyncStatus } from '@shared/api/endpoints/endpoint.models';
 
 import { getPrisma } from '@app/prisma';
 
@@ -15,11 +15,25 @@ export async function readDataUpdatedAt(): Promise<string | null> {
   return row ? row.lastSeededAt.toISOString() : null;
 }
 
+/** Every language's sync state, per `LanguageStatus` — see `seedLocalizedNames.ts`. */
+async function readLanguageStatuses(): Promise<LanguageSyncStatus[]> {
+  const rows = await getPrisma().languageStatus.findMany({ orderBy: { lang: 'asc' } });
+  return rows.map((row) => ({
+    lang: row.lang,
+    isInSync: row.isInSync,
+    lastSyncedAt: row.lastSyncedAt ? row.lastSyncedAt.toISOString() : null,
+    lastCheckedAt: row.lastCheckedAt.toISOString(),
+  }));
+}
+
 async function handleDataStatus(
   _req: express.Request,
   res: express.Response,
 ): Promise<void> {
-  const body: DataStatusResponse = { dataUpdatedAt: await readDataUpdatedAt() };
+  const body: DataStatusResponse = {
+    dataUpdatedAt: await readDataUpdatedAt(),
+    languages: await readLanguageStatuses(),
+  };
   res.status(HttpStatusCode.OK).json(body);
 }
 

@@ -220,6 +220,64 @@ Empirically, flat blessings dominate the low slots and % blessings concentrate
 in the higher, harder-to-reach slots (e.g. *Bronze Dagger* slot 1 is ~92% flat,
 ~8% percentage), matching the in-game feel of % blessings being rare.
 
+## Localized names
+
+wizardry.info publishes the same "Drop Rates by Junk" page per language at
+`<OFFICIAL_DROP_RATE_LIST_BASE_URL>/<lang>/<OFFICIAL_JUNK_DROP_RATES_URI>`
+(`en`, `ja`, `ko`, `de` — the `LanguageCode` enum, mirrored between
+schema.prisma and `packages/shared/src/domain/language.ts`; its values are
+lowercase ISO 639-1 codes rather than the UPPERCASE house style, because the
+value is used verbatim as the URL path segment, `?lang=` value, cookie value,
+and `Accept-Language` subtag).
+They also have language codes for traditional and simplified Chinese, but the
+junk lists are not localized there yet. Seems like only the English and
+Japanese lists are regularly updated.
+
+**English stays the canonical/`@unique` key** for `Equipment`/`Junk`, exactly
+as described above; the localized pages contribute *only* display names
+(`nameJa`/`nameKo`/`nameDe`, nullable columns) for rows English already
+created. This is a deliberate, narrower scope than the main scrape: no public
+dataset carries JP/KO/DE names keyed by anything stable enough to join on, so
+localized names are additive and never a key, and (for now) only the junk page
+is localized — a piece obtainable *solely* via Remains/Bonus Equipment (no
+junk source, see above) has no localized name yet.
+
+**Alignment.** The localized pages are structural translations of the English
+page — same junks, same items, same table shape, just translated headers and
+names. `parseDropRatesByJunk` runs unchanged over any language (row shape and
+column position are language-independent; only the literal English header
+text and the strict "`<h2>` must be followed by a `<table>`" check are
+English-specific, and both are relaxed for localized pages via
+`ParseDropRatesByJunkOptions`). The two languages' row lists are then lined up
+**by position** and the alignment is *proven*, not assumed: the language-
+independent drop-rate numbers (group number, group rate, item rate, all 5
+quality rates, all 5 grade rates) must match at every row
+(`alignLocalizedNames.ts`, tolerant of float noise but not of a real
+divergence). Only on a full match are the localized junk/equipment names
+trusted and written; a numeric mismatch anywhere — the source's own
+description of what a page-drift failure looks like — fails the whole
+language closed rather than risk mis-assigning a name.
+
+**Graceful degradation.** Each language is seeded independently
+(`seedLocalizedNames.ts`) and isolated in its own try/catch: a fetch failure,
+parse failure, or failed alignment for one language never aborts the seed or
+the other languages. `LanguageStatus` (one row per language, `en` included —
+see schema.prisma) records `isInSync` + `lastSyncedAt` + `lastCheckedAt` per
+language, mirroring `DataStatus.lastSeededAt` but per-language, since
+languages are not guaranteed to update in lockstep with English. A failed sync
+leaves any previously-written localized names in place (stale-but-non-null is
+preferred over clearing to null) and just flips `isInSync: false` — surfaced
+via `GET /data-status`'s `languages[]` for a future "this language's data may
+be outdated" UI notice.
+
+**API surface (backend groundwork only — no frontend display yet).** `name`/
+`junkName` are always English in every request and response; a
+`localeMiddleware` resolves the request's locale (`?lang=` → `lang` cookie →
+`Accept-Language` → English default) and list/guarantee/curve responses add a
+locale-resolved `displayName`/`junkDisplayName` (falls back to English when
+untranslated). Nothing sends a locale today, so these always equal the
+English name — byte-for-byte unchanged from before this existed.
+
 ## Parser gotchas (verified against the sample HTML)
 
 - **Quality and grade are separate distributions**, not the same numbers. They

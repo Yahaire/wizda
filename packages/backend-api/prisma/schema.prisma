@@ -22,6 +22,51 @@ model DataStatus {
   lastSeededAt DateTime
 }
 
+/// The languages the app knows about because the official junk lists
+/// are written in these.
+/// Unlike every other enum here
+/// (`EquipmentRankKind`, `StatKind`, ...), the members are **lowercase**: a
+/// Prisma enum's member name *is* the value stored in the DB, and these are ISO
+/// 639-1 codes used verbatim as URL path segments (`gacha_rates/<lang>/...`),
+/// `?lang=` values, cookie values, and `Accept-Language` subtags. (`@map("en")`
+/// would allow an uppercase `EN` member, but the generated client would then
+/// expose `"EN"` and map it to `"en"` only at the DB boundary — so `EN` would
+/// interpolate into URLs as `"EN"`. Don't.)
+///
+/// Mirrors `packages/shared/src/domain/language.ts` (keep the two in sync),
+/// which spells the members `EN`/`JA`/`KO`/`DE` for house style while keeping
+/// these same lowercase *values* — the values are what the round-trip needs.
+enum LanguageCode {
+  en
+  ja
+  ko
+  de
+}
+
+/// Per-language sync state for the localized `Equipment`/`Junk` display names
+/// (see `nameJa`/`nameKo`/`nameDe` and docs/domain.md's "Localized names"
+/// section). One row per `LanguageCode` — **including `en`**: a deliberate,
+/// cheap duplicate of `DataStatus.lastSeededAt` (always `isInSync: true`) so the
+/// table has no special case and is uniform to read for a DB maintainer.
+model LanguageStatus {
+  lang LanguageCode @id
+
+  /// True if this language's page aligned positionally with English (same row
+  /// count + matching language-independent drop-rate numbers at every row) on
+  /// the last attempt — so its stored names are trustworthy. Always true for `en`.
+  isInSync Boolean
+
+  /// When this language's names were last successfully aligned and written.
+  /// Null if never. Falls behind `DataStatus.lastSeededAt` when a language's
+  /// page failed to load, parse, or align on a later seed run. Equals the seed
+  /// completion time for `en`.
+  lastSyncedAt DateTime?
+
+  /// When this language was last attempted, in sync or not — distinct from
+  /// `lastSyncedAt` so a failing language still shows it was recently retried.
+  lastCheckedAt DateTime
+}
+
 // ---------------------------------------------------------------------------
 // Stats & blessings (static reference data)
 //
@@ -163,6 +208,17 @@ model Equipment {
   /// Denormalised summary of the per-pool grade distributions.
   maxDropGrade   Int?
 
+  /// Localized display names, filled in by `seedLocalizedNames` from the
+  /// per-language "Drop Rates by Junk" pages (see docs/domain.md's "Localized
+  /// names" section). `name` above stays the canonical/unique English key —
+  /// these are purely additive display data, never joined on. Null when that
+  /// language has never successfully aligned for this item (see
+  /// `LanguageStatus`); a stale-but-once-aligned value is kept rather than
+  /// cleared, so these can also be non-null while that language `isInSync: false`.
+  nameJa String?
+  nameKo String?
+  nameDe String?
+
   category      EquipmentCategory?          @relation(fields: [categoryCode], references: [code])
   dropRates     EquipmentDropRate[]
   blessingRates EquipmentBlessingDropRate[]
@@ -190,6 +246,12 @@ model Junk {
   /// Highest grade (1–5, White…Red) any equipment drops from this junk; null if
   /// unknown. Denormalised summary of the per-row grade distributions.
   maxDropGrade   Int?
+
+  /// Localized display names — see `Equipment.nameJa`/`nameKo`/`nameDe` above,
+  /// same rules (additive, never a key, kept stale-but-non-null on a failed sync).
+  nameJa String?
+  nameKo String?
+  nameDe String?
 
   dropRates EquipmentDropRate[]
 }

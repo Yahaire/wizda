@@ -89,6 +89,12 @@ export interface JunkGuaranteeEntry {
   /** The junk's `@unique` name — the public key (see {@link GuaranteeFilters.equipment}). */
   junkName: string,
   /**
+   * `junkName` resolved to the request's locale, falling back to `junkName`
+   * when no translation exists yet. Display-only — never send this back to the
+   * API; `junkName` remains the key.
+   */
+  junkDisplayName: string,
+  /**
    * Whether the source listed this junk's drop table more than once — a
    * frontend caveat flag (see `Junk.hasMultiplePools` in schema.prisma).
    */
@@ -188,6 +194,8 @@ export interface MatchedOutcome {
 /** Response of `POST /junk-to-guarantee/curve`. */
 export interface CertaintyCurveResult {
   junkName: string,
+  /** See {@link JunkGuaranteeEntry.junkDisplayName}. */
+  junkDisplayName: string,
   /** P(match | one junk of this type); 0 if the target is impossible here. */
   probabilityPerJunk: number,
   /** True when the query required blessings — see {@link JunkToGuaranteeResult.estimated}. */

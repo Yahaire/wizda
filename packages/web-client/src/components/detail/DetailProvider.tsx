@@ -360,6 +360,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     equipmentByName.get(name)
     ?? {
       name,
+      displayName: name,
       category: null,
       rank: null,
       maxDropQuality: null,
@@ -370,7 +371,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   );
   const resolveJunk = (name: string): JunkListItem => (
     junkByName.get(name)
-    ?? { name, hasMultiplePools: false, maxDropQuality: null, maxDropGrade: null }
+    ?? { name, displayName: name, hasMultiplePools: false, maxDropQuality: null, maxDropGrade: null }
   );
 
   // Opening from a list starts a fresh stack; cross-links push onto it, tagging

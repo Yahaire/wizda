@@ -8,7 +8,15 @@ import { EquipmentRankKind } from '../../domain/rank';
 
 /** One entry of `GET /junks`. */
 export interface JunkListItem {
+  /** The `@unique` English name — the stable public key, always English regardless of locale. */
   name: string,
+  /**
+   * `name` resolved to the request's locale (`?lang=`/cookie/`Accept-Language`,
+   * see the backend's `localeMiddleware`), falling back to `name` when no
+   * translation exists yet. Display-only — never send this back to the API;
+   * `name` remains the key for every request.
+   */
+  displayName: string,
   /** See `Junk.hasMultiplePools` — a frontend caveat flag. */
   hasMultiplePools: boolean,
   /** Highest quality (★1–5) any equipment drops from this junk; null if unknown. */
@@ -44,7 +52,13 @@ export interface EquipmentCategoryRef {
 
 /** One entry of `GET /equipment`. */
 export interface EquipmentListItem {
+  /** The `@unique` English name — the stable public key, always English regardless of locale. */
   name: string,
+  /**
+   * `name` resolved to the request's locale, falling back to `name` when no
+   * translation exists yet. Display-only — see {@link JunkListItem.displayName}.
+   */
+  displayName: string,
   /** Category, or null when the taxonomy enrichment couldn't match it (see the seed). */
   category: EquipmentCategoryRef | null,
   /** Equipment rank, or null when it couldn't be derived (enrichment — see schema). */

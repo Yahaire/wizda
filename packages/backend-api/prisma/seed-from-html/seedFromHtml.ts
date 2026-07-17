@@ -3,6 +3,7 @@ import path from 'path';
 
 import { PrismaClient } from '@local-prisma/generated/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { SOURCE_LANGUAGE } from '@shared/domain/language';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 
 import { parseDropRatesByJunk } from './dropRatesByJunk.parser';
@@ -13,23 +14,23 @@ import { buildTaxonomyByName } from './equipmentTaxonomy.mapping';
 import { seedEquipmentTaxonomy } from './equipmentTaxonomy.seed';
 import { loadCsv } from './loadCsv';
 import { loadHtml } from './loadHtml';
+import { seedLocalizedNames } from './seedLocalizedNames';
 import { seedStaticReferenceData } from './seedStaticReferenceData';
+import { buildDropRateSourceUrl } from './sourceUrls';
 
 // Load the root .env (this file lives at packages/backend-api/prisma/seed-from-html).
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 /**
- * Source of the "Drop Rates by Junk" HTML page. Either a remote URL or a path
- * to a local copy (handy while iterating on the parser without hammering the
- * source site). Example: https://wizardry.info/daphne/gacha_rates/en/equipments.html
+ * Base URL + per-page URIs the drop-rate pages are composed from:
+ * `<BASE>/<lang>/<URI>`. English (the source-of-truth language) and every
+ * localized language (see `seedLocalizedNames`) share this same composition —
+ * see `sourceUrls.ts`. Example:
+ * https://wizardry.info/daphne/gacha_rates/en/equipments.html
  */
-const JUNK_DROP_RATES_SOURCE = process.env.JUNK_DROP_RATES_SOURCE_URL;
-
-/**
- * Source of the "Drop Rates Related to Additional Blessings" HTML page.
- * Example: https://wizardry.info/daphne/gacha_rates/en/alternations.html
- */
-const EQUIPMENT_BLESSING_DROP_RATES_SOURCE = process.env.EQUIPMENT_BLESSING_DROP_RATES_SOURCE_URL;
+const DROP_RATE_LIST_BASE_URL = process.env.OFFICIAL_DROP_RATE_LIST_BASE_URL;
+const JUNK_DROP_RATES_URI = process.env.OFFICIAL_JUNK_DROP_RATES_URI;
+const BLESSING_DROP_RATES_URI = process.env.OFFICIAL_BLESSING_DROP_RATES_URI;
 
 /**
  * Sources of the Fasterthoughts equipment taxonomy CSVs (weapons + armor). Each
@@ -41,11 +42,14 @@ const WEAPON_TAXONOMY_SOURCE = process.env.WEAPON_TAXONOMY_SOURCE_URL;
 const ARMOR_TAXONOMY_SOURCE = process.env.ARMOR_TAXONOMY_SOURCE_URL;
 
 async function main(): Promise<void> {
-  if (!JUNK_DROP_RATES_SOURCE) {
-    throw new Error('JUNK_DROP_RATES_SOURCE_URL is not set (see .env.example).');
+  if (!DROP_RATE_LIST_BASE_URL) {
+    throw new Error('OFFICIAL_DROP_RATE_LIST_BASE_URL is not set (see .env.example).');
   }
-  if (!EQUIPMENT_BLESSING_DROP_RATES_SOURCE) {
-    throw new Error('EQUIPMENT_BLESSING_DROP_RATES_SOURCE_URL is not set (see .env.example).');
+  if (!JUNK_DROP_RATES_URI) {
+    throw new Error('OFFICIAL_JUNK_DROP_RATES_URI is not set (see .env.example).');
+  }
+  if (!BLESSING_DROP_RATES_URI) {
+    throw new Error('OFFICIAL_BLESSING_DROP_RATES_URI is not set (see .env.example).');
   }
   if (!WEAPON_TAXONOMY_SOURCE) {
     throw new Error('WEAPON_TAXONOMY_SOURCE_URL is not set (see .env.example).');
@@ -53,6 +57,10 @@ async function main(): Promise<void> {
   if (!ARMOR_TAXONOMY_SOURCE) {
     throw new Error('ARMOR_TAXONOMY_SOURCE_URL is not set (see .env.example).');
   }
+
+  const JUNK_DROP_RATES_SOURCE = buildDropRateSourceUrl(DROP_RATE_LIST_BASE_URL, SOURCE_LANGUAGE, JUNK_DROP_RATES_URI);
+  const EQUIPMENT_BLESSING_DROP_RATES_SOURCE =
+    buildDropRateSourceUrl(DROP_RATE_LIST_BASE_URL, SOURCE_LANGUAGE, BLESSING_DROP_RATES_URI);
 
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 
@@ -71,6 +79,12 @@ async function main(): Promise<void> {
         + `${[...parsedJunk.junksWithMultiplePools].join(', ')}`);
     }
     await seedDropRatesByJunk(prisma, parsedJunk);
+
+    console.log('[seed] syncing localized (ja/ko/de) junk + equipment names...');
+    await seedLocalizedNames(prisma, parsedJunk, {
+      baseUrl: DROP_RATE_LIST_BASE_URL,
+      junkUri: JUNK_DROP_RATES_URI,
+    });
 
     console.log(`[seed] loading equipment blessing drop rates from: ${EQUIPMENT_BLESSING_DROP_RATES_SOURCE}`);
     const blessingHtml = await loadHtml(EQUIPMENT_BLESSING_DROP_RATES_SOURCE);
@@ -134,6 +148,14 @@ async function main(): Promise<void> {
       where: { id: 1 },
       update: { lastSeededAt: seededAt },
       create: { id: 1, lastSeededAt: seededAt },
+    });
+    // English's own LanguageStatus row: a deliberate, cheap duplicate of the
+    // stamp above (always in sync) so LanguageStatus is uniform across every
+    // language — see the model doc in schema.prisma.
+    await prisma.languageStatus.upsert({
+      where: { lang: SOURCE_LANGUAGE },
+      update: { isInSync: true, lastSyncedAt: seededAt, lastCheckedAt: seededAt },
+      create: { lang: SOURCE_LANGUAGE, isInSync: true, lastSyncedAt: seededAt, lastCheckedAt: seededAt },
     });
     console.log(`[seed] done. Stamped data update time: ${seededAt.toISOString()}`);
   } finally {

@@ -165,6 +165,27 @@ export interface ParseDropRatesByJunkResult {
   junksWithMultiplePools: Set<string>;
 }
 
+export interface ParseDropRatesByJunkOptions {
+  /**
+   * Whether to check each table's header text against the expected English
+   * labels (`EXPECTED_HEADER_ROW_1`/`_2`). The row *shape* (14/12 `<td>`s,
+   * column positions) is language-independent and always enforced regardless
+   * of this flag — only the literal English header strings are skipped.
+   * Default `true`. Set `false` when parsing a localized page, whose headers
+   * are translated (see `seedLocalizedNames.ts`); trustworthiness there comes
+   * from `alignLocalizedNames`'s numeric fingerprint check, not the header text.
+   */
+  validateHeaders?: boolean;
+  /**
+   * Whether an `<h2>` not immediately followed by a `<table>` is silently
+   * skipped instead of throwing. Default `false` (throw — matches historical
+   * behavior for the trusted English source). Localized pages may carry a
+   * benign extra heading (e.g. a page title) with no accompanying table; set
+   * `true` there so a harmless heading doesn't abort the whole language.
+   */
+  lenientSections?: boolean;
+}
+
 /**
  * Parses the "Drop Rates by Junk" page into one row per (junk, group, equipment).
  *
@@ -178,8 +199,15 @@ export interface ParseDropRatesByJunkResult {
  * (`Junk.hasMultiplePools`) for the frontend to surface as a caveat, since the
  * discarded version may still be accurate for players who haven't reached
  * whatever milestone unlocks the later pool.
+ *
+ * Runs identically over any language's copy of the page — row shape and column
+ * position are language-independent — see `ParseDropRatesByJunkOptions` for the
+ * two checks that are English-specific and can be relaxed.
  */
-export function parseDropRatesByJunk(html: string): ParseDropRatesByJunkResult {
+export function parseDropRatesByJunk(
+  html: string,
+  { validateHeaders = true, lenientSections = false }: ParseDropRatesByJunkOptions = {},
+): ParseDropRatesByJunkResult {
   const $ = cheerio.load(html);
   const rowsByJunk = new Map<string, ParsedJunkDropRow[]>();
   const junksWithMultiplePools = new Set<string>();
@@ -193,10 +221,15 @@ export function parseDropRatesByJunk(html: string): ParseDropRatesByJunkResult {
     const junkName = $(section).text().trim();
     const table = sections[i + 1];
     if (!table || table.name !== 'table') {
+      if (lenientSections) {
+        continue;
+      }
       throw new Error(`Expected a <table> immediately after <h2>${junkName}</h2>.`);
     }
 
-    validateHeader($, table, junkName);
+    if (validateHeaders) {
+      validateHeader($, table, junkName);
+    }
     const parsedRows = parseJunkTable($, table, junkName);
 
     const previousRows = rowsByJunk.get(junkName);

@@ -24,6 +24,7 @@ function gear(
 ): EquipmentListItem {
   return {
     name,
+    displayName: name,
     category: null,
     rank: null,
     maxDropQuality: MAX_LEVEL,

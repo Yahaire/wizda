@@ -8,6 +8,7 @@ import { MaintenanceResponse } from '@shared/api/endpoints/endpoint.models';
 import { BUILD_TIME, GIT_COMMIT, VERSION_LABEL } from '@shared/generated/version';
 
 import { sendErrorResponse } from '@app/http';
+import { localeMiddleware } from '@app/locale';
 import { dataStatusRouter, readDataUpdatedAt } from '@app/routes/dataStatus';
 import { junkToGuaranteeRouter } from '@app/routes/junkToGuarantee';
 import { listsRouter } from '@app/routes/lists';
@@ -62,6 +63,8 @@ app.get('/', (_req, res, next) => {
     })
     .catch(next);
 });
+
+app.use(localeMiddleware);
 
 app.use('/junk-to-guarantee', junkToGuaranteeRouter);
 app.use(dataStatusRouter);

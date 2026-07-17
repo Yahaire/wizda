@@ -8,6 +8,7 @@ import {
 } from '@shared/api/endpoints/lists.models';
 import { EquipmentRankKind } from '@shared/domain/rank';
 
+import { pickLocalizedName } from '@app/localizedNames';
 import { getPrisma } from '@app/prisma';
 
 /**
@@ -25,12 +26,15 @@ interface EquipmentSourceMaxRow {
 }
 
 async function handleListJunks(
-  _req: express.Request,
+  req: express.Request,
   res: express.Response,
 ): Promise<void> {
   const junks = await getPrisma().junk.findMany({
     select: {
       name: true,
+      nameJa: true,
+      nameKo: true,
+      nameDe: true,
       hasMultiplePools: true,
       maxDropQuality: true,
       maxDropGrade: true,
@@ -38,12 +42,18 @@ async function handleListJunks(
     orderBy: { name: 'asc' },
   });
 
-  const body: JunkListItem[] = junks;
+  const body: JunkListItem[] = junks.map((junk) => ({
+    name: junk.name,
+    displayName: pickLocalizedName(junk, req.locale),
+    hasMultiplePools: junk.hasMultiplePools,
+    maxDropQuality: junk.maxDropQuality,
+    maxDropGrade: junk.maxDropGrade,
+  }));
   res.status(HttpStatusCode.OK).json(body);
 }
 
 async function handleListEquipment(
-  _req: express.Request,
+  req: express.Request,
   res: express.Response,
 ): Promise<void> {
   const prisma = getPrisma();
@@ -62,6 +72,9 @@ async function handleListEquipment(
       select: {
         id: true,
         name: true,
+        nameJa: true,
+        nameKo: true,
+        nameDe: true,
         rank: true,
         maxDropQuality: true,
         maxDropGrade: true,
@@ -123,6 +136,7 @@ async function handleListEquipment(
 
   const body: EquipmentListItem[] = equipment.map((item) => ({
     name: item.name,
+    displayName: pickLocalizedName(item, req.locale),
     // Enriched from the Fasterthoughts taxonomy (see the seed); null for the few
     // items whose name isn't in that source.
     category: item.category ? { code: item.category.code, name: item.category.name } : null,
