@@ -42,6 +42,14 @@ export interface WizdaLines {
     readonly estimateNoteLink: string,
     readonly endOfList: string,
     readonly noResults: string,
+    /**
+     * Shown beside the name filter's footer while more results are still unloaded —
+     * the filter only searches what's on screen, so a missing junk may just be
+     * further down the list.
+     */
+    readonly filterSearchesLoadedOnly: string,
+    /** The name filter matched nothing among the results loaded so far. */
+    readonly noFilterMatches: string,
     readonly blessingsHelp: string,
     /** Plain-language help shown in each filter's info modal (the ⓘ next to the label). */
     readonly filterHelp: {

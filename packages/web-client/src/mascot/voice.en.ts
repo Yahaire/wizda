@@ -39,6 +39,11 @@ export const wizdaLinesEn = {
     estimateNoteLink: "Want to check my calculations — or know how the game really rolls?",
     endOfList: "That's all I got!",
     noResults: "Oh... no junk can get you that one — try loosening the filters a little!",
+    filterSearchesLoadedOnly: TsUtilities.stringJoin([
+      "Careful — I only search the junk I've already dug up.",
+      "Ask me to show more if the one you want isn't here!",
+    ]),
+    noFilterMatches: "Nothing by that name in what I've dug up so far.",
     blessingsHelp: TsUtilities.stringJoin([
       "Pick every blessing the item must carry —",
       "I'll only count pieces that have all of them.",

@@ -92,10 +92,6 @@ export function ResultsPanel({
   // Index of the first freshly-loaded row, captured right before a "Show more"
   // fetch — once the new rows land, we smooth-scroll them into view.
   const showMoreAnchorRef = useRef<number | null>(null);
-  const handleShowMore = () => {
-    showMoreAnchorRef.current = result?.results.length ?? null;
-    onShowMore();
-  };
 
   // Hand off to the shared junk detail modal (drops list + cross-links). We leave
   // this compact per-result view mounted behind it and open the shared modal as
@@ -115,6 +111,16 @@ export function ResultsPanel({
     }
     return result.results.filter((entry) => entry.junkName.toLowerCase().includes(needle));
   }, [result, nameFilter]);
+
+  const isFiltering = nameFilter.trim() !== "";
+
+  // Anchored against the *filtered* row count, not the raw result length, so the
+  // scroll lands on the first new row the user can actually see. With a filter
+  // on, the fresh page may match nothing — the effect's bounds check no-ops then.
+  const handleShowMore = () => {
+    showMoreAnchorRef.current = entries.length;
+    onShowMore();
+  };
 
   const virtualizer = useVirtualizer({
     count: entries.length,
@@ -287,10 +293,21 @@ export function ResultsPanel({
         </div>
 
         {/* Lives inside the scroll container, right after the last row, so it
-            only comes into view once the player scrolls to the end of the list. */}
-        {nameFilter.trim() === "" && (
-          <Center py="sm">
-            {result.hasMore ? (
+            only comes into view once the user scrolls to the end of the list.
+            Shown while filtering too: the filter only searches the rows already
+            loaded, so hiding "Show more" here made a low-rate junk that simply
+            hadn't been fetched yet look like it was missing from our data. */}
+        <Stack gap="xs" py="sm" align="center">
+          {isFiltering && entries.length === 0 && (
+            <Text c="dimmed" ta="center" size="sm">{wizda.oracle.noFilterMatches}</Text>
+          )}
+          {result.hasMore ? (
+            <>
+              {isFiltering && (
+                <Text className="wizda-speech" ta="center" size="sm">
+                  <WizdaMark glyph={WizdaGlyph.info} />{wizda.oracle.filterSearchesLoadedOnly}
+                </Text>
+              )}
               <Button
                 variant="light"
                 color="crimson"
@@ -299,18 +316,14 @@ export function ResultsPanel({
               >
                 Show more
               </Button>
-            ) : (
-              <Text className="wizda-speech" ta="center">
-                <WizdaMark glyph={WizdaGlyph.welcome} />{wizda.oracle.endOfList}
-              </Text>
-            )}
-          </Center>
-        )}
+            </>
+          ) : (
+            <Text className="wizda-speech" ta="center">
+              <WizdaMark glyph={WizdaGlyph.welcome} />{wizda.oracle.endOfList}
+            </Text>
+          )}
+        </Stack>
       </Box>
-
-      {entries.length === 0 && (
-        <Text c="dimmed" ta="center" size="sm">No junk matches that name.</Text>
-      )}
 
       {/* Per-junk detail — recovers the full name when it's been truncated. */}
       <JunkDetailModal
