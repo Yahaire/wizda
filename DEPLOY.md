@@ -196,9 +196,26 @@ pm2 startup
 
 ### F. Apache Reverse Proxy (via SSH, one-time)
 
-Create a config file for each vhost. **The frontend vhost is the primary domain**,
-so its config must exclude AutoSSL's ACME challenge path — otherwise the proxy
-swallows `/.well-known/acme-challenge/` and certificate renewal fails.
+Create a config file for each vhost.
+
+The pattern is **catch-all proxy, minus the paths Apache must keep for itself**.
+`ProxyPass /` is deliberately broad — the Node app owns the whole site, so it
+should receive everything by default. Do *not* replace it with an allow-list of
+specific routes: every new route in the app would then need an Apache edit plus a
+rebuild and restart, and a forgotten one produces a 404 that looks exactly like an
+application bug.
+
+The exception list, by contrast, is closed and known — it does not grow as the app
+grows. There are two kinds of exception, and they need **different treatment**:
+
+| Path | Treatment | Why |
+|---|---|---|
+| `/.well-known/` | Exclude (`!`) | AutoSSL serves its ACME challenge from disk. Apache itself is the right handler, so telling mod_proxy to keep its hands off is exactly right. If the proxy swallows it, certificate renewal fails silently. |
+| `/___proxy_subdomain_*` | Proxy explicitly | cPanel rewrites `cpanel.wizda.app`, `webmail.wizda.app` and `whm.wizda.app` onto these internal paths *within this vhost*, expecting its own `ProxyPass` to forward them to the local service ports. Apache cannot serve them from disk, so `!` does **not** work here — see the symptom section below. |
+
+The distinction matters: `!` means "this is not a proxied path", which is true of
+`/.well-known/` and false of the proxy subdomains. Using `!` on the latter
+suppresses cPanel's own forwarding and leaves the request with no handler at all.
 
 Frontend (root domain):
 
@@ -206,14 +223,44 @@ Frontend (root domain):
 nano /etc/apache2/conf.d/userdata/ssl/2/<username>/wizda.app/proxy.conf
 ```
 
-Contents:
+Contents — **exclusions must precede the catch-all; first match wins**:
 
 ```apache
 # Let AutoSSL serve its ACME challenge from disk, not the Node app.
 ProxyPass /.well-known/ !
+
+# Send cPanel's proxy subdomains to their own services, not the Node app.
+# The local services speak HTTPS with a certificate that does not match
+# 127.0.0.1, so peer verification has to be off for this hop.
+SSLProxyEngine On
+SSLProxyVerify none
+SSLProxyCheckPeerName off
+SSLProxyCheckPeerCN off
+SSLProxyCheckPeerExpire off
+
+# No trailing slashes: this matches both /___proxy_subdomain_cpanel
+# and /___proxy_subdomain_cpanel/whatever.
+ProxyPass        /___proxy_subdomain_cpanel  https://127.0.0.1:2083
+ProxyPassReverse /___proxy_subdomain_cpanel  https://127.0.0.1:2083
+ProxyPass        /___proxy_subdomain_whm     https://127.0.0.1:2087
+ProxyPassReverse /___proxy_subdomain_whm     https://127.0.0.1:2087
+ProxyPass        /___proxy_subdomain_webmail https://127.0.0.1:2096
+ProxyPassReverse /___proxy_subdomain_webmail https://127.0.0.1:2096
+
 ProxyPass / http://127.0.0.1:4000/
 ProxyPassReverse / http://127.0.0.1:4000/
 ```
+
+Add further service subdomains the same way if you ever use them — Web Disk is
+`2078`, cpcalendars/cpcontacts are `2080`. Only the ones listed above are needed
+for normal cPanel/WHM/webmail access.
+
+Once the entry page loads, cPanel navigates with session paths like
+`/cpsess0123456789/…`. Those are **not** proxy-subdomain paths and would
+otherwise be caught by `ProxyPass /` — they work because cPanel's own rewrite
+matches on the `Host` header (`cpanel.wizda.app`) rather than on the path, and
+so rewrites every subsequent request back onto `/___proxy_subdomain_cpanel/`
+before mod_proxy sees it. That rewrite half was never the broken part.
 
 API (subdomain):
 
@@ -224,9 +271,17 @@ nano /etc/apache2/conf.d/userdata/ssl/2/<username>/api.wizda.app/proxy.conf
 Contents:
 
 ```apache
+# Cheap insurance: keeps DCV working if a port-80 config is ever added.
+ProxyPass /.well-known/ !
+
 ProxyPass / http://127.0.0.1:4001/
 ProxyPassReverse / http://127.0.0.1:4001/
 ```
+
+cPanel does attach `cpanel.`/`webmail.`/`whm.` aliases to non-primary vhosts too,
+so `cpanel.api.wizda.app` technically exists and is technically broken by the
+catch-all here. Nobody visits it, so the proxy-subdomain block is not repeated —
+but if you ever want it, the same lines work verbatim.
 
 Then rebuild and restart Apache:
 
@@ -238,6 +293,66 @@ systemctl restart httpd
 > **Note:** The `ssl/2` path is for HTTPS (port 443). If the directories don't
 > exist yet, create them with `mkdir -p`. On the primary domain the directory is
 > named after the domain itself (`wizda.app`), same as a subdomain.
+
+> **Do not add an equivalent `std/2` (port 80) config.** AutoSSL performs its
+> domain-control validation over plain HTTP. Port 80 having no catch-all proxy is
+> what keeps renewals working, including for the `mail.`, `cpanel.` and `webmail.`
+> service subdomains.
+
+#### Symptom: `cpanel.wizda.app` is broken by the catch-all
+
+Both failure modes below come from the same root cause, and the error text tells
+you which one you are in. Common to both:
+
+1. Wildcard DNS `*.wizda.app` resolves the hostname to the server.
+2. cPanel's `ServerAlias cpanel.wizda.app` places the request in the **wizda.app**
+   vhost.
+3. cPanel rewrites the URI to `/___proxy_subdomain_cpanel/…` and expects its own
+   `ProxyPass` to forward it to `127.0.0.1:2083`.
+4. Our `proxy.conf` is included *ahead of* cPanel's directives, so whatever we
+   say about that path wins — first match wins, and cPanel never gets a look in.
+
+**A styled Next.js 404** — nothing in `proxy.conf` mentions the path, so
+`ProxyPass /` forwarded it to the Node app on :4000, which has no such route.
+
+**Apache's plain `Not Found`, with "additionally, a 403 Forbidden error was
+encountered while trying to use an ErrorDocument"** — `proxy.conf` excludes the
+path with `!`. That is worse, not better: `!` means "do not proxy this", so
+cPanel's forwarding is suppressed and Apache tries to serve the path from the
+document root, where no such directory exists. **This is why the paths must be
+proxied explicitly rather than excluded.**
+
+Apply the config above, then:
+
+```bash
+/scripts/rebuildhttpdconf && systemctl restart httpd
+```
+
+Diagnostics, if it still misbehaves. What matters is not just whether cPanel's
+directives exist but *which directive type* they are and whether they land before
+or after our include:
+
+```bash
+# Are cPanel's own proxy-subdomain directives in the built vhost, and where?
+grep -n "proxy_subdomain\|userdata" /etc/apache2/conf/httpd.conf
+
+# Is the service actually listening on the port we proxy to?
+curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:2083/
+
+# Is our file being picked up at all?
+httpd -S 2>&1 | grep -i wizda
+```
+
+If `grep` finds no `proxy_subdomain` lines at all, proxy subdomains are disabled
+in WHM » Server Configuration » Tweak Settings » Domains. The explicit `ProxyPass`
+above still works in that case — but the rewrite that maps `cpanel.wizda.app` onto
+the path would be gone too, so enable the setting rather than hand-rolling it.
+
+Fallbacks that bypass Apache entirely and stay reliable regardless:
+`https://wizda.app:2083` (cPanel), `:2087` (WHM), `:2096` (webmail). Also
+unaffected is `mail.wizda.app` **for SMTP/IMAP**, which never touches Apache —
+note that the same hostname *in a browser* is a webmail proxy subdomain and does
+go through the vhost.
 
 ### G. First-Time Database Setup (via SSH, one-time)
 
