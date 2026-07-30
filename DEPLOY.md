@@ -229,6 +229,12 @@ Contents — **exclusions must precede the catch-all; first match wins**:
 # Let AutoSSL serve its ACME challenge from disk, not the Node app.
 ProxyPass /.well-known/ !
 
+# mod_proxy adds X-Forwarded-Host automatically but NOT X-Forwarded-Proto —
+# without this, every request looks like plain HTTP to the Node app. See the
+# "Symptom: language redirect goes to localhost:4000" note below for why this
+# alone isn't enough to fix the redirect host, just the scheme.
+RequestHeader set X-Forwarded-Proto "https"
+
 # Send cPanel's proxy subdomains to their own services, not the Node app.
 # The local services speak HTTPS with a certificate that does not match
 # 127.0.0.1, so peer verification has to be off for this hop.
@@ -298,6 +304,32 @@ systemctl restart httpd
 > domain-control validation over plain HTTP. Port 80 having no catch-all proxy is
 > what keeps renewals working, including for the `mail.`, `cpanel.` and `webmail.`
 > service subdomains.
+
+#### Symptom: language redirect goes to `http://localhost:4000/en`
+
+Visiting `https://wizda.app/` (no locale in the path) redirects to
+`http://localhost:4000/en` instead of `https://wizda.app/en`, while visiting
+`https://wizda.app/en` directly works fine.
+
+Root cause is in Next.js itself, not Apache: `next-server.js`'s
+`attachRequestMeta` builds every absolute URL the server constructs internally
+as `${protocol}://${fetchHostname}:${port}${req.url}` whenever `next start` was
+given **both** an explicit hostname and port — which section E's
+`-p 4000 -H 127.0.0.1` always is, precisely because loopback-only binding is a
+hard requirement (see "Security: network exposure"). That branch ignores the
+incoming `Host`/`X-Forwarded-Host` header entirely, so `request.url` inside
+`middleware.ts` resolves to the bind address, not the public one — no Apache
+header (`ProxyPreserveHost`, `X-Forwarded-*`) can override it, and dropping
+`-H` to fix it would reopen the exact port exposure that flag exists to close.
+Direct requests to `/en` never hit this path because no absolute URL needs
+building — only middleware's locale redirect does.
+
+Fixed in `packages/web-client/src/middleware.ts`: the redirect's origin is
+built from `X-Forwarded-Host`/`X-Forwarded-Proto` directly instead of
+`request.url`/`request.nextUrl.origin`. The `X-Forwarded-Proto` header above is
+still worth keeping — Apache's mod_proxy sends `X-Forwarded-Host`
+automatically but not `X-Forwarded-Proto`, and the middleware falls back to
+`https` only when `X-Forwarded-Host` is present at all.
 
 #### Symptom: `cpanel.wizda.app` is broken by the catch-all
 

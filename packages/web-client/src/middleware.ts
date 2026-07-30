@@ -36,7 +36,19 @@ export function middleware(request: NextRequest): NextResponse {
   const fromHeader = parseAcceptLanguage(request.headers.get('accept-language'));
   const lang = fromCookie ?? fromHeader ?? DEFAULT_LANGUAGE;
 
-  const target = new URL(`${localeHref(lang, pathname)}${search}`, request.url);
+  // Can't use `request.url`/`request.nextUrl.origin` as the base here: in
+  // production `next start` is given an explicit `-H 127.0.0.1 -p 4000` (to
+  // keep the port loopback-only, see DEPLOY.md), and whenever Next is started
+  // with both a hostname and a port it hardcodes every absolute URL it builds
+  // internally to THAT bind address instead of the proxied request — so this
+  // redirect's target would resolve to `http://localhost:4000/...` no matter
+  // what Apache forwards. Reading the forwarded headers directly sidesteps it.
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const origin = forwardedHost
+    ? `${request.headers.get('x-forwarded-proto') ?? 'https'}://${forwardedHost}`
+    : request.nextUrl.origin;
+
+  const target = new URL(`${localeHref(lang, pathname)}${search}`, origin);
 
   // 307, never 301. A permanent redirect is cached by browsers more or less
   // forever, so a visitor who later picks the other language would keep being
