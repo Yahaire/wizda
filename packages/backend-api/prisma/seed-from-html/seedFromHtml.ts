@@ -10,10 +10,11 @@ import { parseDropRatesByJunk } from './dropRatesByJunk.parser';
 import { seedDropRatesByJunk } from './dropRatesByJunk.seed';
 import { parseEquipmentBlessingDropRates } from './equipmentBlessingDropRate.parser';
 import { seedEquipmentBlessingDropRates } from './equipmentBlessingDropRate.seed';
-import { buildTaxonomyByName } from './equipmentTaxonomy.mapping';
+import { buildTaxonomyByName, hasTaxonomyDrift, TaxonomyDrift } from './equipmentTaxonomy.mapping';
 import { seedEquipmentTaxonomy } from './equipmentTaxonomy.seed';
 import { loadCsv } from './loadCsv';
 import { loadHtml } from './loadHtml';
+import { seedJapaneseReadings } from './seedJapaneseReadings';
 import { seedLocalizedNames } from './seedLocalizedNames';
 import { seedStaticReferenceData } from './seedStaticReferenceData';
 import { buildDropRateSourceUrl } from './sourceUrls';
@@ -40,6 +41,54 @@ const BLESSING_DROP_RATES_URI = process.env.OFFICIAL_BLESSING_DROP_RATES_URI;
  */
 const WEAPON_TAXONOMY_SOURCE = process.env.WEAPON_TAXONOMY_SOURCE_URL;
 const ARMOR_TAXONOMY_SOURCE = process.env.ARMOR_TAXONOMY_SOURCE_URL;
+
+/**
+ * Print unmapped source values as a loud, delimited block. Deliberately the last
+ * thing the seed writes: above it sit hundreds of `unmatchedNames` lines, and
+ * this is the one section that needs a human. It is *not* a failure — the seed
+ * completed and the site is up (a non-zero exit would make
+ * `scripts/seed-with-maintenance.mjs` hold `.maintenance`, taking the whole site
+ * down over a missing category label).
+ */
+function logTaxonomyDrift(drift: TaxonomyDrift): void {
+  if (!hasTaxonomyDrift(drift)) {
+    return;
+  }
+
+  const rule = '='.repeat(72);
+  const lines: string[] = [
+    '',
+    rule,
+    '[seed] ACTION REQUIRED — the taxonomy CSVs used values we do not map.',
+    '[seed] The seed COMPLETED and the site is up. The items below were stored,',
+    '[seed] just without the field we could not resolve.',
+    '',
+  ];
+
+  const section = (heading: string, values: readonly string[]): void => {
+    if (values.length === 0) {
+      return;
+    }
+    lines.push(`[seed]   ${heading}`);
+    for (const value of values) {
+      lines.push(`[seed]     - ${value}`);
+    }
+  };
+
+  section('Unknown weapon Type (stored without a category):', drift.weaponTypes);
+  section('Unknown armor weight class (stored without a category):', drift.armorWeightClasses);
+  section('Unknown armor Type — a NEW GEAR SLOT, needs a Prisma migration:', drift.armorTypes);
+  section('Unknown Rank (each item KEPT its previous rank):', drift.ranks);
+
+  lines.push(
+    '',
+    '[seed] Fix: see "Adding a new equipment category" in docs/domain.md,',
+    '[seed] then re-run the seed so the affected items pick the new codes up.',
+    rule,
+    '',
+  );
+  console.log(lines.join('\n'));
+}
 
 async function main(): Promise<void> {
   if (!DROP_RATE_LIST_BASE_URL) {
@@ -86,6 +135,10 @@ async function main(): Promise<void> {
       junkUri: JUNK_DROP_RATES_URI,
     });
 
+    // Strictly after the names above — it reads them back out of the DB.
+    console.log('[seed] computing Japanese name readings (kana search keys)...');
+    await seedJapaneseReadings(prisma);
+
     console.log(`[seed] loading equipment blessing drop rates from: ${EQUIPMENT_BLESSING_DROP_RATES_SOURCE}`);
     const blessingHtml = await loadHtml(EQUIPMENT_BLESSING_DROP_RATES_SOURCE);
     console.log('[seed] parsing equipment blessing drop rates...');
@@ -112,7 +165,7 @@ async function main(): Promise<void> {
       loadCsv(WEAPON_TAXONOMY_SOURCE),
       loadCsv(ARMOR_TAXONOMY_SOURCE),
     ]);
-    const taxonomyByName = buildTaxonomyByName(weaponRows, armorRows);
+    const { byName: taxonomyByName, drift } = buildTaxonomyByName(weaponRows, armorRows);
     console.log(`[seed] parsed taxonomy for ${taxonomyByName.size} item(s) `
       + `(${weaponRows.length} weapon + ${armorRows.length} armor row(s)).`);
 
@@ -123,8 +176,13 @@ async function main(): Promise<void> {
     console.log(`[seed] taxonomy: enriched ${taxonomy.updated} existing + created ${taxonomy.created} new `
       + `equipment (from ${taxonomy.totalTaxonomyEntries} taxonomy entry/entries).`);
     if (taxonomy.withoutCategory.length > 0) {
-      console.log(`[seed] taxonomy: ${taxonomy.withoutCategory.length} item(s) got a rank but `
-        + `no category (source lacked a weight class): ${taxonomy.withoutCategory.join(', ')}`);
+      console.log(`[seed] taxonomy: ${taxonomy.withoutCategory.length} item(s) stored without a `
+        + `category (source lacked, or we could not map, a weight class): `
+        + `${taxonomy.withoutCategory.join(', ')}`);
+    }
+    if (taxonomy.withoutRank.length > 0) {
+      console.log(`[seed] taxonomy: ${taxonomy.withoutRank.length} item(s) had no usable rank in the `
+        + `source (each kept whatever rank it already had): ${taxonomy.withoutRank.join(', ')}`);
     }
     if (taxonomy.unmatchedNames.length > 0) {
       console.log(`[seed] taxonomy: ${taxonomy.unmatchedNames.length} equipment not found in the CSVs `
@@ -158,6 +216,9 @@ async function main(): Promise<void> {
       create: { lang: SOURCE_LANGUAGE, isInSync: true, lastSyncedAt: seededAt, lastCheckedAt: seededAt },
     });
     console.log(`[seed] done. Stamped data update time: ${seededAt.toISOString()}`);
+
+    // Last, so it can't scroll away above the unmatched-name dump.
+    logTaxonomyDrift(drift);
   } finally {
     await prisma.$disconnect();
   }

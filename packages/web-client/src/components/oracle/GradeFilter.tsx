@@ -1,6 +1,8 @@
 'use client';
 
 import { GRADE_HEX } from '@/components/gear/gearDisplays';
+import { useStrings } from '@/i18n/LanguageProvider';
+import { getStrings } from '@/i18n/languageStore';
 import { ColorSwatch, Group, Text } from '@mantine/core';
 import { GRADES } from '@shared/domain/grade';
 
@@ -26,27 +28,17 @@ interface GradeFilterProps extends GradeLevelProps {
  * needn't repeat it.
  */
 function slotsTooltip(activeBlessingSlots: number): string {
-  let tooltipString: string;
+  const strings = getStrings().oracle;
   switch (activeBlessingSlots) {
-    case 0: {
-      tooltipString = "Any amount of blessings";
-      break;
-    }
-    case 1: {
-      tooltipString = "At least 1 blessing";
-      break;
-    }
-    case 4: {
-      tooltipString = "4 blessings";
-      break;
-    }
-    default: {
-      tooltipString = `At least ${activeBlessingSlots} blessings`;
-      break;
-    }
+    case 0:
+      return strings.slotsAny;
+    case 1:
+      return strings.slotsAtLeastOne;
+    case 4:
+      return strings.slotsFour;
+    default:
+      return strings.slotsAtLeast(activeBlessingSlots);
   }
-
-  return tooltipString;
 }
 
 /** White is near-white: without a border it dissolves into the track. */
@@ -93,6 +85,7 @@ export function GradeFilter({
   max,
   blessingCount,
 }: GradeFilterProps) {
+  const strings = useStrings();
   const floor = gradeFloorFor(blessingCount);
   const shown = clampLevel(value, floor, max);
 
@@ -104,7 +97,7 @@ export function GradeFilter({
       max={max}
       color="crimson"
       thumbColor={GRADE_HEX[shown]!}
-      ariaLabel="Lowest acceptable grade"
+      ariaLabel={strings.oracle.gradeSliderAriaLabel}
       note={undefined}
       marks={GRADES.map((grade) => ({
         value: grade.value,

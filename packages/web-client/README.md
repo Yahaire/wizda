@@ -35,17 +35,24 @@ lists. A mascot, **Wizda**, guides the experience through friendly microcopy
 
 ```
 src/
+  middleware.ts        307s language-less URLs ("/junks") to the resolved locale
+                       ("/en/junks"). Cookie → Accept-Language → English. See docs/i18n.md
   app/
-    layout.tsx         root: fonts, MantineProvider (dark), Notifications, Umami <script>,
-                       mounts DetailProvider (see below) around the routed page
+    [lang]/            every route lives under the locale segment; both locales are
+                       statically prerendered (generateStaticParams)
+      layout.tsx       root: <html lang>, fonts, MantineProvider (dark), Notifications,
+                       Umami <script>, LanguageProvider, mounts DetailProvider (see
+                       below) around the routed page
+      page.tsx         "/<lang>"           → Junk Oracle
+      junks/page.tsx   "/<lang>/junks"     → junk list
+      equipment/…      "/<lang>/equipment" → equipment list
+      about/page.tsx   "/<lang>/about"     → about + data/privacy note
     theme.ts           Mantine theme (crimson primary, tuned dark scale, font vars)
-    page.tsx           "/"          → Junk Oracle
-    junks/page.tsx     "/junks"     → junk list
-    equipment/page.tsx "/equipment" → equipment list
-    about/page.tsx     "/about"     → about + data/privacy note
+    pageMetadata.ts    per-route, per-language <title>/<description> + hreflang alternates
+    sitemap.ts         every route × language, cross-linked by hreflang
     manifest.ts        PWA web app manifest
     sw.ts              Serwist service worker (excluded from the app tsconfig)
-    app.constants.ts   names, tagline, support/data-source URLs
+    app.constants.ts   names, tagline, site origin, support/data-source URLs
   components/
     Shell.tsx          responsive AppShell (header + collapsible sidebar/burger, max-width body)
     AdSlot.tsx         reserved ad slot — intentionally renders nothing for now
@@ -64,6 +71,15 @@ src/
                        its own copy.
     gear/              gearDisplays (QualityStars / GradeBadge / grade colours)
     table/DataTable.tsx  reusable virtualized, sortable table (sticky first col, h-scroll)
+  i18n/
+    locale.ts          leaf module (no catalog imports, so middleware stays small): the
+                       offered languages, the cookie, Accept-Language parsing, and the
+                       path helpers — localeHref / stripLocale / swapLocalePath
+    languageStore.ts   the per-language catalogs + the module-level mirror non-React
+                       code reads (getStrings / getWizda / getLang)
+    LanguageProvider.tsx  stateless — takes the [lang] route segment and publishes it;
+                       useStrings / useWizda / useLang / useLocaleHref
+    strings.<lang>.ts  UI-chrome catalogs (structural parity enforced by strings.test.ts)
   mascot/
     wizda.tsx          Wizda's voice: wizdaSay / wizdaConfirm + greeting bank
     WizdaGreeter.tsx   first-visit welcome + once-a-day greeting (mobile-friendly)
@@ -94,6 +110,12 @@ is in `transpilePackages` so Next compiles its TS (runtime enums/catalogs).
   Results are virtualized, paged (`Show more`), filterable by name, scroll into
   view on calculate, and each row opens a detail modal; the last selection is
   remembered in `localStorage`.
+- **Language (EN/JA)** — the language is the first path segment (`/en/…`, `/ja/…`)
+  and both locales are prerendered, so a page arrives already in the right
+  language rather than flashing English and swapping after hydration. A prefixed
+  URL always wins over the remembered preference, so a shared `/ja/` link opens in
+  Japanese for everyone. **Read [`docs/i18n.md`](../../docs/i18n.md) before
+  touching routes, links, or metadata.**
 - **Lag guards** — the backend enforces a result limit and a "≥1 filter" rule; the
   Calculate button is disabled until a filter is set (and nudges you if poked).
 - **Lists** — click a column to sort, filter by name (equipment also by rank).

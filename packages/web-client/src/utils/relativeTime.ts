@@ -1,9 +1,13 @@
 /**
  * Human, coarse "time ago" phrasing for the data-freshness label and Wizda's
- * freshness toast — e.g. "just now", "2 hours ago", "3 days ago". English only
- * for now (matches the single voice locale); the buckets are deliberately coarse
- * because players only care roughly how stale the data is, never to the second.
+ * freshness toast — e.g. "just now", "2 hours ago", "3 days ago" (and their
+ * localized equivalents). The wording is delegated to `Intl.RelativeTimeFormat`
+ * keyed by the active language, so a new locale needs no new copy here; the
+ * buckets are deliberately coarse because players only care roughly how stale
+ * the data is, never to the second.
  */
+
+import { getLang, getStrings } from '@/i18n/languageStore';
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -22,36 +26,41 @@ function elapsedMs(from: Date | string, now: Date): number {
   return Math.max(0, now.getTime() - toDate(from).getTime());
 }
 
-function pluralize(count: number, unit: string): string {
-  return `${count} ${unit}${count === 1 ? "" : "s"} ago`;
+/** The largest whole unit that fits `ms`, as an `Intl.RelativeTimeFormat` pair. */
+function largestUnit(ms: number): { value: number, unit: Intl.RelativeTimeFormatUnit } {
+  if (ms < HOUR_MS) {
+    return { value: Math.floor(ms / MINUTE_MS), unit: 'minute' };
+  }
+  if (ms < DAY_MS) {
+    return { value: Math.floor(ms / HOUR_MS), unit: 'hour' };
+  }
+  if (ms < WEEK_MS) {
+    return { value: Math.floor(ms / DAY_MS), unit: 'day' };
+  }
+  if (ms < MONTH_MS) {
+    return { value: Math.floor(ms / WEEK_MS), unit: 'week' };
+  }
+  if (ms < YEAR_MS) {
+    return { value: Math.floor(ms / MONTH_MS), unit: 'month' };
+  }
+  return { value: Math.floor(ms / YEAR_MS), unit: 'year' };
 }
 
 /**
- * Coarse "time ago" phrase for a past instant. Returns "just now" under a minute,
- * then the largest whole unit (minutes → years). `now` is injectable for tests.
+ * Coarse "time ago" phrase for a past instant, in the active language. Returns
+ * the "just now" form under a minute, then the largest whole unit (minutes →
+ * years). `now` is injectable for tests.
  */
 export function formatRelativeAge(from: Date | string, now: Date = new Date()): string {
   const ms = elapsedMs(from, now);
-
   if (ms < MINUTE_MS) {
-    return "just now";
+    return getStrings().common.justNow;
   }
-  if (ms < HOUR_MS) {
-    return pluralize(Math.floor(ms / MINUTE_MS), "minute");
-  }
-  if (ms < DAY_MS) {
-    return pluralize(Math.floor(ms / HOUR_MS), "hour");
-  }
-  if (ms < WEEK_MS) {
-    return pluralize(Math.floor(ms / DAY_MS), "day");
-  }
-  if (ms < MONTH_MS) {
-    return pluralize(Math.floor(ms / WEEK_MS), "week");
-  }
-  if (ms < YEAR_MS) {
-    return pluralize(Math.floor(ms / MONTH_MS), "month");
-  }
-  return pluralize(Math.floor(ms / YEAR_MS), "year");
+  // `numeric: 'always'` keeps the plain "N units ago" form — no locale idioms
+  // ("yesterday", "last week") that the coarse buckets here don't intend.
+  const formatter = new Intl.RelativeTimeFormat(getLang(), { numeric: 'always' });
+  const { value, unit } = largestUnit(ms);
+  return formatter.format(-value, unit);
 }
 
 /** True when `from` is within the last 24 hours — the "fresh ink" window. */

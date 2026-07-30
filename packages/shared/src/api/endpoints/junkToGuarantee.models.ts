@@ -95,6 +95,12 @@ export interface JunkGuaranteeEntry {
    */
   junkDisplayName: string,
   /**
+   * Hiragana reading of {@link junkDisplayName}, for search only — never render
+   * it. Present only when the request resolved to Japanese *and* a reading is
+   * stored; absent otherwise. See `JunkListItem.nameReading` in lists.models.ts.
+   */
+  junkNameReading?: string,
+  /**
    * Whether the source listed this junk's drop table more than once — a
    * frontend caveat flag (see `Junk.hasMultiplePools` in schema.prisma).
    */
@@ -196,6 +202,8 @@ export interface CertaintyCurveResult {
   junkName: string,
   /** See {@link JunkGuaranteeEntry.junkDisplayName}. */
   junkDisplayName: string,
+  /** See {@link JunkGuaranteeEntry.junkNameReading}. */
+  junkNameReading?: string,
   /** P(match | one junk of this type); 0 if the target is impossible here. */
   probabilityPerJunk: number,
   /** True when the query required blessings — see {@link JunkToGuaranteeResult.estimated}. */

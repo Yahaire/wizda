@@ -1,7 +1,6 @@
 import { TsUtilities } from '@shared/tsUtilities';
 
 export const APP_NAME = 'Wizda';
-export const PAGE_TITLE_SUFFIX = ` — ${APP_NAME}`;
 
 /** The junk-guarantee tool's display name (the app itself stays "Wizda"). */
 export const ORACLE_NAME = 'Junk Oracle';
@@ -10,6 +9,13 @@ export const APP_DESCRIPTION = TsUtilities.stringJoin([
   "Work out how much junk to farm to guarantee the item you want in",
   "Wizardry Variants Daphne.",
 ]);
+
+/**
+ * The public origin, used as `metadataBase` so `hreflang` alternates and the
+ * sitemap emit absolute URLs (relative ones are invalid in both). Overridable
+ * for a preview deployment; defaults to production.
+ */
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://wizda.app';
 
 /** External "support the project" link — the project's Ko-fi tip page. */
 export const SUPPORT_URL = 'https://ko-fi.com/yahaire';

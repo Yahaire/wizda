@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { useDetail } from '@/components/detail/DetailProvider';
+import { useStrings } from '@/i18n/LanguageProvider';
 import { Divider, Group, Paper, Pill, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 
 import {
@@ -38,11 +39,23 @@ interface QuerySummaryProps {
  * colour of its own beyond the grade tint on the subject.
  */
 export function QuerySummary({ filters, matched }: QuerySummaryProps) {
+  const strings = useStrings();
   const [expanded, setExpanded] = useState(false);
   const { equipment } = useDetail();
 
   const query = resolveQuery(matched, filters);
-  const subject = subjectOf(query);
+
+  // A named piece knows its own category/rank, so the icon reads them off the
+  // reference list rather than off the (coarser) filter axes — and the subject
+  // resolves each name key to its locale display name from the same list.
+  const equipmentByName = useMemo(() => {
+    const map = new Map<string, EquipmentListItem>();
+    for (const item of equipment ?? []) {
+      map.set(item.name, item);
+    }
+    return map;
+  }, [equipment]);
+  const subject = subjectOf(query, equipmentByName);
 
   // The ceiling the quality/grade sliders showed for this query — the best any
   // junk could reach across the admitted gear. A result junk that falls short of
@@ -65,20 +78,14 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
   }, [equipment, filters]);
   const narrowed = wasNarrowed(matched, filters, ceilings);
 
-  // A named piece knows its own category/rank, so the icon reads them off the
-  // reference list rather than off the (coarser) filter axes.
-  const equipmentByName = useMemo(() => {
-    const map = new Map<string, EquipmentListItem>();
-    for (const item of equipment ?? []) {
-      map.set(item.name, item);
-    }
-    return map;
-  }, [equipment]);
   const identity = subjectIdentity(query, equipmentByName);
 
   const gradeNames = query.grade.map(gradeName);
   const showSubjectFull = expanded && subject.hidden.length > 0;
-  const subjectText = showSubjectFull ? joinHuman(query.equipment, 'or') : subject.text;
+  // The expanded view spells out every name — resolved to display names, matching
+  // the collapsed `subject.text`, rather than leaking the English keys.
+  const fullSubject = query.equipment.map((name) => equipmentByName.get(name)?.displayName ?? name);
+  const subjectText = showSubjectFull ? joinHuman(fullSubject, 'or') : subject.text;
 
   const hasQuality = query.quality.length > 0;
   const hasBlessings = query.blessings.length > 0;
@@ -101,7 +108,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
               enough to wrap, this box fills the card and its lines rag left. */}
           <Text component="div" fz="md" ta="center" style={{ minWidth: 0 }}>
             <Tooltip
-              label={gradeNames.length ? `Grade: ${joinHuman(gradeNames, 'or')}` : ''}
+              label={gradeNames.length ? strings.oracle.gradeTooltipLabel(joinHuman(gradeNames, 'or')) : ''}
               disabled={gradeNames.length === 0}
               withArrow
             >
@@ -109,7 +116,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
                 span
                 fw={500}
                 style={gradeTextStyle(query.grade)}
-                aria-label={gradeNames.length ? `${subjectText}, ${joinHuman(gradeNames, 'or')} grade` : undefined}
+                aria-label={gradeNames.length ? strings.oracle.gradeTooltipLabel(joinHuman(gradeNames, 'or')) : undefined}
               >
                 {subjectText}
               </Text>
@@ -121,7 +128,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
                 style={{ verticalAlign: 'baseline' }}
               >
                 <Text span c="dimmed" fz="sm" td="underline">
-                  +{subject.hidden.length} more
+                  {strings.common.moreCount(subject.hidden.length)}
                 </Text>
               </UnstyledButton>
             )}
@@ -131,7 +138,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
         {(hasQuality || hasBlessings) && (
           <Group gap="xs" wrap="wrap">
             {hasQuality && (
-              <Tooltip label="Any of these quality levels" withArrow openDelay={300}>
+              <Tooltip label={strings.oracle.qualityListTooltip} withArrow openDelay={300}>
                 <Group gap={4} wrap="nowrap">
                   <QualityChips values={query.quality} />
                 </Group>
@@ -143,7 +150,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
             )}
 
             {hasBlessings && (
-              <Tooltip label="Must carry all of these" withArrow openDelay={300}>
+              <Tooltip label={strings.oracle.mustCarryAllTooltip} withArrow openDelay={300}>
                 <Group gap={4} wrap="wrap">
                   {query.blessings.map((code, index) => (
                     <Group key={code} gap={4} wrap="nowrap">
@@ -159,7 +166,7 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
 
         {narrowed && (
           <Text c="dimmed" fz="xs">
-            Narrowed to the pieces this junk actually drops.
+            {strings.oracle.narrowedNote}
           </Text>
         )}
       </Stack>

@@ -3,7 +3,9 @@
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
-import { wizda } from './voice';
+import { useWizda } from '@/i18n/LanguageProvider';
+import { stripLocale } from '@/i18n/locale';
+
 import { pickGreeting, WizdaGlyph, wizdaSay } from './wizda';
 
 const WELCOMED_KEY = 'wizda.welcomed';
@@ -23,7 +25,10 @@ function today(): string {
  * it only fires the toasts.
  */
 export function WizdaGreeter() {
-  const pathname = usePathname();
+  // Locale-stripped, so "am I on the home page" is one check rather than one
+  // per language.
+  const pathname = stripLocale(usePathname());
+  const wizda = useWizda();
 
   useEffect(() => {
     const welcomed = localStorage.getItem(WELCOMED_KEY);
@@ -45,7 +50,9 @@ export function WizdaGreeter() {
     localStorage.setItem(LAST_GREETED_KEY, stamp);
 
     wizdaSay(pickGreeting(), { glyph: WizdaGlyph.greet, autoClose: 7000 });
-  }, [pathname]);
+    // `wizda` participates so a language switch re-reads her line; the daily-stamp
+    // guard above keeps that from greeting twice.
+  }, [pathname, wizda]);
 
   return null;
 }

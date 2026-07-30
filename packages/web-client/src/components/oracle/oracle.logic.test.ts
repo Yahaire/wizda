@@ -18,7 +18,7 @@ function equipmentList(...items: Partial<EquipmentListItem>[]): Map<string, Equi
   for (const item of items) {
     map.set(item.name!, {
       name: item.name!,
-      displayName: item.name!,
+      displayName: item.displayName ?? item.name!,
       category: item.category ?? null,
       rank: item.rank ?? null,
       maxDropQuality: null,
@@ -35,7 +35,7 @@ const ROBE = { code: 'CLOTHES', name: 'Clothes' };
 
 /** The subject as it reads for a query nothing has narrowed yet. */
 function subjectFor(overrides: Partial<OracleFilters>): string {
-  return subjectOf(resolveQuery(null, filters(overrides))).text;
+  return subjectOf(resolveQuery(null, filters(overrides)), new Map()).text;
 }
 
 describe('subjectOf', () => {
@@ -49,7 +49,7 @@ describe('subjectOf', () => {
   it('caps a long equipment list, holding the overflow back for the "+N more" affordance', () => {
     const subject = subjectOf(resolveQuery(null, filters({
       equipment: ['Frost Dagger', 'Sunfang', 'Ember Bow', 'Gale Axe', 'Tide Staff'],
-    })));
+    })), new Map());
 
     // No trailing "or" — the visible list isn't the whole list.
     expect(subject.text).toBe('Frost Dagger, Sunfang, Ember Bow');
@@ -102,7 +102,18 @@ describe('subjectOf', () => {
     const matched: MatchedOutcome = { equipment: ['Beastskin Robe'] };
     const query = resolveQuery(matched, filters({ equipment: ['Silver Axe', 'Beastskin Robe'] }));
 
-    expect(subjectOf(query).text).toBe('Beastskin Robe');
+    expect(subjectOf(query, new Map()).text).toBe('Beastskin Robe');
+  });
+
+  it('resolves each name key to its locale display name, falling back to the key', () => {
+    const catalog = equipmentList(
+      { name: 'Frost Dagger', displayName: '氷結の短剣' },
+      { name: 'Sunfang', displayName: '太陽の牙' },
+    );
+    const query = resolveQuery(null, filters({ equipment: ['Frost Dagger', 'Sunfang', 'Unlisted Blade'] }));
+
+    // Known keys localize; a key absent from the catalog keeps its English name.
+    expect(subjectOf(query, catalog).text).toBe('氷結の短剣, 太陽の牙, or Unlisted Blade');
   });
 });
 

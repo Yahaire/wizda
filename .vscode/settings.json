@@ -1,4 +1,14 @@
 {
     "js/ts.tsdk.path": "node_modules/typescript/lib",
-    "js/ts.tsdk.promptToUseWorkspaceVersion": true
+    "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+
+    // Wizda carries a lot of legitimate non-ASCII *inside string/regex literals*:
+    // Japanese UI text (strings.ja.ts, voice.ja.ts) with full-width punctuation
+    // like ％ and the nakaguro ・, plus the deliberately look-alike dash/quote set
+    // in search.ts's IGNORED_PUNCTUATION. VS Code's homoglyph check earns its keep
+    // in *code* — a Cyrillic "а" smuggled into an identifier — so that stays on;
+    // we only stop it flagging string contents, where non-ASCII is expected.
+    // (allowedLocales can't do this job: the full-width ％ reports
+    // notAmbiguousInLocales: [], so no locale clears it.)
+    "editor.unicodeHighlight.includeStrings": false
 }

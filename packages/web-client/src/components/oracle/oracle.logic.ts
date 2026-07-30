@@ -3,10 +3,10 @@ import type {
   MatchedOutcome,
 } from '@shared/api/endpoints/junkToGuarantee.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
+import type { EquipmentCategoryCode } from '@shared/domain/equipment';
 import type { EquipmentRankKind } from '@shared/domain/rank';
-import { wizda } from '@/mascot/voice';
+import { getStrings, getWizda } from '@/i18n/languageStore';
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
-import { GRADES } from '@shared/domain/grade';
 import { QUALITIES } from '@shared/domain/quality';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { BLESSINGS } from '@shared/domain/stats';
@@ -232,38 +232,35 @@ export function gradeFloorFor(blessingCount: number): number {
  * words are Wizda's (in the phrase catalog); this adapter feeds her the data.
  */
 export function blessingFloorPhrase(blessingCount: number, floor: number): string {
-  return wizda.confirm.blessingFloorPhrase(blessingCount, gradeName(floor), floor >= MAX_LEVEL);
+  return getWizda().confirm.blessingFloorPhrase(blessingCount, gradeName(floor), floor >= MAX_LEVEL);
 }
 
 export function gradeName(value: number): string {
-  return GRADES.find((grade) => grade.value === value)?.name ?? `grade ${value}`;
+  const names = getStrings().vocab.gradeName;
+  return names[value as 1 | 2 | 3 | 4 | 5] ?? `grade ${value}`;
 }
 
 export function qualityLabel(value: number): string {
   return QUALITIES.find((quality) => quality.value === value)?.label ?? `★${value}`;
 }
 
-/** Short player-friendly blessing label: "ATK", "ATK%", "SUR". */
+/** Short player-friendly blessing label: "ATK", "ATK%", "SUR" (localized). */
 export function blessingLabel(code: string): string {
   const blessing = BLESSINGS.find((entry) => entry.code === code);
   if (!blessing) {
     return code;
   }
-  return blessing.isPercent ? `${blessing.statKind}%` : blessing.statKind;
+  return getStrings().vocab.blessingLabel(blessing.statKind, blessing.isPercent);
 }
 
 /**
- * Join a list the way a person would speak it: "a", "a and b", "a, b, and c".
- * Pass `"or"` for the accepted-outcome (OR set) axes, where "and" would misread.
+ * Join a list the way the active language speaks it — "a, b, and c" in English,
+ * "a・b・c" in Japanese. Pass `"or"` for the accepted-outcome (OR set) axes,
+ * where a language that distinguishes it would otherwise misread. The locale
+ * owns the separator/conjunction (see `common.joinList`).
  */
 export function joinHuman(items: string[], conjunction: 'and' | 'or' = 'and'): string {
-  if (items.length <= 1) {
-    return items[0] ?? '';
-  }
-  if (items.length === 2) {
-    return `${items[0]} ${conjunction} ${items[1]}`;
-  }
-  return `${items.slice(0, -1).join(', ')}, ${conjunction} ${items[items.length - 1]}`;
+  return getStrings().common.joinList(items, conjunction);
 }
 
 // ---------------------------------------------------------------------------
@@ -272,10 +269,23 @@ export function joinHuman(items: string[], conjunction: 'and' | 'or' = 'and'): s
 // falling back to the raw filters when the curve request hasn't landed or failed.
 // ---------------------------------------------------------------------------
 
-const RANK_NAME_BY_KIND = new Map(EQUIPMENT_RANKS.map((rank) => [rank.kind as string, rank.name]));
+/** A rank's localized display name, falling back to its English name. */
+function rankName(kind: string): string {
+  return getStrings().vocab.rankName[kind as EquipmentRankKind] ?? kind;
+}
+
 const CATEGORY_NAME_BY_CODE = new Map(
-  EQUIPMENT_CATEGORIES.map((category) => [category.code, category.name]),
+  EQUIPMENT_CATEGORIES.map((category) => [category.code as string, category.name]),
 );
+
+/** A category's localized display name, falling back to its English name. */
+function categoryName(code: string): string {
+  return (
+    getStrings().vocab.categoryName[code as EquipmentCategoryCode]
+    ?? CATEGORY_NAME_BY_CODE.get(code)
+    ?? code
+  );
+}
 
 /** How many equipment names the subject line shows before collapsing to "+N more". */
 export const SUBJECT_EQUIPMENT_CAP = 3;
@@ -383,11 +393,20 @@ export interface QuerySubject {
  * nothing named, rank becomes an adjective on the category ("Any Silver Odachi").
  * That reads badly once both axes are plural — "Any Silver or Ebonsteel Odachi or
  * Katana" parses several ways — so the ranks move into a trailing parenthetical.
+ *
+ * `query.equipment` holds the English `name` keys; the reference list resolves each
+ * to its locale `displayName` (English fallback) so the subject reads in the active
+ * language rather than leaking the key. The rank/category branch localizes on its
+ * own (see `rankName`/`categoryName`).
  */
-export function subjectOf(query: ResolvedQuery): QuerySubject {
+export function subjectOf(
+  query: ResolvedQuery,
+  equipmentByName: Map<string, EquipmentListItem>,
+): QuerySubject {
   if (query.equipment.length > 0) {
-    const shown = query.equipment.slice(0, SUBJECT_EQUIPMENT_CAP);
-    const hidden = query.equipment.slice(SUBJECT_EQUIPMENT_CAP);
+    const display = (name: string): string => equipmentByName.get(name)?.displayName ?? name;
+    const shown = query.equipment.slice(0, SUBJECT_EQUIPMENT_CAP).map(display);
+    const hidden = query.equipment.slice(SUBJECT_EQUIPMENT_CAP).map(display);
     return {
       // A dangling "or" before "+N more" would lie about the list being complete.
       text: hidden.length > 0 ? shown.join(', ') : joinHuman(shown, 'or'),
@@ -395,17 +414,18 @@ export function subjectOf(query: ResolvedQuery): QuerySubject {
     };
   }
 
-  const ranks = query.rank.map((kind) => RANK_NAME_BY_KIND.get(kind) ?? kind);
-  const categories = query.category.map((code) => CATEGORY_NAME_BY_CODE.get(code) ?? code);
-  const noun = categories.length > 0 ? joinHuman(categories, 'or') : 'equipment';
+  const strings = getStrings();
+  const ranks = query.rank.map(rankName);
+  const categories = query.category.map(categoryName);
+  const noun = categories.length > 0 ? joinHuman(categories, 'or') : strings.oracle.subjectNoun;
 
   if (ranks.length === 0) {
-    return { text: `Any ${noun}`, hidden: [] };
+    return { text: strings.oracle.subjectAny(noun), hidden: [] };
   }
   if (ranks.length === 1 || categories.length <= 1) {
-    return { text: `Any ${joinHuman(ranks, 'or')} ${noun}`, hidden: [] };
+    return { text: strings.oracle.subjectRankedInline(joinHuman(ranks, 'or'), noun), hidden: [] };
   }
-  return { text: `Any ${noun} (${joinHuman(ranks, 'or')})`, hidden: [] };
+  return { text: strings.oracle.subjectRankedTrailing(noun, joinHuman(ranks, 'or')), hidden: [] };
 }
 
 /** What the subject line's icon should depict, and what colour(s) to tint it. */

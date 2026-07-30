@@ -17,8 +17,10 @@ export interface SeedTaxonomyResult {
    * equipment list. See docs/domain.md.
    */
   created: number,
-  /** Enriched/created items that got a rank but no category (source lacked a weight class). */
+  /** Enriched/created items that got no category (source lacked, or we couldn't map, a weight class). */
   withoutCategory: string[],
+  /** Enriched/created items the source gave no usable rank for (blank, or a rank we don't know). */
+  withoutRank: string[],
   /**
    * DB equipment names absent from the CSVs (name drift or genuinely absent) —
    * these keep whatever enrichment they already had.
@@ -72,9 +74,17 @@ export async function seedEquipmentTaxonomy(
     const values = toUpdate.map(({ id, entry }) => Prisma.sql`(
       ${id}::text, ${entry.categoryCode}::text, ${entry.rank}::"EquipmentRankKind"
     )`);
+    // `rank` is COALESCEd, `categoryCode` is not, and the asymmetry is deliberate.
+    // A null rank here means "the source didn't tell us this time" (blank column,
+    // or a label we no longer recognise) — never "this item has no rank". Plain-
+    // SETting it would mean a single upstream rename ("Ebonsteel" -> "Ebon Steel")
+    // silently clears the rank on every Ebonsteel item at once, which is exactly
+    // the catalogue-wide blast radius this pass was reworked to avoid. Category
+    // has no such failure mode: nulling it is the intended outcome for an item we
+    // can't place, and the previous value would be just as wrong.
     await prisma.$executeRaw`
       UPDATE "Equipment" AS e
-      SET "categoryCode" = v.category_code, "rank" = v.rank
+      SET "categoryCode" = v.category_code, "rank" = COALESCE(v.rank, e."rank")
       FROM (VALUES ${Prisma.join(values)}) AS v(id, category_code, rank)
       WHERE e.id = v.id
     `;
@@ -96,20 +106,31 @@ export async function seedEquipmentTaxonomy(
     .map((item) => item.name)
     .sort((left, right) => left.localeCompare(right));
 
-  const anomalies = toUpdate
-    .filter(({ junkSourced, entry }) => junkSourced && !obtainableRanks.has(entry.rank))
-    .map(({ name, entry }) => ({ name, rank: entry.rank }));
+  // A null rank isn't an anomaly, it's an absence — it's reported via
+  // `withoutRank` instead, and the UPDATE above left the previous value in place.
+  const anomalies = toUpdate.flatMap(({ name, junkSourced, entry: { rank } }) => {
+    if (!junkSourced || rank === null || obtainableRanks.has(rank)) {
+      return [];
+    }
+    return [{ name, rank }];
+  });
 
-  const withoutCategory = [...toUpdate, ...toCreate]
-    .filter(({ entry }) => entry.categoryCode === null)
+  const sortedNames = (
+    entries: readonly { name: string, entry: EquipmentTaxonomyEntry }[],
+    isMissing: (entry: EquipmentTaxonomyEntry) => boolean,
+  ): string[] => entries
+    .filter(({ entry }) => isMissing(entry))
     .map(({ name }) => name)
     .sort((left, right) => left.localeCompare(right));
+
+  const enriched = [...toUpdate, ...toCreate];
 
   return {
     totalTaxonomyEntries: taxonomyByName.size,
     updated: toUpdate.length,
     created: toCreate.length,
-    withoutCategory,
+    withoutCategory: sortedNames(enriched, (entry) => entry.categoryCode === null),
+    withoutRank: sortedNames(enriched, (entry) => entry.rank === null),
     unmatchedNames,
     anomalies,
   };

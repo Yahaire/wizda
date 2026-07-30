@@ -1,6 +1,7 @@
 'use client';
 
 import { QualityStarRow, QualityStars } from '@/components/gear/gearDisplays';
+import { useStrings } from '@/i18n/LanguageProvider';
 import { Group } from '@mantine/core';
 import { QUALITIES } from '@shared/domain/quality';
 
@@ -44,6 +45,7 @@ export function QualityReadout({ value, max = MAX_LEVEL }: QualityLevelProps) {
  * written stars a piece carries.
  */
 export function QualityFilter({ value, onChange, max }: QualityFilterProps) {
+  const strings = useStrings();
   return (
     <LevelSlider
       value={clampLevel(value, MIN_LEVEL, max)}
@@ -51,7 +53,7 @@ export function QualityFilter({ value, onChange, max }: QualityFilterProps) {
       min={MIN_LEVEL}
       max={max}
       color="crimson"
-      ariaLabel="Lowest acceptable quality"
+      ariaLabel={strings.oracle.qualitySliderAriaLabel}
       // The stop already writes the stars out, so the drag label says the same thing
       // the field's readout does — what picking this stop would leave the field saying.
       marks={QUALITIES.map((quality) => ({

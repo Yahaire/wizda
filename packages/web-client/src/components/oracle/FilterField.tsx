@@ -1,5 +1,6 @@
 'use client';
 
+import { useStrings } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
 import { ActionIcon, Anchor, Group, Input, Modal, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -37,6 +38,7 @@ export function FilterField({
   onClear,
   canClear = false,
 }: FilterFieldProps) {
+  const strings = useStrings();
   const [infoOpened, info] = useDisclosure(false);
 
   return (
@@ -53,7 +55,7 @@ export function FilterField({
                 color="gray"
                 size="sm"
                 radius="xl"
-                aria-label={`What is ${label}?`}
+                aria-label={strings.common.whatIsAriaLabel(label)}
                 onClick={info.open}
               >
                 <IconInfoCircle size={15} />
@@ -67,10 +69,10 @@ export function FilterField({
               type="button"
               size="xs"
               c="dimmed"
-              aria-label={`Clear ${label}`}
+              aria-label={strings.common.clearAriaLabel(label)}
               onClick={onClear}
             >
-              Clear
+              {strings.common.clear}
             </Anchor>
           )}
         </Group>

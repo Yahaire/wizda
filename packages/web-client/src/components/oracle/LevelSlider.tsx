@@ -1,5 +1,6 @@
 'use client';
 
+import { useStrings } from '@/i18n/LanguageProvider';
 import { Slider, Stack, Text } from '@mantine/core';
 
 /** One stop on the scale: what to draw under the track, and what to call it. */
@@ -35,12 +36,14 @@ interface LevelSliderProps {
 
 /** The lowest level constrains nothing, so it says so rather than "1★ and up". */
 export function AnyLevel() {
-  return <Text c="dimmed" fz="sm">Any</Text>;
+  const strings = useStrings();
+  return <Text c="dimmed" fz="sm">{strings.common.any}</Text>;
 }
 
 /** "…and everything above". Dropped at the top of the scale, where there is nothing above. */
 export function AndUp() {
-  return <Text span c="dimmed" fz="sm" fw={700}>+</Text>;
+  const strings = useStrings();
+  return <Text span c="dimmed" fz="sm" fw={700}>{strings.common.andUp}</Text>;
 }
 
 /**

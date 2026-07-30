@@ -1,6 +1,8 @@
 'use client';
 
+import { rankName } from '@/components/gear/gearDisplays';
 import { IconMultiSelect } from '@/components/select/IconMultiSelect';
+import { useStrings } from '@/i18n/LanguageProvider';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { IconCircleFilled } from '@tabler/icons-react';
 
@@ -23,19 +25,20 @@ const RANK_CHOICES = [...EQUIPMENT_RANKS]
  * {@link CategoryFilter}/{@link EquipmentSelect}.
  */
 export function RankFilter({ value, onChange, available }: RankFilterProps) {
+  const strings = useStrings();
   return (
     <IconMultiSelect
       data={RANK_CHOICES}
       value={value}
       onChange={onChange}
       getValue={(rank) => rank.kind}
-      getLabel={(rank) => rank.name}
+      getLabel={(rank) => rankName(rank.kind)}
       getIcon={(rank) => ({ icon: IconCircleFilled, color: rank.color })}
       isUnavailable={(rank) => !available.has(rank.kind)}
-      unavailableHint="Greyed out: no gear you've picked comes in that rank."
-      placeholder="Any rank"
-      selectedPlaceholder="Add more ranks…"
-      emptyMessage="No matching rank"
+      unavailableHint={strings.oracle.rankGreyedHint}
+      placeholder={strings.oracle.anyRankPlaceholder}
+      selectedPlaceholder={strings.oracle.addMoreRanksPlaceholder}
+      emptyMessage={strings.oracle.noMatchingRank}
     />
   );
 }

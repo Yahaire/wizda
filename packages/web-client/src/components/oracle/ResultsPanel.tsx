@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CALCULATION_DOC_URL } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
-import { wizda } from '@/mascot/voice';
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch';
+import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
+import { createSearchMatcher, normalize } from '@/utils/search';
 import {
     ActionIcon, Alert, Anchor, Box, Button, Center, Group, Loader, Modal, Paper, Stack, Text,
     TextInput, ThemeIcon, Tooltip, UnstyledButton
@@ -60,9 +62,10 @@ interface ResultsPanelProps {
  * from rather than discarding the answer, the same way the detail modal's Back reads.
  */
 function BackButton({ onBack }: { onBack: () => void }) {
+  const strings = useStrings();
   return (
-    <Tooltip label="Back to the start" withArrow openDelay={300}>
-      <ActionIcon variant="subtle" color="gray" onClick={onBack} aria-label="Back">
+    <Tooltip label={strings.oracle.backToStartTooltip} withArrow openDelay={300}>
+      <ActionIcon variant="subtle" color="gray" onClick={onBack} aria-label={strings.common.backAriaLabel}>
         <IconArrowLeft size={18} />
       </ActionIcon>
     </Tooltip>
@@ -79,7 +82,14 @@ export function ResultsPanel({
   fillHeight,
   onBack,
 }: ResultsPanelProps) {
-  const [nameFilter, setNameFilter] = useState("");
+  const strings = useStrings();
+  const wizda = useWizda();
+  const {
+    value: nameFilter,
+    setValue: setNameFilter,
+    debounced: debouncedNameFilter,
+    compositionProps: nameFilterCompositionProps,
+  } = useDebouncedSearch();
   const [detail, setDetail] = useState<JunkGuaranteeEntry | null>(null);
   // "You were here": the last junk row whose detail we opened, tinted once the
   // modal closes so you re-orient to where you left off. Only the most recent one
@@ -105,12 +115,20 @@ export function ResultsPanel({
     if (!result) {
       return [];
     }
-    const needle = nameFilter.trim().toLowerCase();
-    if (!needle) {
+    if (!debouncedNameFilter.trim()) {
       return result.results;
     }
-    return result.results.filter((entry) => entry.junkName.toLowerCase().includes(needle));
-  }, [result, nameFilter]);
+    // Match on the localized display name — it's what the player sees and types —
+    // plus, in Japanese, the reading, so a kana query reaches a name in kanji.
+    // Shares the catalogue matcher rather than a bare `includes`, so this filter
+    // gets the same aliasing and script folding as every other search box.
+    const matcher = createSearchMatcher(debouncedNameFilter);
+    return result.results.filter((entry) => matcher.matchesNormalized(
+      [entry.junkDisplayName, entry.junkNameReading]
+        .filter((text): text is string => Boolean(text))
+        .map(normalize),
+    ));
+  }, [result, debouncedNameFilter]);
 
   const isFiltering = nameFilter.trim() !== "";
 
@@ -182,16 +200,16 @@ export function ResultsPanel({
         <Group gap={6} wrap="nowrap">
           <BackButton onBack={onBack} />
           <Text fw={600}>
-            {result.total} {result.total === 1 ? "junk" : "junks"} can get it
+            {strings.oracle.resultsCount(result.total)}
           </Text>
           {showEstimate && (
-            <Tooltip label="Blessing odds rest on one assumption — tap to see it" withArrow>
+            <Tooltip label={strings.oracle.blessingOddsTooltip} withArrow>
               <ActionIcon
                 variant="subtle"
                 color="yellow"
                 size="sm"
                 radius="xl"
-                aria-label="The assumption behind these blessing odds"
+                aria-label={strings.oracle.blessingOddsAriaLabel}
                 onClick={() => setEstimateOpen(true)}
               >
                 <IconAlertTriangle size={16} />
@@ -202,22 +220,23 @@ export function ResultsPanel({
         <TextInput
           size="xs"
           w={{ base: 130, xs: 220 }}
-          placeholder="Filter by name"
+          placeholder={strings.oracle.filterByNamePlaceholder}
           leftSection={<IconSearch size={14} />}
           value={nameFilter}
           onChange={(event) => setNameFilter(event.currentTarget.value)}
+          {...nameFilterCompositionProps}
         />
       </Group>
 
       {/* Column headers */}
       <Group justify="space-between" wrap="nowrap" px="sm" gap="lg">
-        <Text size="xs" c="dimmed" fw={700} tt="uppercase">Junk</Text>
+        <Text size="xs" c="dimmed" fw={700} tt="uppercase">{strings.oracle.columnJunk}</Text>
         <Group gap="sm" wrap="nowrap">
           <Group gap="lg" wrap="nowrap">
             <Text size="xs" c="dimmed" fw={700} tt="uppercase" w={NUM_COL} ta="right" visibleFrom="xs">
-              %/junk
+              {strings.oracle.columnPercentPerJunk}
             </Text>
-            <Text size="xs" c="dimmed" fw={700} tt="uppercase" w={NUM_COL} ta="right"># req.</Text>
+            <Text size="xs" c="dimmed" fw={700} tt="uppercase" w={NUM_COL} ta="right">{strings.oracle.columnNumRequired}</Text>
           </Group>
           <Box w={CHEVRON_COL} />
         </Group>
@@ -266,7 +285,7 @@ export function ResultsPanel({
                   >
                     <Group justify="space-between" wrap="nowrap" h="100%" gap="lg">
                       <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-                        <Text truncate fw={500}>{entry.junkName}</Text>
+                        <Text truncate fw={500}>{entry.junkDisplayName}</Text>
                         {entry.hasMultiplePools && (
                           <ThemeIcon variant="subtle" color="yellow" size="sm">
                             <IconInfoCircle size={16} />
@@ -314,7 +333,7 @@ export function ResultsPanel({
                 onClick={handleShowMore}
                 loading={loadingMore}
               >
-                Show more
+                {strings.oracle.showMoreButton}
               </Button>
             </>
           ) : (
@@ -338,7 +357,7 @@ export function ResultsPanel({
       <Modal
         opened={estimateOpen}
         onClose={() => setEstimateOpen(false)}
-        title="About the blessing odds"
+        title={strings.oracle.estimateModalTitle}
         centered
         size="md"
       >
@@ -352,9 +371,9 @@ export function ResultsPanel({
               rel="noopener noreferrer"
               inherit
             >
-              The calculation doc
+              {strings.oracle.calculationDocLinkLabel}
             </Anchor>{' '}
-            spells out every step, and corrections are welcome.
+            {strings.oracle.estimateFooterSuffix}
           </Text>
         </Stack>
       </Modal>

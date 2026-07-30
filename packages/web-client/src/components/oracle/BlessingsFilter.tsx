@@ -1,26 +1,13 @@
 'use client';
 
-import {
-  Button,
-  Chip,
-  Group,
-  Modal,
-  Pill,
-  SimpleGrid,
-  Text,
-} from '@mantine/core';
+import { useStrings, useWizda } from '@/i18n/LanguageProvider';
+import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
+import { Button, Chip, Group, Modal, Pill, SimpleGrid, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { BLESSINGS } from '@shared/domain/stats';
 import { IconSparkles } from '@tabler/icons-react';
 
-import { BLESSINGS } from '@shared/domain/stats';
-
-import { wizda } from '@/mascot/voice';
-import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
-
-import {
-  blessingLabel,
-  MAX_BLESSINGS,
-} from './oracle.logic';
+import { blessingLabel, MAX_BLESSINGS } from './oracle.logic';
 
 interface BlessingsFilterProps {
   value: string[],
@@ -43,6 +30,8 @@ interface BlessingsFilterProps {
  * already picked, or the player couldn't take it back.
  */
 export function BlessingsFilter({ value, onChange, available }: BlessingsFilterProps) {
+  const strings = useStrings();
+  const wizda = useWizda();
   const [opened, { open, close }] = useDisclosure(false);
   const atCap = value.length >= MAX_BLESSINGS;
   const unreachable = BLESSINGS.some(
@@ -63,7 +52,9 @@ export function BlessingsFilter({ value, onChange, available }: BlessingsFilterP
         leftSection={<IconSparkles size={16} />}
         onClick={open}
       >
-        {value.length ? `Blessings (${value.length})` : 'Choose blessings'}
+        {value.length
+          ? strings.oracle.blessingsCountButton(value.length)
+          : strings.oracle.blessingsChooseButton}
       </Button>
 
       {value.length > 0 && (
@@ -83,7 +74,7 @@ export function BlessingsFilter({ value, onChange, available }: BlessingsFilterP
       <Modal
         opened={opened}
         onClose={close}
-        title="Required blessings"
+        title={strings.oracle.blessingsModalTitle}
         size="md"
         centered
       >
@@ -116,16 +107,16 @@ export function BlessingsFilter({ value, onChange, available }: BlessingsFilterP
         </Chip.Group>
         {atCap && (
           <Text c="dimmed" size="xs" mt="sm">
-            That&apos;s the most a single piece can hold ({MAX_BLESSINGS}).
+            {strings.oracle.blessingsCapNote(MAX_BLESSINGS)}
           </Text>
         )}
         {!atCap && unreachable && (
           <Text c="dimmed" size="xs" mt="sm">
-            Greyed out: no gear your other filters allow could carry that one too.
+            {strings.oracle.blessingsGreyedNote}
           </Text>
         )}
         <Group justify="flex-end" mt="md">
-          <Button variant="light" color="crimson" onClick={close}>Done</Button>
+          <Button variant="light" color="crimson" onClick={close}>{strings.oracle.blessingsDoneButton}</Button>
         </Group>
       </Modal>
     </div>

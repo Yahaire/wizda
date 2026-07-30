@@ -17,6 +17,14 @@ export interface JunkListItem {
    * `name` remains the key for every request.
    */
   displayName: string,
+  /**
+   * Hiragana reading of {@link displayName}, for search only — never render it.
+   * Present only when the request resolved to Japanese *and* a reading is stored
+   * (see `Equipment.nameJaReading`); absent for every other locale, so English
+   * clients don't carry it. Lets a player reach `夜` by typing `よる`, which no
+   * amount of string normalization can do on its own.
+   */
+  nameReading?: string,
   /** See `Junk.hasMultiplePools` — a frontend caveat flag. */
   hasMultiplePools: boolean,
   /** Highest quality (★1–5) any equipment drops from this junk; null if unknown. */
@@ -59,6 +67,8 @@ export interface EquipmentListItem {
    * translation exists yet. Display-only — see {@link JunkListItem.displayName}.
    */
   displayName: string,
+  /** Search-only hiragana reading — see {@link JunkListItem.nameReading}. */
+  nameReading?: string,
   /** Category, or null when the taxonomy enrichment couldn't match it (see the seed). */
   category: EquipmentCategoryRef | null,
   /** Equipment rank, or null when it couldn't be derived (enrichment — see schema). */

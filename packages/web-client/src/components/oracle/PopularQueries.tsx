@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useDetail } from '@/components/detail/DetailProvider';
-import { wizda } from '@/mascot/voice';
+import { useWizda } from '@/i18n/LanguageProvider';
 import { api } from '@/services/api';
 import { Box, Collapse, Group, Paper, Stack, Text, UnstyledButton } from '@mantine/core';
 
@@ -72,7 +72,7 @@ const TWO_LINE_CLAMP: React.CSSProperties = {
  */
 function PopularRow({ entry, equipmentByName, onPick, index }: PopularRowProps) {
   const query = resolvedQueryFrom(entry.filters);
-  const subject = subjectOf(query);
+  const subject = subjectOf(query, equipmentByName);
   const identity = subjectIdentity(query, equipmentByName);
 
   const hasMeta = query.quality.length > 0 || query.blessings.length > 0;
@@ -145,6 +145,7 @@ function PopularRow({ entry, equipmentByName, onPick, index }: PopularRowProps) 
  * anyone; a broken one should cost the empty state nothing but its own absence.
  */
 export function PopularQueries({ onPick }: PopularQueriesProps) {
+  const wizda = useWizda();
   const [entries, setEntries] = useState<PopularQueryEntry[]>([]);
   // Drives the reveal, and is deliberately a beat behind `entries`. Collapse only
   // animates a false→true flip, so opening in the same commit the rows arrive in

@@ -8,16 +8,34 @@ math see [`docs/calculation.md`](./calculation.md); for the data model see
 ## Why there's no cookie banner
 
 A cookie-consent banner exists to get your permission before a site does
-something to identify or follow you: dropping a cookie, tying your visits
-together, building a profile. Wizda doesn't do any of that.
+something to identify or follow you: dropping a tracking cookie, tying your
+visits together, building a profile. Wizda doesn't do any of that.
 
-Everything below runs **without cookies**, without accounts, and without
-storing your IP on our side. It never links one visit to the next, never
-follows you across sites, and never builds a profile of you — it only keeps
-**anonymous, aggregate counts**: how many people used a feature, which items
-came up often. There's simply nothing here for a consent banner to gate, so we
-don't put one in front of you. If that's ever untrue of something we add,
-we'll add a banner and say so plainly — but nothing here today needs one.
+Everything below runs without accounts and without storing your IP on our side.
+It never links one visit to the next, never follows you across sites, and never
+builds a profile of you — it only keeps **anonymous, aggregate counts**: how
+many people used a feature, which items came up often. There's simply nothing
+here for a consent banner to gate, so we don't put one in front of you. If
+that's ever untrue of something we add, we'll add a banner and say so plainly —
+but nothing here today needs one.
+
+### The one cookie, and why it needs no banner
+
+Picking a site language writes a single cookie, `wizda.lang`, holding exactly
+one value: `en` or `ja`. It's written **only when you click the switcher** —
+language auto-detection never writes anything — so a visitor who never touches
+it stores nothing at all. It carries no identifier, isn't read by analytics,
+and is only consulted for URLs that don't already name a language (see
+[`docs/i18n.md`](./i18n.md)).
+
+That's the textbook consent-exempt case: ePrivacy requires consent for storage
+that isn't strictly necessary for a service the user explicitly asked for, and
+"remember the language I just chose" is precisely that exception. Worth noting
+the same rule covers *any* storage on your device, not just cookies — so the
+`localStorage` language preference this replaced was already in the same
+category. Nothing about what we store changed; only the mechanism did, so that
+the page can be served in the right language from the very first byte instead of
+flashing English first.
 
 ## What we track, and why
 
@@ -70,6 +88,7 @@ that will read it.
 | Page views | visit/path counts | none | no | env var |
 | `guarantee_query` | filter-count/certainty stats | none | no | env var |
 | Most-searched | searched filter combos (aggregate) | none | no | always on (own DB) |
+| Language choice | `en` or `ja`, on your device only | none | `wizda.lang` | only if you pick one |
 
 All three are **self-hosted or self-owned** — Umami runs on our own server
 rather than a third-party analytics SaaS, and the popularity tables live in

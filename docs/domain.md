@@ -115,8 +115,11 @@ Plus an **enrichment** source (not needed by the core calc):
    produce (equipment no junk drops). Pulled via the `WEAPON_TAXONOMY_SOURCE_URL` /
    `ARMOR_TAXONOMY_SOURCE_URL` env vars (raw-GitHub URL or a local file). The
    mapping tables + name-match live in `prisma/seed-from-html/equipmentTaxonomy.*`;
-   the seed logs how many rows it updated vs. created plus any unmatched names. An
-   unrecognised `Rank` fails the seed loudly.
+   the seed logs how many rows it updated vs. created plus any unmatched names.
+   A `Type`/`Armor Type`/`Rank` we don't map is **recorded, not fatal**: that one
+   field is left null, the item is stored with everything else we could derive,
+   and the seed finishes and prints an `ACTION REQUIRED` block naming the
+   unmapped values. See "Adding a new equipment category" below.
 
 ## "Drop Rates by Junk" structure
 
@@ -277,6 +280,111 @@ be outdated" UI notice.
 locale-resolved `displayName`/`junkDisplayName` (falls back to English when
 untranslated). Nothing sends a locale today, so these always equal the
 English name — byte-for-byte unchanged from before this existed.
+
+### Japanese readings (`nameJaReading`)
+
+`Equipment`/`Junk.nameJaReading` stores the hiragana **reading** (yomi) of
+`nameJa` — a fourth localized column, but a search aid rather than a display name,
+and never a key. It exists because a Japanese name mixes kanji, hiragana and
+katakana in one string and the script a player *types* is not the one the name is
+*written* in; reading kanji needs a dictionary, not a rule, so the seed runs one
+and stores the answer. **Why it's shaped this way is in
+[`docs/search.md`](./search.md)** — this section covers only the data model.
+
+- **Filled by `seedJapaneseReadings.ts`**, which runs after `seedLocalizedNames`
+  and reads `nameJa` back out of the DB, so it can be re-run on its own. No-ops
+  when no row has a Japanese name. ~356 ms init + ~110 ms for all ~1,200 names.
+- **Seed-only dependency.** kuroshiro pulls ~41 MB of dictionary and is imported
+  *only* from `prisma/seed-from-html/`, never from `src/` — the API just reads
+  the column.
+- **Stored un-normalized.** Casing, punctuation and katakana folding are search
+  policy and live in the client's `normalize()`, so tuning them never costs a
+  reseed.
+- **A residue needs overrides.** kuromoji is trained on ordinary Japanese and this
+  catalogue is coined fantasy compounds, so ~18% of names come back with kanji
+  still in them — but that is a handful of characters, and `妖` (in the archaic
+  `妖なる`, "Fey") is 96% of it. Two tables patch them, and **which one an entry
+  belongs in is a question of timing, not key length**:
+
+  ```
+  name ─▶ KANJI_RUN_READINGS ─▶ kuroshiro ─▶ RESIDUAL_KANJI_READINGS ─▶ reading
+  ```
+
+  `RESIDUAL_KANJI_READINGS` runs *after* conversion, per character, and is safe by
+  construction — it can only change the character it replaces. Prefer it.
+
+  `KANJI_RUN_READINGS` substitutes into the name *before* conversion, and is only
+  for readings that span several characters. `鬼啼島` ("Island of the Wailing Oni",
+  おになきじま) is the case: a post-pass can never see that run intact, because
+  kuroshiro converts 島 → とう on its own and leaves `おに啼とう`, with no `啼島`
+  remaining to match. **Keep this table minimal** — splicing kana in changes how
+  kuromoji tokenises the neighbours. Measured: moving `棍` to the pre-pass turns
+  `水零の戦棍` from `みずれいのせんこん` into `みずれいのおののこん`, misreading 戦 as おの.
+
+  The seed logs loudly if any name still holds kanji afterwards, so a future
+  scrape introducing a new one surfaces then rather than quietly costing those
+  items their kana search path.
+- **`ko`/`de` have no equivalent.** Hangul and German need no reading to be
+  searchable; there is no script gap to bridge.
+
+On the wire the field is `nameReading` (`junkNameReading` on guarantee/curve
+entries), and it is **omitted entirely unless the request resolved to Japanese** —
+~7 KB gzipped per list that English clients never pay for.
+
+## Adding a new equipment category
+
+The game adds gear categories (a collab class arriving with a weapon nothing else
+uses, say). Nothing breaks when it does — the seed stores the item without a
+category and says so — but the item stays unclassified until someone works
+through the list below.
+
+**How you find out:** the seed's last output is an `ACTION REQUIRED` block naming
+every source value it couldn't map. Also visible in the app: unclassified pieces
+show a `?` and "Not known yet" in the Equipment list's Category column.
+
+**Why it's non-fatal.** This used to throw. The throw fired *after* the drop-rate
+writes had committed, so a single new weapon type both blocked rank/category
+enrichment for the entire catalogue and — via `scripts/seed-with-maintenance.mjs`,
+which holds `.maintenance` on any non-zero exit — took the whole site down until a
+human noticed. Nothing is silently mis-tagged by the softer behaviour either: an
+unmapped item simply has no category, which every display path already handles.
+
+The fix is mechanical. In order:
+
+1. `packages/shared/src/domain/equipment.ts` — add `{ code, name, equipmentType }`
+   to `EQUIPMENT_CATEGORIES`. This is the source of truth; the `EquipmentCategory`
+   table is seeded from it, so **no migration is needed**.
+2. `packages/backend-api/prisma/seed-from-html/equipmentTaxonomy.mapping.ts` — map
+   the source value: the `Type` in `WEAPON_TYPE_TO_CATEGORY`, or the
+   `(Type, Armor Type)` pair in `ARMOR_TYPE_TO_CATEGORY`.
+3. `packages/web-client/src/i18n/strings.ja.ts` — add the name to
+   `JA_CATEGORY_NAME`. English derives itself from the shared table and needs
+   nothing. *Compile error until done.*
+4. `packages/web-client/src/components/CategoryIcon.tsx` — add a glyph to
+   `EQUIPMENT_CATEGORY_ICONS`. *Compile error until done.* Use `react-icons/gi`
+   (game-icons.net, CC BY 3.0, already credited on the About page). **Never game
+   assets** — see the "No game assets, ever" rule.
+5. `docs/glossary.md` — add the agreed per-language wording to the equipment
+   categories table.
+6. Re-run `npm run db:seed:maintenance`, then deploy. Items enriched with the new
+   code only pick it up on that reseed.
+
+Steps 3 and 4 are compile errors by design, and `strings.test.ts` names this
+section in its failure message — so a half-added category can't ship.
+
+**A new rank or equipment *type* is not mechanical.** Both are Prisma enums
+(`EquipmentRankKind`, `EquipmentTypeKind` in `schema.prisma`), so they need a
+migration on top of the shared-table edit, plus `vocab.rankName` in both locales
+and, for a rank, its `orderIndex`/`color`/`isObtainableThroughJunk` in
+`shared/src/domain/rank.ts`. An unknown *outer* armor `Type` in the CSV means
+exactly this case — a whole new gear slot — which is why the seed reports it
+separately from an unknown weight class.
+
+A note on ranks specifically: when the seed can't map a `Rank`, the affected items
+**keep the rank they already had** (the write `COALESCE`s). That is deliberate. An
+upstream *rename* like `Ebonsteel` → `Ebon Steel` would otherwise clear the rank
+on every Ebonsteel item at once — the same catalogue-wide blast radius this pass
+was reworked to avoid.
 
 ## Parser gotchas (verified against the sample HTML)
 

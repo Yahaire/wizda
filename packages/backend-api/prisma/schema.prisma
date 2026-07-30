@@ -219,6 +219,18 @@ model Equipment {
   nameKo String?
   nameDe String?
 
+  /// Hiragana reading (yomi) of `nameJa`, computed at seed time by
+  /// `seedJapaneseReadings`. A search aid only — never a key, never displayed.
+  /// Japanese writes one name in kanji, hiragana and katakana at once, so a
+  /// player typing `よる` can't reach `夜` by any amount of string normalization;
+  /// only a stored reading bridges the two (the same trick Elasticsearch's
+  /// `kuromoji_readingform` and a Japanese form's フリガナ field use). Kept
+  /// un-normalized — casing/punctuation/katakana folding is the client's
+  /// `normalize()`, so tuning that never needs a reseed. Null when `nameJa` is
+  /// null or the reading pass hasn't run. `ko`/`de` need no equivalent: hangul
+  /// and German are matched by the client normalizer as-is.
+  nameJaReading String?
+
   category      EquipmentCategory?          @relation(fields: [categoryCode], references: [code])
   dropRates     EquipmentDropRate[]
   blessingRates EquipmentBlessingDropRate[]
@@ -252,6 +264,10 @@ model Junk {
   nameJa String?
   nameKo String?
   nameDe String?
+
+  /// Hiragana reading (yomi) of `nameJa` — see `Equipment.nameJaReading` above,
+  /// same rules (search aid only, un-normalized, never a key).
+  nameJaReading String?
 
   dropRates EquipmentDropRate[]
 }

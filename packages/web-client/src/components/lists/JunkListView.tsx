@@ -1,16 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
-import {
-  Alert,
-  Badge,
-  Center,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core';
+import { useDetail } from '@/components/detail/DetailProvider';
+import { GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
+import { Column, DataTable } from '@/components/table/DataTable';
+import { TruncatedText } from '@/components/TruncatedText';
+import { useStrings } from '@/i18n/LanguageProvider';
+import { Alert, Badge, Center, Loader, Stack, Text, Title } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 
 import type {
@@ -18,22 +15,12 @@ import type {
   JunkListItem,
 } from '@shared/api/endpoints/lists.models';
 
-import {
-  Column,
-  DataTable,
-} from '@/components/table/DataTable';
-import { useDetail } from '@/components/detail/DetailProvider';
-import { TruncatedText } from '@/components/TruncatedText';
-import {
-  GradeBadge,
-  QualityStars,
-} from '@/components/gear/gearDisplays';
-
 interface JunkRow extends JunkListItem {
   drops: number,
 }
 
 function JunkListContent() {
+  const strings = useStrings();
   const {
     junks,
     dropsByJunk,
@@ -46,18 +33,22 @@ function JunkListContent() {
     drops: (dropsByJunk.get(junk.name) as EquipmentListItem[] | undefined)?.length ?? 0,
   })), [junks, dropsByJunk]);
 
+  // Stable so DataTable's folded-text cache survives re-renders. `nameReading`
+  // is present only in Japanese, and is what lets a kana query reach a kanji name.
+  const junkSearchTexts = useCallback((row: JunkRow) => [row.displayName, row.nameReading], []);
+
   const columns: Column<JunkRow>[] = [
     {
       key: 'name',
-      header: 'Junk',
+      header: strings.lists.junkTitle,
       width: '3fr',
       minWidth: 200,
-      sortValue: (row) => row.name.toLowerCase(),
-      render: (row) => <TruncatedText fw={500}>{row.name}</TruncatedText>,
+      sortValue: (row) => row.displayName.toLowerCase(),
+      render: (row) => <TruncatedText fw={500}>{row.displayName}</TruncatedText>,
     },
     {
       key: 'quality',
-      header: 'Max ★',
+      header: strings.lists.columnMaxQuality,
       width: '90px',
       minWidth: 84,
       align: 'right',
@@ -68,7 +59,7 @@ function JunkListContent() {
     },
     {
       key: 'grade',
-      header: 'Max grade',
+      header: strings.lists.columnMaxGrade,
       width: '110px',
       minWidth: 108,
       sortValue: (row) => row.maxDropGrade ?? 0,
@@ -78,10 +69,10 @@ function JunkListContent() {
     },
     {
       key: 'drops',
-      header: 'Drops',
+      header: strings.lists.columnDrops,
       width: '64px',
       minWidth: 60,
-      align: 'right',
+      align: 'center',
       sortValue: (row) => row.drops,
       render: (row) => (row.drops
         ? <Text>{row.drops}</Text>
@@ -89,7 +80,7 @@ function JunkListContent() {
     },
     {
       key: 'pools',
-      header: 'Notes',
+      header: strings.lists.columnNotes,
       width: '1fr',
       minWidth: 130,
       sortValue: (row) => (row.hasMultiplePools ? 1 : 0),
@@ -100,7 +91,7 @@ function JunkListContent() {
           color="yellow"
           leftSection={<IconInfoCircle size={12} />}
         >
-          Multiple pools
+          {strings.lists.multiplePoolsLabel}
         </Badge>
       ) : null),
     },
@@ -108,10 +99,10 @@ function JunkListContent() {
 
   return (
     <Stack gap="md">
-      <Title order={2}>Junk</Title>
+      <Title order={2}>{strings.lists.junkTitle}</Title>
 
       {status === 'error' && (
-        <Alert color="red" variant="light">Couldn&apos;t load the junk list — try refreshing.</Alert>
+        <Alert color="red" variant="light">{strings.lists.junkLoadError}</Alert>
       )}
 
       {status === 'loading' && (
@@ -123,9 +114,9 @@ function JunkListContent() {
           data={rows}
           columns={columns}
           getRowId={(row) => row.name}
-          searchText={(row) => row.name}
-          searchPlaceholder="Filter junk by name"
-          emptyMessage="No junk by that name."
+          searchTexts={junkSearchTexts}
+          searchPlaceholder={strings.lists.junkSearchPlaceholder}
+          emptyMessage={strings.lists.junkEmptyMessage}
           onRowClick={(row) => openJunk(row.name)}
         />
       )}

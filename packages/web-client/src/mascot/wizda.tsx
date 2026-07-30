@@ -5,11 +5,10 @@ import { useEffect, useRef } from 'react';
 import { GiFairy, GiHyenaHead } from 'react-icons/gi';
 
 import { gameIcon, IconComponent } from '@/components/icons/iconComponent';
+import { getWizda } from '@/i18n/languageStore';
 import { Anchor, Box, Button, Group, Stack, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertTriangle, IconInfoCircle, IconSparkles } from '@tabler/icons-react';
-
-import { wizda } from './voice';
 
 /** Default lifetime for an auto-dismissing toast (matches the provider default). */
 const DEFAULT_AUTO_CLOSE_MS = 5000;
@@ -62,7 +61,7 @@ export function WizdaMark({ glyph: Glyph }: { glyph: IconComponent }) {
 }
 
 export function pickGreeting(): string {
-  const daily = wizda.greet.daily;
+  const daily = getWizda().greet.daily;
   const index = Math.floor(Math.random() * daily.length);
   return daily[index] ?? daily[0]!;
 }
@@ -109,6 +108,10 @@ function WizdaToastBody({ id, glyph, text, note, noteHref, autoCloseMs }: WizdaT
   // (or vice-versa) doesn't dismiss it.
   const pointerInsideRef = useRef(false);
   const focusInsideRef = useRef(false);
+  // Anchor into Mantine's DOM tree so we can reach the actual toast root (see
+  // below) — this component only renders the message; the close button lives
+  // outside it as a sibling.
+  const anchorRef = useRef<HTMLDivElement>(null);
 
   const clearTimer = () => {
     if (timerRef.current !== null) {
@@ -156,6 +159,22 @@ function WizdaToastBody({ id, glyph, text, note, noteHref, autoCloseMs }: WizdaT
       deadlineRef.current = Date.now() + autoCloseMs;
       timerRef.current = window.setTimeout(() => notifications.hide(id), autoCloseMs);
     }
+
+    // Mantine renders this component as the toast's *message* only — the icon
+    // and close button are siblings under the actual toast root, which it
+    // always marks `role="alert"`. Listening there (rather than on our own
+    // Box below) is what makes hover/focus detection cover the whole visible
+    // toast, close button included.
+    const toastRoot = anchorRef.current?.closest<HTMLElement>('[role="alert"]');
+    const onPointerEnter = () => handleEnter('pointer');
+    const onPointerLeave = () => handleLeave('pointer');
+    const onFocusIn = () => handleEnter('focus');
+    const onFocusOut = () => handleLeave('focus');
+    toastRoot?.addEventListener('mouseenter', onPointerEnter);
+    toastRoot?.addEventListener('mouseleave', onPointerLeave);
+    toastRoot?.addEventListener('focusin', onFocusIn);
+    toastRoot?.addEventListener('focusout', onFocusOut);
+
     // If the window loses focus while the pointer is still parked on the toast, no
     // mouseleave fires — treat a window blur as leaving so it doesn't hang open.
     const handleWindowBlur = () => {
@@ -170,18 +189,17 @@ function WizdaToastBody({ id, glyph, text, note, noteHref, autoCloseMs }: WizdaT
     return () => {
       clearTimer();
       window.removeEventListener('blur', handleWindowBlur);
+      toastRoot?.removeEventListener('mouseenter', onPointerEnter);
+      toastRoot?.removeEventListener('mouseleave', onPointerLeave);
+      toastRoot?.removeEventListener('focusin', onFocusIn);
+      toastRoot?.removeEventListener('focusout', onFocusOut);
     };
     // Set up once on mount; ref-based handlers manage state without re-running.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <Box
-      onMouseEnter={() => handleEnter('pointer')}
-      onMouseLeave={() => handleLeave('pointer')}
-      onFocusCapture={() => handleEnter('focus')}
-      onBlurCapture={() => handleLeave('focus')}
-    >
+    <Box ref={anchorRef}>
       <Stack gap={4}>
         {speech(glyph, text)}
         {note && (
@@ -265,6 +283,7 @@ export function wizdaConfirm(
   onConfirm: () => void,
   options: WizdaConfirmOptions = {},
 ): void {
+  const wizda = getWizda();
   const {
     glyph = WizdaGlyph.confirm,
     confirmLabel = wizda.confirm.tidyLabel,

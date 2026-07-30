@@ -8,7 +8,9 @@ import {
 } from 'react-icons/gi';
 
 import { gameIcon, IconComponent, IconComponentProps } from '@/components/icons/iconComponent';
-import { EQUIPMENT_CATEGORIES, EquipmentTypeKind } from '@shared/domain/equipment';
+import {
+    EQUIPMENT_CATEGORIES, EquipmentCategoryCode, EquipmentTypeKind
+} from '@shared/domain/equipment';
 import {
     IconBrandRedhat, IconCircle, IconHandStop, IconQuestionMark, IconShield, IconShirt, IconShoe,
     IconSword
@@ -23,7 +25,7 @@ import {
  * an oversized katana stand in), and Two-Handed Spear borrows a generic spear.
  * The one-vs-two-handed split is real art, not a modifier, wherever it exists.
  */
-const EQUIPMENT_CATEGORY_ICONS: Record<string, IconComponent> = {
+const EQUIPMENT_CATEGORY_ICONS: Record<EquipmentCategoryCode, IconComponent> = {
   // Weapons
   DAGGER: gameIcon(GiPlainDagger),
   ONE_HANDED_SWORD: gameIcon(GiBroadsword),
@@ -89,18 +91,26 @@ const EQUIPMENT_TYPE_ICONS: Record<EquipmentTypeKind, IconComponent> = {
 
 /** Category code → its equipment type, so a code alone is enough to pick an icon. */
 const EQUIPMENT_TYPE_BY_CATEGORY = new Map(
-  EQUIPMENT_CATEGORIES.map((category) => [category.code, category.equipmentType]),
+  EQUIPMENT_CATEGORIES.map((category) => [category.code as string, category.equipmentType]),
 );
 
 /**
  * The icon for an equipment category: its own glyph, else its type's, else a
  * question mark.
+ *
+ * The code is typed open because it arrives from the API, which is free to name a
+ * category this build has never heard of — gear the game added since we last
+ * deployed. That lands on the question mark deliberately: "we don't know what
+ * this is yet" is honest and legible, where guessing a sword would not be. The
+ * type-icon tier in between only covers a code we *do* know but have no glyph
+ * for, which the `Record<EquipmentCategoryCode, …>` above now makes a compile
+ * error anyway — it stays as belt-and-braces.
  */
 export function getCategoryIcon(categoryCode?: string | null): IconComponent {
   if (!categoryCode) {
     return IconQuestionMark;
   }
-  const categoryIcon = EQUIPMENT_CATEGORY_ICONS[categoryCode];
+  const categoryIcon = EQUIPMENT_CATEGORY_ICONS[categoryCode as EquipmentCategoryCode];
   if (categoryIcon) {
     return categoryIcon;
   }

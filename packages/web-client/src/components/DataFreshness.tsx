@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { wizda } from '@/mascot/voice';
+import { useLocaleHref, useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, wizdaSay } from '@/mascot/wizda';
 import { api } from '@/services/api';
 import { formatRelativeAge, isFreshWithinDay } from '@/utils/relativeTime';
@@ -18,6 +18,9 @@ import { IconRefresh } from '@tabler/icons-react';
  * timestamp, so a cold DB or a failed fetch just leaves the header clean.
  */
 export function DataFreshness() {
+  const strings = useStrings();
+  const wizda = useWizda();
+  const localeHref = useLocaleHref();
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,16 +48,16 @@ export function DataFreshness() {
       glyph: WizdaGlyph.greet,
       autoClose: 12000,
       note: wizda.data.freshnessNote(age),
-      noteHref: '/about#data-privacy',
+      noteHref: localeHref('/about#data-privacy'),
     });
   };
 
   return (
-    <Tooltip label="How fresh is this data?" position="bottom" withArrow openDelay={400}>
+    <Tooltip label={strings.dataFreshness.tooltipLabel} position="bottom" withArrow openDelay={400}>
       <UnstyledButton
         onClick={speak}
         ml="auto"
-        aria-label="Data freshness — where this data comes from"
+        aria-label={strings.dataFreshness.ariaLabel}
         style={{ opacity: 0.6, transition: 'opacity 120ms ease' }}
         onMouseEnter={(event) => { event.currentTarget.style.opacity = '1'; }}
         onMouseLeave={(event) => { event.currentTarget.style.opacity = '0.6'; }}

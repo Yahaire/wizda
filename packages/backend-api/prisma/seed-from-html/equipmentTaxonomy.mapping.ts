@@ -6,9 +6,18 @@ import type { CsvRow } from './loadCsv';
  * Pure mappings from the Fasterthoughts CSV taxonomy columns to our own
  * `EquipmentCategory` codes and `EquipmentRankKind` ranks, plus the builder that
  * turns parsed CSV rows into a `name -> { categoryCode, rank }` lookup. Kept free
- * of I/O and Prisma so it's unit-testable (see the sibling `.test.ts`). Unknown
- * source values throw, so a new/renamed Type/Rank in the upstream data fails the
- * seed loudly instead of silently mis-tagging items.
+ * of I/O and Prisma so it's unit-testable (see the sibling `.test.ts`).
+ *
+ * Unknown source values are **recorded, not thrown**: an unrecognised Type/Rank
+ * yields `null` for that one field and lands in {@link TaxonomyDrift}, which the
+ * orchestrator prints as an ACTION REQUIRED block. This used to throw, on the
+ * reasoning that loud drift beats silently mis-tagged items — still true, but the
+ * throw fired mid-seed *after* the drop-rate writes had committed, so one new
+ * weapon type both blocked enrichment for the whole catalogue and (via
+ * `scripts/seed-with-maintenance.mjs`, which holds `.maintenance` on any non-zero
+ * exit) took the site down until a human re-ran it. Nothing is mis-tagged now
+ * either — an unmapped item simply has no category, which every display path
+ * already handles. See docs/domain.md's "Adding a new equipment category".
  */
 
 /** CSV header names we read (weapon + armor share most; armor adds "Armor Type"). */
@@ -18,15 +27,51 @@ const RANK_COLUMN = 'Rank';
 const ARMOR_TYPE_COLUMN = 'Armor Type';
 
 /**
- * The item's derived category + rank. `categoryCode` is nullable because the
- * source occasionally omits an item's weight class (e.g. a couple of gloves with
- * a blank Armor Type) — those still get a rank, just no category. A non-empty but
- * *unrecognised* Type/Armor-Type still throws (real drift), only genuinely blank
- * fields are tolerated.
+ * The item's derived category + rank. Both are nullable, for two different
+ * reasons that happen to share a representation:
+ * - *blank* source field — the source occasionally omits an item's weight class
+ *   (e.g. a couple of gloves with a blank Armor Type). Routine, not drift.
+ * - *unrecognised* source value — real drift (a new weapon type, a renamed
+ *   rank). Also recorded in {@link TaxonomyDrift} so it gets reported.
+ *
+ * A null `rank` means "the source didn't tell us this time", never "this item
+ * has no rank" — see the `COALESCE` in `equipmentTaxonomy.seed.ts`.
  */
 export interface EquipmentTaxonomyEntry {
   categoryCode: string | null,
-  rank: EquipmentRankKind,
+  rank: EquipmentRankKind | null,
+}
+
+/**
+ * Unrecognised source values seen while building the taxonomy, deduplicated and
+ * sorted. Non-empty means the upstream CSVs have drifted from our mappings and
+ * someone needs to work through the runbook; the seed itself still completes.
+ */
+export interface TaxonomyDrift {
+  /** Unknown weapon `Type` values, e.g. "Polearm". */
+  weaponTypes: string[],
+  /** Unknown *outer* armor `Type` values (a new gear slot), e.g. "Cape". */
+  armorTypes: string[],
+  /** Known armor `Type` with an unknown weight class, formatted "Head / Plated". */
+  armorWeightClasses: string[],
+  /** Unknown `Rank` values, e.g. a renamed "Ebon Steel". */
+  ranks: string[],
+}
+
+/** Whether any drift at all was recorded — the trigger for the ACTION REQUIRED report. */
+export function hasTaxonomyDrift(drift: TaxonomyDrift): boolean {
+  return (
+    drift.weaponTypes.length > 0
+    || drift.armorTypes.length > 0
+    || drift.armorWeightClasses.length > 0
+    || drift.ranks.length > 0
+  );
+}
+
+/** What {@link buildTaxonomyByName} returns: the lookup, plus what it couldn't map. */
+export interface TaxonomyBuildResult {
+  byName: Map<string, EquipmentTaxonomyEntry>,
+  drift: TaxonomyDrift,
 }
 
 /**
@@ -103,35 +148,29 @@ export function canonicalName(csvName: string): string {
   return CSV_NAME_ALIASES[csvName] ?? csvName;
 }
 
-/** CSV `Rank` label -> our rank kind; throws on an unrecognised rank. */
-export function rankToKind(rank: string): EquipmentRankKind {
-  const kind = RANK_TO_KIND[rank];
-  if (!kind) {
-    throw new Error(`Unknown equipment rank in taxonomy CSV: "${rank}"`);
-  }
-  return kind;
+/** CSV `Rank` label -> our rank kind; null when blank or unrecognised. */
+export function getRankKind(rank: string): EquipmentRankKind | null {
+  return RANK_TO_KIND[rank] ?? null;
 }
 
-/** Weapon `Type` -> category code; throws on an unrecognised type. */
-export function weaponCategoryCode(type: string): string {
-  const code = WEAPON_TYPE_TO_CATEGORY[type];
-  if (!code) {
-    throw new Error(`Unknown weapon type in taxonomy CSV: "${type}"`);
-  }
-  return code;
+/** Weapon `Type` -> category code; null when blank or unrecognised. */
+export function getWeaponCategoryCode(type: string): string | null {
+  return WEAPON_TYPE_TO_CATEGORY[type] ?? null;
 }
 
-/** Armor `(Type, Armor Type)` -> category code; throws on an unrecognised pair. */
-export function armorCategoryCode(type: string, armorType: string): string {
-  const byArmorType = ARMOR_TYPE_TO_CATEGORY[type];
-  if (!byArmorType) {
-    throw new Error(`Unknown armor Type in taxonomy CSV: "${type}"`);
-  }
-  const code = byArmorType[armorType];
-  if (!code) {
-    throw new Error(`Unknown Armor Type "${armorType}" for Type "${type}" in taxonomy CSV`);
-  }
-  return code;
+/** Armor `(Type, Armor Type)` -> category code; null when either is blank or unrecognised. */
+export function getArmorCategoryCode(type: string, armorType: string): string | null {
+  return ARMOR_TYPE_TO_CATEGORY[type]?.[armorType] ?? null;
+}
+
+/** Whether the outer armor `Type` is a gear slot we know at all (vs. a new one). */
+export function isKnownArmorType(type: string): boolean {
+  return type in ARMOR_TYPE_TO_CATEGORY;
+}
+
+/** Sorted, deduplicated — so 50 rows carrying the same new Type report once. */
+function toSortedUnique(values: Iterable<string>): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 /**
@@ -139,12 +178,30 @@ export function armorCategoryCode(type: string, armorType: string): string {
  * CSV rows, keyed by the gacha-rate spelling (see {@link CSV_NAME_ALIASES}). Rows
  * without an item name (blank separator lines) are skipped. A name appearing twice
  * keeps the last occurrence.
+ *
+ * Every row yields an entry, even one whose Type/Rank we don't recognise — that
+ * item is still worth storing with whatever we *could* derive. What we couldn't
+ * map comes back in {@link TaxonomyBuildResult.drift}.
  */
 export function buildTaxonomyByName(
   weaponRows: readonly CsvRow[],
   armorRows: readonly CsvRow[],
-): Map<string, EquipmentTaxonomyEntry> {
+): TaxonomyBuildResult {
   const byName = new Map<string, EquipmentTaxonomyEntry>();
+  const unknownWeaponTypes: string[] = [];
+  const unknownArmorTypes: string[] = [];
+  const unknownArmorWeightClasses: string[] = [];
+  const unknownRanks: string[] = [];
+
+  // A blank field is a routine source gap, not drift — only a non-empty value we
+  // can't place gets recorded. Same rule for every column below.
+  const resolveRank = (rank: string): EquipmentRankKind | null => {
+    const kind = getRankKind(rank);
+    if (!kind && rank) {
+      unknownRanks.push(rank);
+    }
+    return kind;
+  };
 
   for (const row of weaponRows) {
     const name = row[NAME_COLUMN]?.trim();
@@ -152,9 +209,13 @@ export function buildTaxonomyByName(
       continue;
     }
     const type = (row[TYPE_COLUMN] ?? '').trim();
+    const categoryCode = type ? getWeaponCategoryCode(type) : null;
+    if (!categoryCode && type) {
+      unknownWeaponTypes.push(type);
+    }
     byName.set(canonicalName(name), {
-      categoryCode: type ? weaponCategoryCode(type) : null,
-      rank: rankToKind((row[RANK_COLUMN] ?? '').trim()),
+      categoryCode,
+      rank: resolveRank((row[RANK_COLUMN] ?? '').trim()),
     });
   }
 
@@ -165,11 +226,30 @@ export function buildTaxonomyByName(
     }
     const type = (row[TYPE_COLUMN] ?? '').trim();
     const armorType = (row[ARMOR_TYPE_COLUMN] ?? '').trim();
+    const categoryCode = type && armorType ? getArmorCategoryCode(type, armorType) : null;
+    if (!categoryCode && type && armorType) {
+      // Split the two, because they mean different things: an unknown outer Type
+      // is a whole new gear slot (needs an `EquipmentTypeKind` migration), while
+      // an unknown weight class is just one more category under a slot we have.
+      if (isKnownArmorType(type)) {
+        unknownArmorWeightClasses.push(`${type} / ${armorType}`);
+      } else {
+        unknownArmorTypes.push(type);
+      }
+    }
     byName.set(canonicalName(name), {
-      categoryCode: type && armorType ? armorCategoryCode(type, armorType) : null,
-      rank: rankToKind((row[RANK_COLUMN] ?? '').trim()),
+      categoryCode,
+      rank: resolveRank((row[RANK_COLUMN] ?? '').trim()),
     });
   }
 
-  return byName;
+  return {
+    byName,
+    drift: {
+      weaponTypes: toSortedUnique(unknownWeaponTypes),
+      armorTypes: toSortedUnique(unknownArmorTypes),
+      armorWeightClasses: toSortedUnique(unknownArmorWeightClasses),
+      ranks: toSortedUnique(unknownRanks),
+    },
+  };
 }

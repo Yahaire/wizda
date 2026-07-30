@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
-import { wizda } from '@/mascot/voice';
+import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import { Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
+import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
+import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { IconSparkles } from '@tabler/icons-react';
 
 import { BlessingsFilter } from './BlessingsFilter';
@@ -28,17 +30,24 @@ import { QualityFilter, QualityReadout } from './QualityFilter';
 import { RankFilter } from './RankFilter';
 import { ResultsPanel } from './ResultsPanel';
 
+import type { WizdaLines } from '@/mascot/voice';
 import type {
   GuaranteeFilters,
   JunkToGuaranteeQuery,
   JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
-function friendlyError(errorCode: string): string {
+function friendlyError(wizda: WizdaLines, errorCode: string): string {
   switch (errorCode) {
     case 'UNKNOWN_EQUIPMENT':
       return wizda.errors.unknownEquipment;
     case 'UNKNOWN_BLESSING':
       return wizda.errors.unknownBlessing;
+    // The backend validates category/rank against the same shared tables this
+    // client bundles, so these only fire when a saved filter outlives a change
+    // to them. The prune below clears the culprit; this explains what happened.
+    case 'UNKNOWN_CATEGORY':
+    case 'UNKNOWN_RANK':
+      return wizda.errors.unknownGearKind;
     case 'NO_QUERY':
       return wizda.oracle.snark;
     default:
@@ -46,7 +55,12 @@ function friendlyError(errorCode: string): string {
   }
 }
 
+const KNOWN_CATEGORY_CODES = new Set<string>(EQUIPMENT_CATEGORIES.map((category) => category.code));
+const KNOWN_RANK_KINDS = new Set<string>(EQUIPMENT_RANKS.map((rank) => rank.kind));
+
 export function OraclePage() {
+  const strings = useStrings();
+  const wizda = useWizda();
   const [filters, setFilters] = useLocalStorage<OracleFilters>({
     key: FILTERS_STORAGE_KEY,
     defaultValue: DEFAULT_FILTERS,
@@ -136,6 +150,9 @@ export function OraclePage() {
     if (listStatus === 'error') {
       wizdaSay(wizda.oracle.loadError, { glyph: WizdaGlyph.info, color: 'red' });
     }
+    // Fire once when the load transitions to error; `wizda` is intentionally out
+    // of the deps so a later language switch doesn't re-raise the same toast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listStatus]);
 
   // The Oracle only guarantees junk-farmable gear, so it works off the pieces a
@@ -160,6 +177,22 @@ export function OraclePage() {
         : { ...current, equipment: pruned };
     });
   }, [junkEquipment, setFilters]);
+
+  // Same idea for category/rank, but checked against the bundled taxonomy rather
+  // than the API, so it runs at mount without waiting for the catalog. A code the
+  // filter menus can no longer offer — remembered from before a game update
+  // reshuffled the taxonomy, or replayed from a popular query — would otherwise
+  // sit in storage and 400 the backend on every single Calculate.
+  useEffect(() => {
+    setFilters((current) => {
+      const category = current.category.filter((code) => KNOWN_CATEGORY_CODES.has(code));
+      const rank = current.rank.filter((kind) => KNOWN_RANK_KINDS.has(kind));
+      if (category.length === current.category.length && rank.length === current.rank.length) {
+        return current;
+      }
+      return { ...current, category, rank };
+    });
+  }, [setFilters]);
 
   // Which options still lead anywhere, what the level sliders top out at, and
   // whether the selection contradicts itself. See `oracle.facets.ts`.
@@ -240,7 +273,7 @@ export function OraclePage() {
       return;
     }
     const code = error instanceof ApiError ? error.errorCode : 'INTERNAL_ERROR';
-    wizdaSay(friendlyError(code), { glyph: WizdaGlyph.info, color: 'red' });
+    wizdaSay(friendlyError(wizda, code), { glyph: WizdaGlyph.info, color: 'red' });
   };
 
   /**
@@ -329,7 +362,7 @@ export function OraclePage() {
     <Paper withBorder p="lg" radius="md">
       <Stack gap="lg">
         <FilterField
-          label="Equipment"
+          label={strings.oracle.equipmentLabel}
           description={wizda.oracle.filterHelp.equipment}
           onClear={() => patch({ equipment: [] })}
           canClear={filters.equipment.length > 0}
@@ -345,7 +378,7 @@ export function OraclePage() {
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
           <FilterField
-            label="Category"
+            label={strings.oracle.categoryLabel}
             description={wizda.oracle.filterHelp.category}
             onClear={() => patch({ category: [] })}
             canClear={filters.category.length > 0}
@@ -359,7 +392,7 @@ export function OraclePage() {
           </FilterField>
 
           <FilterField
-            label="Rank"
+            label={strings.oracle.rankLabel}
             description={wizda.oracle.filterHelp.rank}
             onClear={() => patch({ rank: [] })}
             canClear={filters.rank.length > 0}
@@ -373,7 +406,7 @@ export function OraclePage() {
         </SimpleGrid>
 
         <FilterField
-          label="Quality"
+          label={strings.oracle.qualityLabel}
           description={wizda.oracle.filterHelp.quality}
           readout={<QualityReadout value={filters.minQuality} max={facets.maxQuality} />}
           onClear={() => patch({ minQuality: MIN_LEVEL })}
@@ -387,7 +420,7 @@ export function OraclePage() {
         </FilterField>
 
         <FilterField
-          label="Grade"
+          label={strings.oracle.gradeLabel}
           description={wizda.oracle.filterHelp.grade}
           readout={(
             <GradeReadout
@@ -409,7 +442,7 @@ export function OraclePage() {
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
           <FilterField
-            label="Blessings"
+            label={strings.oracle.blessingsLabel}
             description={wizda.oracle.filterHelp.blessings}
             onClear={() => patch({ blessings: [] })}
             canClear={filters.blessings.length > 0}
@@ -422,7 +455,7 @@ export function OraclePage() {
           </FilterField>
 
           <FilterField
-            label="Certainty"
+            label={strings.oracle.certaintyLabel}
             description={wizda.oracle.filterHelp.certainty}
           >
             <CertaintySlider
@@ -445,7 +478,7 @@ export function OraclePage() {
             cursor: 'not-allowed',
           }}
         >
-          Calculate
+          {strings.oracle.calculateButton}
         </Button>
       </Stack>
     </Paper>
@@ -510,7 +543,7 @@ export function OraclePage() {
       <Modal
         opened={Boolean(conflict)}
         onClose={undoConflict}
-        title="Hold on a moment"
+        title={strings.oracle.conflictModalTitle}
         centered
         size="md"
       >
@@ -524,11 +557,11 @@ export function OraclePage() {
               color={conflict?.fix ? 'gray' : 'crimson'}
               onClick={undoConflict}
             >
-              Undo
+              {strings.oracle.undoButton}
             </Button>
             {conflict?.fix && (
               <Button color="crimson" onClick={tidyConflict}>
-                Clean up
+                {strings.oracle.cleanUpButton}
               </Button>
             )}
           </Group>

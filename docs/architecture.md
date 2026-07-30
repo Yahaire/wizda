@@ -85,4 +85,6 @@ math module thinks.**
 | DB schema | `packages/backend-api/prisma/schema.prisma` |
 | Scraper / seed (writes to DB) | `packages/backend-api/prisma/seed-from-html/` |
 | API endpoints (reads DB, calls the math) | `packages/backend-api/src/` |
-| UI | `packages/web-client/` |
+| Search matching (see [`docs/search.md`](./search.md)) | `packages/web-client/src/utils/search.ts` |
+| Language resolution + catalogs (see [`docs/i18n.md`](./i18n.md)) | `packages/web-client/src/i18n/`, `src/middleware.ts` |
+| UI (routes are per-locale: `app/[lang]/…`) | `packages/web-client/` |

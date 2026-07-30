@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { useStrings } from '@/i18n/LanguageProvider';
 import { Alert, Button, Center, Divider, Group, Loader, Modal, Stack, Text } from '@mantine/core';
-import { TsUtilities } from '@shared/tsUtilities';
 import { IconChevronRight, IconInfoCircle } from '@tabler/icons-react';
 
 import { CertaintyCurve, CURVE_ROW_HEIGHT } from './CertaintyCurve';
@@ -14,13 +14,6 @@ import type {
   CertaintyCurveResult,
   JunkGuaranteeEntry,
 } from '@shared/api/endpoints/junkToGuarantee.models';
-
-const MULTI_POOL_NOTE = TsUtilities.stringJoin([
-  "Rates shown are for the latest version of this junk.",
-  "If you haven't completed the progression that unlocks this area's newer pool,",
-  "or you still have junks left from the previous version,",
-  "your actual drops may differ.",
-]);
 
 /** Three rows plus the Stack's gaps — reserved so the curve doesn't jump in on load. */
 const CURVE_MIN_HEIGHT = 3 * CURVE_ROW_HEIGHT + 20;
@@ -52,6 +45,7 @@ export function JunkDetailModal({
   onRequestCurve,
   onSeeFullDetails,
 }: JunkDetailModalProps) {
+  const strings = useStrings();
   const selectedPct = queryFilters.certaintyPct;
   const percents = useMemo(() => certaintyWindow(selectedPct), [selectedPct]);
 
@@ -87,17 +81,17 @@ export function JunkDetailModal({
     <Modal
       opened={Boolean(entry)}
       onClose={onClose}
-      title="Junk details"
+      title={strings.oracle.junkDetailsTitle}
       centered
       size="md"
     >
       {entry && (
         <Stack gap="sm">
-          <Text fw={600} fz="lg">{entry.junkName}</Text>
+          <Text fw={600} fz="lg">{entry.junkDisplayName}</Text>
 
           <QuerySummary filters={queryFilters} matched={curve?.matched ?? null} />
 
-          <Divider label="Junk needed by certainty" labelPosition="center" />
+          <Divider label={strings.detail.junkNeededByCertainty} labelPosition="center" />
 
           {status === 'loading' && (
             <Center mih={CURVE_MIN_HEIGHT}>
@@ -106,8 +100,7 @@ export function JunkDetailModal({
           )}
           {status === 'error' && (
             <Text size="sm" c="dimmed" ta="center">
-              Couldn&apos;t chart the curve — but you&apos;ll still need about{' '}
-              {entry.junkNeeded.toLocaleString()} of these.
+              {strings.oracle.curveLoadError(entry.junkNeeded.toLocaleString())}
             </Text>
           )}
           {status === 'ready' && curve && (
@@ -115,13 +108,13 @@ export function JunkDetailModal({
           )}
 
           <Group justify="space-between">
-            <Text c="dimmed" fz="xs">Chance per junk</Text>
+            <Text c="dimmed" fz="xs">{strings.oracle.chancePerJunk}</Text>
             <Text c="dimmed" fz="xs">{formatPercent(entry.probabilityPerJunk)}</Text>
           </Group>
 
           {entry.hasMultiplePools && (
             <Alert color="yellow" variant="light" icon={<IconInfoCircle />}>
-              {MULTI_POOL_NOTE}
+              {strings.oracle.multiPoolNote}
             </Alert>
           )}
 
@@ -131,7 +124,7 @@ export function JunkDetailModal({
             rightSection={<IconChevronRight size={16} />}
             onClick={() => onSeeFullDetails(entry.junkName)}
           >
-            See full junk details
+            {strings.oracle.seeFullDetailsButton}
           </Button>
         </Stack>
       )}

@@ -1,12 +1,14 @@
 'use client';
 
+import { useCallback, useMemo } from 'react';
+
+import { getCategoryIcon } from '@/components/CategoryIcon';
+import { getRankColor, rankName } from '@/components/gear/gearDisplays';
+import { IconMultiSelect } from '@/components/select/IconMultiSelect';
+import { useStrings } from '@/i18n/LanguageProvider';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
-
-import { getCategoryIcon } from '@/components/CategoryIcon';
-import { getRankColor } from '@/components/gear/gearDisplays';
-import { IconMultiSelect } from '@/components/select/IconMultiSelect';
 
 interface EquipmentSelectProps {
   data: EquipmentListItem[],
@@ -17,18 +19,12 @@ interface EquipmentSelectProps {
   disabled?: boolean,
 }
 
-/** Rank kind → display name, for the dropdown's rank group headers. */
-const RANK_NAME = new Map(EQUIPMENT_RANKS.map((rank) => [rank.kind, rank.name]));
-
-const UNKNOWN_RANK_GROUP = 'Unknown rank';
 // Highest rank first — the most sought-after gear should surface at the top.
-const RANK_GROUP_ORDER = [
-  ...[...EQUIPMENT_RANKS].reverse().map((rank) => rank.name),
-  UNKNOWN_RANK_GROUP,
-];
+const RANKS_HIGH_TO_LOW = [...EQUIPMENT_RANKS].reverse();
 
-/** Max matches shown per rank group, so a broad search doesn't bury one rank under another. */
-const OPTIONS_PER_RANK = 15;
+// Module-level, not an inline arrow: a fresh identity every render would rebuild
+// the dropdown's whole row model (738 items) on renders that changed nothing.
+const getEquipmentValue = (item: EquipmentListItem) => item.name;
 
 /**
  * Multi-select equipment picker: matches loosely (see {@link IconMultiSelect}),
@@ -41,29 +37,59 @@ export function EquipmentSelect({
   available,
   disabled,
 }: EquipmentSelectProps) {
+  const strings = useStrings();
+  const unknownRankGroup = strings.oracle.unknownRankGroup;
+
+  // Stable identities so IconMultiSelect's folded-text cache survives re-renders —
+  // this is the one select big enough (the whole equipment catalogue) for that to
+  // matter. A language switch re-pulls the list, so `data` changes identity and
+  // the cache rebuilds with the new display names.
+  const getLabel = useCallback((item: EquipmentListItem) => item.displayName, []);
+  const getSearchTexts = useCallback(
+    (item: EquipmentListItem) => [item.displayName, item.nameReading],
+    [],
+  );
+  const getRankGroup = useCallback(
+    (item: EquipmentListItem) => (item.rank ? rankName(item.rank) : unknownRankGroup),
+    [unknownRankGroup],
+  );
+  // Memoized (not just recomputed inline) so the whole catalogue isn't
+  // re-bucketed into groups on every render — this is the one select big enough
+  // for that to show. Re-localizes on language switch via `unknownRankGroup`.
+  const rankGroupOrder = useMemo(
+    () => [
+      ...RANKS_HIGH_TO_LOW.map((rank) => rankName(rank.kind)),
+      unknownRankGroup,
+    ],
+    [unknownRankGroup],
+  );
+
   return (
     <IconMultiSelect
       data={data}
       value={value}
       onChange={onChange}
       disabled={disabled}
-      getValue={(item) => item.name}
-      getLabel={(item) => item.name}
+      getValue={getEquipmentValue}
+      // The stable English key stays the option's `value`; the localized display
+      // name is what the player reads and searches — plus, in Japanese, the
+      // reading, so a kana query can reach a name written in kanji.
+      getLabel={getLabel}
+      getSearchTexts={getSearchTexts}
       getIcon={(item) => ({
         icon: getCategoryIcon(item.category?.code),
         color: getRankColor(item.rank),
         className: 'wizda-icon-outline',
       })}
       isUnavailable={(item) => !available.has(item.name)}
-      unavailableHint="Greyed out: doesn't fit your category or rank picks."
+      unavailableHint={strings.oracle.equipmentGreyedHint}
       grouping={{
-        getGroup: (item) => (item.rank ? RANK_NAME.get(item.rank)! : UNKNOWN_RANK_GROUP),
-        order: RANK_GROUP_ORDER,
-        cap: OPTIONS_PER_RANK,
+        getGroup: getRankGroup,
+        order: rankGroupOrder,
       }}
-      placeholder="Search equipment"
-      selectedPlaceholder="Add more gear…"
-      emptyMessage="No gear by that name"
+      placeholder={strings.oracle.searchEquipmentPlaceholder}
+      selectedPlaceholder={strings.oracle.addMoreGearPlaceholder}
+      emptyMessage={strings.oracle.noGearByName}
     />
   );
 }

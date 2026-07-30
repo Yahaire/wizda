@@ -1,17 +1,17 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { usePathname } from 'next/navigation';
-
 import { CategoryIcon } from '@/components/CategoryIcon';
-import { getRankColor, GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
+import { getRankColor, GradeBadge, QualityStars, rankName } from '@/components/gear/gearDisplays';
 import { TruncatedText } from '@/components/TruncatedText';
+import { useLang, useStrings } from '@/i18n/LanguageProvider';
+import { stripLocale } from '@/i18n/locale';
 import { api, MaintenanceError } from '@/services/api';
 import {
     ActionIcon, Alert, Badge, Box, Divider, Group, Modal, ScrollArea, Stack, Text, UnstyledButton
 } from '@mantine/core';
-import { TsUtilities } from '@shared/tsUtilities';
 import {
     IconArrowLeft, IconArrowsSort, IconChevronRight, IconInfoCircle, IconSortAscending,
     IconSortDescending
@@ -21,12 +21,6 @@ import type {
   EquipmentListItem,
   JunkListItem,
 } from '@shared/api/endpoints/lists.models';
-
-const MULTI_POOL_NOTE = TsUtilities.stringJoin([
-  "This junk has more than one recorded drop pool — only the newest is stored.",
-  "If you haven't unlocked this area's newer pool, or you still have junks from the",
-  "previous version, your actual drops may differ.",
-]);
 
 /**
  * Both detail lists (a junk's gear, an equipment's junks) share one grid so
@@ -57,8 +51,13 @@ const ROW_CHEVRON = <IconChevronRight size={12} style={{ opacity: 0.4, marginInl
 
 /** One row of a detail list, flattened so both lists sort through one path. */
 interface DetailListRow {
-  /** Sorted on, and matched against the parent entry's `focusChild`. */
+  /**
+   * The English key — what a click opens, and what's matched against the parent
+   * entry's `focusChild`. Never displayed.
+   */
   name: string,
+  /** The localized name the row shows, so a name sort orders by what's on screen. */
+  sortName: string,
   /** The name cell's content — plain text for junks, icon + text for gear. */
   label: React.ReactNode,
   quality: number | null,
@@ -73,7 +72,7 @@ type SortDir = 'asc' | 'desc';
 // it head the list on a descending sort.
 function compareRows(left: DetailListRow, right: DetailListRow, key: DetailSortKey): number {
   if (key === 'name') {
-    return left.name.localeCompare(right.name);
+    return left.sortName.localeCompare(right.sortName);
   }
   const a = left[key];
   const b = right[key];
@@ -102,6 +101,7 @@ function DetailListHeader({
   dir: SortDir,
   onSort: (key: DetailSortKey) => void,
 }) {
+  const strings = useStrings();
   const active = activeKey === sortKey;
   const icon = !active
     ? <IconArrowsSort size={12} opacity={0.4} />
@@ -110,7 +110,7 @@ function DetailListHeader({
     <UnstyledButton
       onClick={() => onSort(sortKey)}
       style={{ justifySelf: 'start' }}
-      aria-label={`Sort by ${label.toLowerCase()}`}
+      aria-label={strings.common.sortByAriaLabel(label)}
     >
       <Group gap={4} wrap="nowrap">
         <Text size="xs" fw={600} c={active ? undefined : 'dimmed'}>{label}</Text>
@@ -137,6 +137,7 @@ function DetailList({
   focusedRowRef: React.Ref<HTMLButtonElement>,
   onRowClick: (name: string) => void,
 }) {
+  const strings = useStrings();
   const [sortKey, setSortKey] = useState<DetailSortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -175,9 +176,9 @@ function DetailList({
             background: 'var(--mantine-color-body)',
           }}
         >
-          <DetailListHeader label="Name" sortKey="name" {...headerProps} />
-          <DetailListHeader label="Quality" sortKey="quality" {...headerProps} />
-          <DetailListHeader label="Grade" sortKey="grade" {...headerProps} />
+          <DetailListHeader label={strings.detail.nameHeader} sortKey="name" {...headerProps} />
+          <DetailListHeader label={strings.detail.qualityHeader} sortKey="quality" {...headerProps} />
+          <DetailListHeader label={strings.detail.gradeHeader} sortKey="grade" {...headerProps} />
           {/* Empty fourth cell, holding the chevron column's width. */}
           <Box />
         </Box>
@@ -279,9 +280,13 @@ function pushWithFocus(
  * equipment. Closing the modal clears the whole stack.
  */
 export function DetailProvider({ children }: { children: React.ReactNode }) {
+  const lang = useLang();
   const [equipment, setEquipment] = useState<EquipmentListItem[] | null>(null);
   const [junks, setJunks] = useState<JunkListItem[] | null>(null);
   const [status, setStatus] = useState<LoadStatus>('idle');
+  // The language the currently-loaded lists were fetched under. A switch makes
+  // the localized `displayName`s stale, so we re-pull (see the load effect).
+  const loadedLangRef = useRef<string | null>(null);
 
   const [detailStack, setDetailStack] = useState<DetailEntry[]>([]);
 
@@ -290,13 +295,24 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   // that view — rather than there being nothing to go back to (a list-table open).
   const [rootBackable, setRootBackable] = useState(false);
 
-  const pathname = usePathname();
+  const strings = useStrings();
+  // Locale-stripped so `ROUTES_WITHOUT_LISTS` stays a list of routes rather
+  // than a list of routes × languages.
+  const pathname = stripLocale(usePathname());
 
   useEffect(() => {
-    if (status !== 'idle' || ROUTES_WITHOUT_LISTS.has(pathname)) {
+    if (ROUTES_WITHOUT_LISTS.has(pathname)) {
+      return;
+    }
+    // Load once per session, and again whenever the language changes (the lists
+    // carry locale-resolved `displayName`s). A route change alone re-checks but
+    // doesn't refetch: the lists persist across navigation.
+    const langChanged = loadedLangRef.current !== null && loadedLangRef.current !== lang;
+    if (status !== 'idle' && !langChanged) {
       return;
     }
     let alive = true;
+    loadedLangRef.current = lang;
     setStatus('loading');
     Promise.all([api.listEquipment(), api.listJunks()])
       .then(([equipmentList, junkList]) => {
@@ -320,13 +336,13 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-    // `status` deliberately excluded: this effect sets it itself
+    // `status` deliberately excluded from deps: this effect sets it itself
     // ('idle' → 'loading'), and re-running on that transition would fire the
     // cleanup above — flipping `alive` false on the fetch this very call just
-    // started, before it resolves. Re-checking only needs to happen on a route
-    // change; the guard above reads the latest `status` via closure regardless.
+    // started. Re-checking happens on a route or language change; the guards
+    // above read the latest `status`/`lang` via closure regardless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, lang]);
 
   const equipmentByName = useMemo(() => {
     const map = new Map<string, EquipmentListItem>();
@@ -406,14 +422,21 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
   ), [current, dropsByJunk]);
 
   // The junks an equipment drops from.
+  // Nested junk sources carry only the English key on the wire (no per-locale
+  // displayName), so the name is resolved through the junk list — which is
+  // fetched under the active language and loaded alongside the equipment list.
   const sourceRows = useMemo<DetailListRow[]>(() => (
-    current?.kind !== 'equipment' ? [] : current.item.sources.map((source) => ({
-      name: source.junkName,
-      label: <TruncatedText size="sm" style={{ minWidth: 0 }}>{source.junkName}</TruncatedText>,
-      quality: source.maxDropQuality,
-      grade: source.maxDropGrade,
-    }))
-  ), [current]);
+    current?.kind !== 'equipment' ? [] : current.item.sources.map((source) => {
+      const displayName = junkByName.get(source.junkName)?.displayName ?? source.junkName;
+      return {
+        name: source.junkName,
+        sortName: displayName,
+        label: <TruncatedText size="sm" style={{ minWidth: 0 }}>{displayName}</TruncatedText>,
+        quality: source.maxDropQuality,
+        grade: source.maxDropGrade,
+      };
+    })
+  ), [current, junkByName]);
 
   // The gear a junk drops. Quality/grade are what the piece drops at *from this
   // junk*, not its global best across every junk (piece.maxDrop*).
@@ -422,6 +445,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
       const here = piece.sources.find((source) => source.junkName === current.item.name);
       return {
         name: piece.name,
+        sortName: piece.displayName,
         label: (
           <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
             <CategoryIcon
@@ -430,7 +454,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
               color={getRankColor(piece.rank) ?? 'var(--mantine-color-dimmed)'}
               style={{ flexShrink: 0 }}
             />
-            <TruncatedText size="sm" style={{ minWidth: 0 }}>{piece.name}</TruncatedText>
+            <TruncatedText size="sm" style={{ minWidth: 0 }}>{piece.displayName}</TruncatedText>
           </Group>
         ),
         quality: here?.maxDropQuality ?? null,
@@ -476,12 +500,12 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
         title={(
           <Group gap="xs" wrap="nowrap">
             {showBack && (
-              <ActionIcon variant="subtle" color="gray" onClick={goBackOrClose} aria-label="Back">
+              <ActionIcon variant="subtle" color="gray" onClick={goBackOrClose} aria-label={strings.common.backAriaLabel}>
                 <IconArrowLeft size={18} />
               </ActionIcon>
             )}
             <Text fw={600}>
-              {current?.kind === 'junk' ? 'Junk details' : 'Equipment details'}
+              {current?.kind === 'junk' ? strings.detail.junkDetailsTitle : strings.detail.equipmentDetailsTitle}
             </Text>
           </Group>
         )}
@@ -494,33 +518,33 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
                 categoryCode={current.item.category?.code}
                 color={getRankColor(current.item.rank) ?? 'var(--mantine-color-dimmed)'}
               />
-              <Text fw={600} fz="lg">{current.item.name}</Text>
+              <Text fw={600} fz="lg">{current.item.displayName}</Text>
             </Group>
             <Group gap="lg">
               {current.item.rank && (
                 <Group gap={6}>
-                  <Text c="dimmed" size="sm">Rank</Text>
-                  <Badge variant="light" color="gray" size="sm">{current.item.rank}</Badge>
+                  <Text c="dimmed" size="sm">{strings.detail.rankLabel}</Text>
+                  <Badge variant="light" color="gray" size="sm">{rankName(current.item.rank)}</Badge>
                 </Group>
               )}
               {current.item.maxDropQuality && (
                 <Group gap={6}>
-                  <Text c="dimmed" size="sm">Max</Text>
+                  <Text c="dimmed" size="sm">{strings.detail.maxLabel}</Text>
                   <QualityStars value={current.item.maxDropQuality} />
                 </Group>
               )}
               {current.item.maxDropGrade && (
                 <Group gap={6}>
-                  <Text c="dimmed" size="sm">Grade</Text>
+                  <Text c="dimmed" size="sm">{strings.detail.gradeHeader}</Text>
                   <GradeBadge value={current.item.maxDropGrade} />
                 </Group>
               )}
             </Group>
             <Divider label={current.item.sources.length === 0
-              ? 'Junk sources'
-              : `Drops from ${current.item.sources.length} junk${current.item.sources.length === 1 ? '' : 's'}`} />
+              ? strings.detail.junkSourcesLabel
+              : strings.detail.dropsFromNJunk(current.item.sources.length)} />
             {current.item.sources.length === 0 ? (
-              <Text c="dimmed" size="sm">No junk drops this one — so there&apos;s nothing for me to count here yet.</Text>
+              <Text c="dimmed" size="sm">{strings.detail.noJunkDrops}</Text>
             ) : (
               <DetailList
                 // Remounts per entry, so each list starts at its own natural
@@ -537,22 +561,22 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
 
         {current?.kind === 'junk' && (
           <Stack gap="sm">
-            <Text fw={600} fz="lg">{current.item.name}</Text>
+            <Text fw={600} fz="lg">{current.item.displayName}</Text>
             {current.item.hasMultiplePools && (
               <Alert color="yellow" variant="light" icon={<IconInfoCircle />}>
-                {MULTI_POOL_NOTE}
+                {strings.oracle.multiPoolNote}
               </Alert>
             )}
             {(current.item.maxDropQuality || current.item.maxDropGrade) && (
               <Group gap="lg">
-                <Text c="dimmed" size="sm">At best it drops</Text>
+                <Text c="dimmed" size="sm">{strings.detail.atBestDrops}</Text>
                 {current.item.maxDropQuality && <QualityStars value={current.item.maxDropQuality} />}
                 {current.item.maxDropGrade && <GradeBadge value={current.item.maxDropGrade} />}
               </Group>
             )}
-            <Divider label={`Drops ${junkDrops.length} piece${junkDrops.length === 1 ? '' : 's'} of gear`} />
+            <Divider label={strings.detail.dropsNPieces(junkDrops.length)} />
             {junkDrops.length === 0 ? (
-              <Text c="dimmed" size="sm">No droppable gear on record.</Text>
+              <Text c="dimmed" size="sm">{strings.detail.noDroppableGear}</Text>
             ) : (
               <DetailList
                 key={current.item.name}

@@ -1,13 +1,13 @@
-import { wizdaLinesEn } from './voice.en';
-
 /**
  * The shape of Wizda's voice — every player-facing line she "says", in one place.
  * See `docs/wizda-voice.md` for who she is and how the lines should read.
  *
- * A translation is a parallel object of this exact shape (e.g. a future
- * `voice.es.ts`); only the {@link wizda} binding at the bottom points at the
- * active locale, so switching languages is a one-line change here. `satisfies`
- * on each locale object makes a missing or mistyped entry a compile error.
+ * A translation is a parallel object of this exact shape (`voice.en.ts`,
+ * `voice.ja.ts`). `satisfies` on each locale object makes a missing or mistyped
+ * entry a compile error. The active locale is chosen at runtime — React
+ * components read her lines through `useWizda()` and non-React modules through
+ * `getWizda()` (both in `@/i18n/languageStore`), so switching language re-renders
+ * her wording live.
  *
  * Static lines are strings. Lines that interpolate computed values (blessing
  * labels, grade names) are functions taking the already-formatted pieces — the
@@ -65,6 +65,12 @@ export interface WizdaLines {
   readonly errors: {
     readonly unknownEquipment: string,
     readonly unknownBlessing: string,
+    /**
+     * A saved filter named a category or rank the app no longer knows — usually
+     * one remembered from before a game update reshuffled them. The stale pick is
+     * dropped as she says this, so the line promises a fix that already happened.
+     */
+    readonly unknownGearKind: string,
     readonly generic: string,
   },
   /**
@@ -119,6 +125,3 @@ export interface WizdaLines {
     readonly qualityTooHigh: (qualityLabel: string) => string,
   },
 }
-
-/** The active locale. Swap this binding to switch languages once more exist. */
-export const wizda: WizdaLines = wizdaLinesEn;

@@ -14,7 +14,7 @@
  * outcome axes then read off that set — see {@link candidateEquipment}.
  */
 
-import { wizda } from '@/mascot/voice';
+import { getWizda } from '@/i18n/languageStore';
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { BLESSINGS } from '@shared/domain/stats';
@@ -228,6 +228,7 @@ function blessingConflictMessage(
   candidates: readonly EquipmentListItem[],
   blessings: readonly string[],
 ): string {
+  const wizda = getWizda();
   const rollableAtAll = availableBlessings(candidates, []);
   const unrollable = blessings.filter((code) => !rollableAtAll.has(code));
 
@@ -256,6 +257,7 @@ export function detectConflict(
   satisfying: readonly EquipmentListItem[],
   filters: OracleFilters,
 ): OracleConflict | null {
+  const wizda = getWizda();
   if (candidates.length === 0) {
     return {
       message: wizda.confirm.identityNoOverlap,

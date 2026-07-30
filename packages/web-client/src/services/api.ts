@@ -15,6 +15,8 @@ import type {
 } from '@shared/api/endpoints/lists.models';
 import type { PopularResult } from '@shared/api/endpoints/popular.models';
 
+import { getLang } from '@/i18n/languageStore';
+
 /** Thrown when the API is in maintenance mode (HTTP 503 + `{ maintenance: true }`). */
 export class MaintenanceError extends Error {
   constructor(message: string) {
@@ -85,6 +87,18 @@ class ApiService {
   // Same-origin; Next rewrites `/api/*` to the backend (dodges CORS).
   private readonly baseUrl = '/api';
 
+  /**
+   * Tack the active language onto a request as `?lang=` — the backend's
+   * highest-priority locale signal (over the `Accept-Language` header), and one
+   * that needs no cookie, so no consent notice. The lang becomes part of the
+   * path, which also keys the `inflight` GET-dedupe map per-language, so a
+   * request in flight under one language can't satisfy a caller now on another.
+   */
+  private withLang(path: string): string {
+    const separator = path.includes('?') ? '&' : '?';
+    return `${path}${separator}lang=${getLang()}`;
+  }
+
   // Concurrent callers requesting the same GET path share one in-flight
   // request instead of each firing their own (e.g. MaintenanceGate and
   // DataFreshness both probing `/data-status` on mount). Cleared as soon as the
@@ -93,14 +107,15 @@ class ApiService {
   private readonly inflight = new Map<string, Promise<unknown>>();
 
   private get<T>(path: string): Promise<T> {
-    const pending = this.inflight.get(path);
+    const langPath = this.withLang(path);
+    const pending = this.inflight.get(langPath);
     if (pending) {
       return pending as Promise<T>;
     }
-    const request = this.fetchJson<T>(path).finally(() => {
-      this.inflight.delete(path);
+    const request = this.fetchJson<T>(langPath).finally(() => {
+      this.inflight.delete(langPath);
     });
-    this.inflight.set(path, request);
+    this.inflight.set(langPath, request);
     return request;
   }
 
@@ -114,7 +129,7 @@ class ApiService {
   }
 
   private async post<TBody, TResult>(path: string, body: TBody): Promise<TResult> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    const response = await fetch(`${this.baseUrl}${this.withLang(path)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

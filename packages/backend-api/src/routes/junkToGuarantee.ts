@@ -1,34 +1,24 @@
 import express from 'express';
 import { z } from 'zod';
 
-import { EquipmentRankKind, Prisma } from '@local-prisma/generated/client';
-
 import { trackGuaranteeQuery } from '@app/analytics';
 import { sendErrorResponse } from '@app/http';
-import { pickLocalizedName } from '@app/localizedNames';
-import { getPrisma } from '@app/prisma';
+import { pickLocalizedName, pickLocalizedReading } from '@app/localizedNames';
 import { recordPopularQuery } from '@app/popularQueries';
+import { getPrisma } from '@app/prisma';
+import { EquipmentRankKind, Prisma } from '@local-prisma/generated/client';
 import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
 import {
-    BLESSING_ESTIMATE_NOTE,
-    CertaintyCurvePoint,
-    CertaintyCurveResult,
-    DEFAULT_CERTAINTY,
-    DEFAULT_GUARANTEE_LIMIT,
-    JunkGuaranteeEntry,
-    JunkToGuaranteeResult,
-    MAX_GUARANTEE_LIMIT,
+    BLESSING_ESTIMATE_NOTE, CertaintyCurvePoint, CertaintyCurveResult, DEFAULT_CERTAINTY,
+    DEFAULT_GUARANTEE_LIMIT, JunkGuaranteeEntry, JunkToGuaranteeResult, MAX_GUARANTEE_LIMIT
 } from '@shared/api/endpoints/junkToGuarantee.models';
 import {
-    blessingPresenceByGrade,
-    DropRateRow,
-    junksNeededForConfidence,
-    matchProbabilityForJunk,
-    MatchQuery,
+    blessingPresenceByGrade, DropRateRow, junksNeededForConfidence, matchProbabilityForJunk,
+    MatchQuery
 } from '@shared/domain/dropRateMath';
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
-import { BLESSINGS } from '@shared/domain/stats';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
+import { BLESSINGS } from '@shared/domain/stats';
 
 import { buildMatchedOutcome, MatchedCandidate } from './matchedOutcome';
 
@@ -126,7 +116,16 @@ export const dropRateRowSelect = {
   grade3Rate: true,
   grade4Rate: true,
   grade5Rate: true,
-  junk: { select: { name: true, nameJa: true, nameKo: true, nameDe: true, hasMultiplePools: true } },
+  junk: {
+    select: {
+      name: true,
+      nameJa: true,
+      nameKo: true,
+      nameDe: true,
+      nameJaReading: true,
+      hasMultiplePools: true,
+    },
+  },
 } satisfies Prisma.EquipmentDropRateSelect;
 
 /** The exact row shape returned for {@link dropRateRowSelect} — derived from
@@ -411,6 +410,7 @@ async function handleJunkToGuarantee(
     nameJa: string | null,
     nameKo: string | null,
     nameDe: string | null,
+    nameJaReading: string | null,
     hasMultiplePools: boolean,
     rows: DropRateRow[],
   }
@@ -423,6 +423,7 @@ async function handleJunkToGuarantee(
         nameJa: row.junk.nameJa,
         nameKo: row.junk.nameKo,
         nameDe: row.junk.nameDe,
+        nameJaReading: row.junk.nameJaReading,
         hasMultiplePools: row.junk.hasMultiplePools,
         rows: [],
       };
@@ -443,9 +444,13 @@ async function handleJunkToGuarantee(
     if (junkNeeded === null) {
       continue; // impossible from this junk — omit
     }
+    const junkNameReading = pickLocalizedReading(aggregate, req.locale);
     results.push({
       junkName: aggregate.name,
       junkDisplayName: pickLocalizedName(aggregate, req.locale),
+      // Spread, not assigned, so the key is absent rather than `undefined` for
+      // every non-Japanese locale and never reaches the wire.
+      ...(junkNameReading !== undefined && { junkNameReading }),
       hasMultiplePools: aggregate.hasMultiplePools,
       probabilityPerJunk,
       junkNeeded,
@@ -502,7 +507,14 @@ async function handleCertaintyCurve(
   // filter's 400, this is the single target resource, not a filter value).
   const junk = await getPrisma().junk.findUnique({
     where: { name: junkName },
-    select: { id: true, name: true, nameJa: true, nameKo: true, nameDe: true },
+    select: {
+      id: true,
+      name: true,
+      nameJa: true,
+      nameKo: true,
+      nameDe: true,
+      nameJaReading: true,
+    },
   });
   if (!junk) {
     sendErrorResponse(
@@ -573,9 +585,12 @@ async function handleCertaintyCurve(
     junkNeeded: junksNeededForConfidence(probabilityPerJunk, certainty),
   }));
 
+  const junkNameReading = pickLocalizedReading(junk, req.locale);
   const body: CertaintyCurveResult = {
     junkName: junk.name,
     junkDisplayName: pickLocalizedName(junk, req.locale),
+    // Spread, not assigned — see the guarantee results above.
+    ...(junkNameReading !== undefined && { junkNameReading }),
     probabilityPerJunk,
     ...(hasBlessings ? { estimated: true, estimatedNote: BLESSING_ESTIMATE_NOTE } : {}),
     points,

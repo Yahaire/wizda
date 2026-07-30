@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { wizda } from './voice';
 import { wizdaLinesEn } from './voice.en';
+import { wizdaLinesJa } from './voice.ja';
 
 /**
- * Every leaf in the catalog must yield non-empty text — a filled-in string, or a
- * function that returns one for sample args. This is the guard a future locale
+ * Every leaf in a locale catalog must yield non-empty text — a filled-in string,
+ * or a function that returns one for sample args. This is the guard each locale
  * leans on: a missing or blank entry fails here, not silently in the UI.
  */
 function checkLeaves(value: unknown, path: string): void {
@@ -34,12 +34,36 @@ function checkLeaves(value: unknown, path: string): void {
   throw new Error(`unexpected leaf type at ${path}: ${typeof value}`);
 }
 
-describe('wizda voice catalog', () => {
-  it('has non-empty text for every line in the active locale', () => {
-    checkLeaves(wizda, '');
-  });
+/** The set of leaf paths in an object, so two locales can be compared for parity. */
+function leafPaths(value: unknown, path: string, out: Set<string>): void {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [key, child] of Object.entries(value)) {
+      leafPaths(child, path ? `${path}.${key}` : key, out);
+    }
+    return;
+  }
+  out.add(path);
+}
 
-  it('exposes the English locale as the active one', () => {
-    expect(wizda).toBe(wizdaLinesEn);
+const LOCALES = {
+  en: wizdaLinesEn,
+  ja: wizdaLinesJa,
+};
+
+describe('wizda voice catalog', () => {
+  for (const [name, catalog] of Object.entries(LOCALES)) {
+    it(`has non-empty text for every line in ${name}`, () => {
+      checkLeaves(catalog, '');
+    });
+  }
+
+  it('keeps every locale in structural parity with English', () => {
+    const reference = new Set<string>();
+    leafPaths(wizdaLinesEn, '', reference);
+    for (const [name, catalog] of Object.entries(LOCALES)) {
+      const paths = new Set<string>();
+      leafPaths(catalog, '', paths);
+      expect([...paths].sort(), `${name} leaf shape`).toEqual([...reference].sort());
+    }
   });
 });

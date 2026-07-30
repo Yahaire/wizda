@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { wizda } from '@/mascot/voice';
+import { wizdaLinesEn as wizda } from '@/mascot/voice.en';
 import { EquipmentRankKind } from '@shared/domain/rank';
 
 import {

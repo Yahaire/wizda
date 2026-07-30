@@ -1,30 +1,18 @@
 'use client';
 
-import {
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useMemo, useRef, useState } from 'react';
 
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch';
+import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
+import { useStrings } from '@/i18n/LanguageProvider';
+import { createSearchMatcher, normalize } from '@/utils/search';
+import { Box, Center, CloseButton, Group, Text, TextInput, UnstyledButton } from '@mantine/core';
 import {
-  Box,
-  Center,
-  CloseButton,
-  Group,
-  Text,
-  TextInput,
-  UnstyledButton,
-} from '@mantine/core';
-import {
-  IconArrowsSort,
-  IconSearch,
-  IconSortAscending,
-  IconSortDescending,
+    IconArrowsSort, IconSearch, IconSortAscending, IconSortDescending
 } from '@tabler/icons-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
-import { createSearchMatcher } from '@/utils/search';
+export type ColumnAlign = 'left' | 'right' | 'center';
 
 export interface Column<T> {
   key: string,
@@ -36,7 +24,7 @@ export interface Column<T> {
   width?: string,
   /** Minimum px width; the table scrolls horizontally rather than crush below it. */
   minWidth?: number,
-  align?: 'left' | 'right' | 'center',
+  align?: ColumnAlign,
 }
 
 type SortDir = 'asc' | 'desc';
@@ -45,8 +33,17 @@ interface DataTableProps<T> {
   data: T[],
   columns: Column<T>[],
   getRowId: (row: T) => string,
-  /** Text a row is matched against by the search box. */
-  searchText: (row: T) => string,
+  /**
+   * Every text a row can be matched on by the search box — typically its display
+   * name plus, in Japanese, the reading the API sends alongside it (a query may
+   * satisfy one term from each). Nullish entries are dropped, so a row without a
+   * reading needs no special-casing at the call site.
+   *
+   * Keep this stable (`useCallback`) — every row's text is folded once and cached
+   * against this function's identity, and a fresh one each render throws that
+   * cache away.
+   */
+  searchTexts: (row: T) => readonly (string | null | undefined)[],
   searchPlaceholder?: string,
   /** Extra filter controls (e.g. a rank select) shown beside the search box. */
   toolbar?: React.ReactNode,
@@ -62,28 +59,53 @@ const GAP = 12;
 const PAD_X = 14;
 const HEADER_BG = 'var(--mantine-color-dark-6)';
 
+/** A column's `align` as a grid/flex alignment value, so header and cells agree. */
+function alignToJustify(align: ColumnAlign | undefined): 'start' | 'end' | 'center' {
+  if (align === 'right') {
+    return 'end';
+  }
+  if (align === 'center') {
+    return 'center';
+  }
+  return 'start';
+}
+
 export function DataTable<T>({
   data,
   columns,
   getRowId,
-  searchText,
-  searchPlaceholder = 'Filter by name',
+  searchTexts,
+  searchPlaceholder,
   toolbar,
   rowHeight = 48,
   height = 560,
-  emptyMessage = 'Nothing matches.',
+  emptyMessage,
   onRowClick,
 }: DataTableProps<T>) {
-  const [query, setQuery] = useState('');
+  const strings = useStrings();
+  const resolvedSearchPlaceholder = searchPlaceholder ?? strings.common.defaultSearchPlaceholder;
+  const resolvedEmptyMessage = emptyMessage ?? strings.common.defaultEmptyMessage;
+  const { value: query, setValue: setQuery, debounced: debouncedQuery, compositionProps } =
+    useDebouncedSearch();
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const scrollRef = useRef<HTMLDivElement>(null);
   const { ref: searchRef, selectOnFocus: selectSearch } = useSelectOnFocus<HTMLInputElement>();
 
+  // Row text never changes between keystrokes, only the query does — so fold it
+  // once here rather than re-normalizing the whole catalog on every character.
+  const haystacks = useMemo(
+    () => data.map((row) => ({
+      row,
+      texts: searchTexts(row).filter((text): text is string => Boolean(text)).map(normalize),
+    })),
+    [data, searchTexts],
+  );
+
   const rows = useMemo(() => {
-    const matches = createSearchMatcher(query);
-    const filtered = query.trim()
-      ? data.filter((row) => matches(searchText(row)))
+    const matcher = createSearchMatcher(debouncedQuery);
+    const filtered = debouncedQuery.trim()
+      ? haystacks.filter((entry) => matcher.matchesNormalized(entry.texts)).map((entry) => entry.row)
       : data;
 
     if (!sortKey) {
@@ -105,7 +127,7 @@ export function DataTable<T>({
       }
       return 0;
     });
-  }, [data, query, sortKey, sortDir, columns, searchText]);
+  }, [data, haystacks, debouncedQuery, sortKey, sortDir, columns]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -175,14 +197,15 @@ export function DataTable<T>({
               onClick={() => setQuery('')}
             />
           )}
-          placeholder={searchPlaceholder}
+          placeholder={resolvedSearchPlaceholder}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
           onFocus={selectSearch}
           w={{ base: '100%', xs: 260 }}
+          {...compositionProps}
         />
         {toolbar}
-        <Text size="sm" c="dimmed">{rows.length} shown</Text>
+        <Text size="sm" c="dimmed">{strings.common.rowsShown(rows.length)}</Text>
       </Group>
 
       <Box
@@ -225,24 +248,25 @@ export function DataTable<T>({
             >
               {columns.map((column, index) => {
                 const inner = column.sortValue ? (
-                  <UnstyledButton
-                    onClick={() => toggleSort(column.key)}
-                    style={{ justifySelf: column.align === 'right' ? 'end' : 'start' }}
-                  >
+                  <UnstyledButton onClick={() => toggleSort(column.key)}>
                     <Group gap={4} wrap="nowrap">
                       <Text size="sm" fw={600}>{column.header}</Text>
                       {sortIcon(column.key)}
                     </Group>
                   </UnstyledButton>
                 ) : (
-                  <Text size="sm" fw={600} ta={column.align ?? 'left'}>
-                    {column.header}
-                  </Text>
+                  <Text size="sm" fw={600}>{column.header}</Text>
                 );
                 return (
                   <Box
                     key={column.key}
                     style={{
+                      // Flex rather than `justifySelf` on the inner element: the
+                      // grid item is this Box, so alignment set inside it is a
+                      // no-op — which is how the header used to drift left of a
+                      // right-aligned column's cells.
+                      display: 'flex',
+                      justifyContent: alignToJustify(column.align),
                       ...stickyPos(index),
                       ...(index === 0 ? { background: HEADER_BG, zIndex: 2 } : {}),
                     }}
@@ -256,7 +280,7 @@ export function DataTable<T>({
             {/* Body */}
             {rows.length === 0 ? (
               <Center p="xl">
-                <Text c="dimmed">{emptyMessage}</Text>
+                <Text c="dimmed">{resolvedEmptyMessage}</Text>
               </Center>
             ) : (
               <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
@@ -286,9 +310,7 @@ export function DataTable<T>({
                           key={column.key}
                           className={index === 0 ? 'wizda-sticky-cell' : undefined}
                           style={{
-                            justifySelf: column.align === 'right'
-                              ? 'end'
-                              : column.align === 'center' ? 'center' : 'start',
+                            justifySelf: alignToJustify(column.align),
                             minWidth: 0,
                             width: '100%',
                             textAlign: column.align ?? 'left',

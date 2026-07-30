@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { APP_NAME } from '@/app/app.constants';
-import { wizda } from '@/mascot/voice';
+import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph } from '@/mascot/wizda';
 import { api, subscribeMaintenance } from '@/services/api';
 import { Box, Stack, Text, Title } from '@mantine/core';
@@ -26,6 +26,8 @@ type Phase = 'present' | 'away' | 'back';
  * she's away we quietly poll for recovery so the app comes back on its own.
  */
 export function MaintenanceGate() {
+  const strings = useStrings();
+  const wizda = useWizda();
   const [phase, setPhase] = useState<Phase>('present');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -111,7 +113,7 @@ export function MaintenanceGate() {
           {APP_NAME}
         </Title>
         <Text size="sm" c="dimmed" ta="center">
-          A Wizardry Variants Daphne Assistant
+          {strings.maintenance.subtitle}
         </Text>
       </Stack>
 

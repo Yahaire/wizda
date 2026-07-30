@@ -1,15 +1,12 @@
 import express from 'express';
 
+import { pickLocalizedName, pickLocalizedReading } from '@app/localizedNames';
+import { getPrisma } from '@app/prisma';
 import { HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
 import {
-    EquipmentJunkSource,
-    EquipmentListItem,
-    JunkListItem,
+    EquipmentJunkSource, EquipmentListItem, JunkListItem
 } from '@shared/api/endpoints/lists.models';
 import { EquipmentRankKind } from '@shared/domain/rank';
-
-import { pickLocalizedName } from '@app/localizedNames';
-import { getPrisma } from '@app/prisma';
 
 /**
  * One (equipment, junk) drop pairing, with the highest quality/grade rank that
@@ -35,6 +32,7 @@ async function handleListJunks(
       nameJa: true,
       nameKo: true,
       nameDe: true,
+      nameJaReading: true,
       hasMultiplePools: true,
       maxDropQuality: true,
       maxDropGrade: true,
@@ -42,13 +40,19 @@ async function handleListJunks(
     orderBy: { name: 'asc' },
   });
 
-  const body: JunkListItem[] = junks.map((junk) => ({
-    name: junk.name,
-    displayName: pickLocalizedName(junk, req.locale),
-    hasMultiplePools: junk.hasMultiplePools,
-    maxDropQuality: junk.maxDropQuality,
-    maxDropGrade: junk.maxDropGrade,
-  }));
+  const body: JunkListItem[] = junks.map((junk) => {
+    const nameReading = pickLocalizedReading(junk, req.locale);
+    return {
+      name: junk.name,
+      displayName: pickLocalizedName(junk, req.locale),
+      // Spread, not assigned, so the key is absent rather than `undefined` for
+      // every non-Japanese locale and never reaches the wire.
+      ...(nameReading !== undefined && { nameReading }),
+      hasMultiplePools: junk.hasMultiplePools,
+      maxDropQuality: junk.maxDropQuality,
+      maxDropGrade: junk.maxDropGrade,
+    };
+  });
   res.status(HttpStatusCode.OK).json(body);
 }
 
@@ -75,6 +79,7 @@ async function handleListEquipment(
         nameJa: true,
         nameKo: true,
         nameDe: true,
+        nameJaReading: true,
         rank: true,
         maxDropQuality: true,
         maxDropGrade: true,
@@ -134,19 +139,24 @@ async function handleListEquipment(
     sourcesByEquipmentId.set(row.equipmentId, sources);
   }
 
-  const body: EquipmentListItem[] = equipment.map((item) => ({
-    name: item.name,
-    displayName: pickLocalizedName(item, req.locale),
-    // Enriched from the Fasterthoughts taxonomy (see the seed); null for the few
-    // items whose name isn't in that source.
-    category: item.category ? { code: item.category.code, name: item.category.name } : null,
-    rank: item.rank as EquipmentRankKind | null,
-    maxDropQuality: item.maxDropQuality,
-    maxDropGrade: item.maxDropGrade,
-    blessings: (blessingsByEquipmentId.get(item.id) ?? []).sort(),
-    sources: (sourcesByEquipmentId.get(item.id) ?? [])
-      .sort((left, right) => left.junkName.localeCompare(right.junkName)),
-  }));
+  const body: EquipmentListItem[] = equipment.map((item) => {
+    const nameReading = pickLocalizedReading(item, req.locale);
+    return {
+      name: item.name,
+      displayName: pickLocalizedName(item, req.locale),
+      // Spread, not assigned — see the junk list above.
+      ...(nameReading !== undefined && { nameReading }),
+      // Enriched from the Fasterthoughts taxonomy (see the seed); null for the few
+      // items whose name isn't in that source.
+      category: item.category ? { code: item.category.code, name: item.category.name } : null,
+      rank: item.rank as EquipmentRankKind | null,
+      maxDropQuality: item.maxDropQuality,
+      maxDropGrade: item.maxDropGrade,
+      blessings: (blessingsByEquipmentId.get(item.id) ?? []).sort(),
+      sources: (sourcesByEquipmentId.get(item.id) ?? [])
+        .sort((left, right) => left.junkName.localeCompare(right.junkName)),
+    };
+  });
   res.status(HttpStatusCode.OK).json(body);
 }
 

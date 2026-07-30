@@ -6,7 +6,9 @@ import { usePathname } from 'next/navigation';
 import { APP_NAME, ORACLE_NAME, SUPPORT_URL } from '@/app/app.constants';
 import { AdSlot } from '@/components/AdSlot';
 import { DataFreshness } from '@/components/DataFreshness';
-import { wizda } from '@/mascot/voice';
+import { LanguageToggle } from '@/components/LanguageToggle';
+import { useLocaleHref, useStrings, useWizda } from '@/i18n/LanguageProvider';
+import { stripLocale } from '@/i18n/locale';
 import { WizdaGreeter } from '@/mascot/WizdaGreeter';
 import {
     AppShell, Box, Burger, Button, Divider, Group, NavLink, ScrollArea, Stack, Text, Title, Tooltip
@@ -23,26 +25,6 @@ interface NavItem {
   tooltip?: string,
 }
 
-const PRIMARY: NavItem = {
-  href: '/',
-  label: ORACLE_NAME,
-  icon: <IconSparkles size={20} />,
-  tooltip: wizda.oracle.tagline,
-};
-
-const LISTS: NavItem[] = [
-  {
-    href: '/junks',
-    label: 'Junk',
-    icon: <IconBox size={20} />,
-  },
-  {
-    href: '/equipment',
-    label: 'Equipment',
-    icon: <IconSword size={20} />,
-  },
-];
-
 function isActive(pathname: string, href: string): boolean {
   if (href === '/') {
     return pathname === '/';
@@ -51,17 +33,43 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  // Nav items are declared with unprefixed paths (`/junks`) and rendered under
+  // the active language by `localeHref`; route comparisons strip the prefix
+  // back off, so neither has to know which language is showing.
+  const pathname = stripLocale(usePathname());
+  const localeHref = useLocaleHref();
+  const strings = useStrings();
+  const wizda = useWizda();
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false);
   // Desktop sidebar is minimized to the header button by default; the burger expands it.
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(false);
+
+  const primary: NavItem = {
+    href: '/',
+    label: ORACLE_NAME,
+    icon: <IconSparkles size={20} />,
+    tooltip: wizda.oracle.tagline,
+  };
+
+  const lists: NavItem[] = [
+    {
+      href: '/junks',
+      label: strings.nav.junkLabel,
+      icon: <IconBox size={20} />,
+    },
+    {
+      href: '/equipment',
+      label: strings.nav.equipmentLabel,
+      icon: <IconSword size={20} />,
+    },
+  ];
 
   const renderLink = (item: NavItem) => {
     const link = (
       <NavLink
         key={item.href}
         component={Link}
-        href={item.href}
+        href={localeHref(item.href)}
         label={item.label}
         leftSection={item.icon}
         active={isActive(pathname, item.href)}
@@ -109,17 +117,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
             onClick={toggleMobile}
             hiddenFrom="sm"
             size="sm"
-            aria-label="Toggle navigation"
+            aria-label={strings.nav.toggleNavigationAriaLabel}
           />
           <Burger
             opened={desktopOpened}
             onClick={toggleDesktop}
             visibleFrom="sm"
             size="sm"
-            aria-label="Toggle navigation"
+            aria-label={strings.nav.toggleNavigationAriaLabel}
           />
           <Link
-            href="/"
+            href={localeHref('/')}
             style={{ textDecoration: 'none' }}
             onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
               closeMobile();
@@ -145,9 +153,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <AppShell.Navbar p="sm">
         <AppShell.Section grow component={ScrollArea}>
           <Stack gap={4}>
-            {renderLink(PRIMARY)}
-            <Divider my="xs" label="Lists" labelPosition="left" />
-            {LISTS.map(renderLink)}
+            {renderLink(primary)}
+            <Divider my="xs" label={strings.nav.listsSectionLabel} labelPosition="left" />
+            {lists.map(renderLink)}
           </Stack>
         </AppShell.Section>
 
@@ -156,8 +164,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Stack gap="xs">
             <NavLink
               component={Link}
-              href="/about"
-              label="About"
+              href={localeHref('/about')}
+              label={strings.nav.aboutLabel}
               leftSection={<IconInfoCircle size={18} />}
               active={isActive(pathname, '/about')}
               onClick={closeMobile}
@@ -173,11 +181,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
               size="xs"
               leftSection={<IconHeartFilled size={16} />}
             >
-              Support the project
+              {strings.nav.supportButtonLabel}
             </Button>
             <Text size="xs" c="dimmed" ta="center">
-              Keeps the lights on ✨
+              {strings.nav.supportCaption}
             </Text>
+            <Divider my={4} />
+            <LanguageToggle />
           </Stack>
         </AppShell.Section>
       </AppShell.Navbar>

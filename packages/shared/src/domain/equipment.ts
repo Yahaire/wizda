@@ -67,7 +67,7 @@ export interface EquipmentCategoryInfo {
  * table. Codes are explicit (not derived from `name`) so renaming a display
  * name never changes a primary key.
  */
-export const EQUIPMENT_CATEGORIES: readonly EquipmentCategoryInfo[] = [
+export const EQUIPMENT_CATEGORIES = [
   // Weapons
   {
     code: 'DAGGER',
@@ -241,4 +241,11 @@ export const EQUIPMENT_CATEGORIES: readonly EquipmentCategoryInfo[] = [
     name: 'Accessories',
     equipmentType: EquipmentTypeKind.ACCESSORY,
   },
-];
+] as const satisfies readonly EquipmentCategoryInfo[];
+
+/**
+ * Every category code as a closed literal union (not the widened `string` on
+ * {@link EquipmentCategoryInfo}'s `code` field). Lets a code-keyed lookup — e.g.
+ * a locale's `vocab.categoryName` — be checked for completeness at compile time.
+ */
+export type EquipmentCategoryCode = (typeof EQUIPMENT_CATEGORIES)[number]['code'];

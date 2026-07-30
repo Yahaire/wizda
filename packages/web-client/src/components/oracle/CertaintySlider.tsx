@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
-import { wizda } from '@/mascot/voice';
+import { useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, wizdaSay } from '@/mascot/wizda';
 import { Group, NumberInput, Slider } from '@mantine/core';
 
@@ -17,6 +17,7 @@ interface CertaintySliderProps {
 const COMMIT_DELAY_MS = 500;
 
 export function CertaintySlider({ value, onChange }: CertaintySliderProps) {
+  const wizda = useWizda();
   // Track the control locally so it stays responsive to every movement, but
   // only push the change upward (localStorage + reactivity) once the user
   // pauses — otherwise every pixel of drag / keystroke fires a commit.

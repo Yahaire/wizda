@@ -92,6 +92,34 @@ a {
 }
 
 /*
+ * Group headers inside IconMultiSelect's virtualized dropdown.
+ *
+ * Deliberately not `Combobox.Group`: its options are absolutely-positioned
+ * siblings in the virtual list, so a header would be a Group with no children —
+ * and Mantine hides exactly that (`.groupLabel:only-child { display: none }`),
+ * leaving an invisible header taking up a row. So the label is restyled here
+ * instead, tracking Mantine's own: dimmed, 0.85em of the option font, the same
+ * `--combobox-option-padding` so it lines up with the options under it, and the
+ * hairline that runs out to the right of the text.
+ */
+.wizda-select-group-label {
+  display: flex;
+  align-items: center;
+  position: relative;
+  color: var(--mantine-color-dimmed);
+  font-size: calc(var(--combobox-option-fz, var(--mantine-font-size-sm)) * 0.85);
+  font-weight: 500;
+  padding: var(--combobox-option-padding, 6px 10px);
+}
+.wizda-select-group-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  margin-inline-start: var(--mantine-spacing-xs);
+  background-color: var(--mantine-color-dark-4);
+}
+
+/*
  * Touch devices have no Esc key, so the Combobox close button's "Esc" shortcut
  * hint is noise there — hide it (the "Close" label stands on its own). Keyed on
  * pointer, not screen width, on purpose: a narrow desktop window still has Esc;

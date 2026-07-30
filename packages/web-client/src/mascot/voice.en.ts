@@ -33,10 +33,10 @@ export const wizdaLinesEn = {
       "Blessings fill one slot at a time, and no piece ever gets the same one twice.",
       "The devs publish each slot's odds, but never say what happens exactly after the first slot is filled.",
       "I assume the game simply rerolls that slot.",
-      "If it starts the whole piece over instead, my numbers drift a little — usually by",
-      "well under 1%, although at worst by about 10%. Everything else here is exact.",
+      "If it actually does something else, my numbers drift a little — usually by well under 1%, although at worst by about 10%.",
+      "Everything else here is exact.",
     ]),
-    estimateNoteLink: "Want to check my calculations — or know how the game really rolls?",
+    estimateNoteLink: "Want to check my calculations?",
     endOfList: "That's all I got!",
     noResults: "Oh... no junk can get you that one — try loosening the filters a little!",
     filterSearchesLoadedOnly: TsUtilities.stringJoin([
@@ -91,6 +91,7 @@ export const wizdaLinesEn = {
   errors: {
     unknownEquipment: "Some of that gear isn't in my notes anymore — try reselecting it.",
     unknownBlessing: "Uh... one of those blessings isn't in my notes anymore — try reselecting it.",
+    unknownGearKind: "That kind of gear isn't in my notes yet — I've cleared it from your filters.",
     generic: "Something went sideways on my end — give it another go in a moment.",
   },
   away: {

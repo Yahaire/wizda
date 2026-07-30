@@ -404,3 +404,10 @@ This sets a maintenance flag before seeding and clears it on success. If the see
 ```bash
 rm .maintenance
 ```
+
+**Taxonomy drift is not a failure.** If the upstream equipment CSVs use a `Type`,
+`Armor Type` or `Rank` we don't map — most likely after a game update adds gear —
+the seed still completes, still clears the maintenance flag, and prints an
+`ACTION REQUIRED` block at the very end naming the unmapped values. The affected
+items are stored without that one field. Work through "Adding a new equipment
+category" in `docs/domain.md`, then re-seed so they pick the new codes up.
