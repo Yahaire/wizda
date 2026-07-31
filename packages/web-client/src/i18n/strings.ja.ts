@@ -30,6 +30,7 @@ const JA_CATEGORY_NAME: Record<EquipmentCategoryCode, string> = {
   TWO_HANDED_SPEAR: '両手槍',
   BOW: '弓',
   ODACHI: '大太刀',
+  CESTI: 'セスタス',
   TOOLS: '工具',
   // Shields
   SMALL_SHIELD: '小盾',

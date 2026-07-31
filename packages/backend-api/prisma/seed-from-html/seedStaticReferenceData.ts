@@ -7,8 +7,8 @@ import { EQUIPMENT_RANKS } from '@shared/domain/rank';
  * Upserts the static reference tables from `packages/shared/src/domain` — the
  * single source of truth for these catalogs:
  *   - `Stat` (10) + `Blessing` (19)               from `stats.ts`
- *   - `EquipmentType` (7) + `EquipmentCategory` (32) from `equipment.ts`
- *   - `EquipmentRank` (7)                          from `rank.ts`
+ *   - `EquipmentType` (7) + `EquipmentCategory` (33) from `equipment.ts`
+ *   - `EquipmentRank` (6)                          from `rank.ts`
  *
  * Must run before the drop-rate seeds: `EquipmentBlessingDropRate` FKs to
  * `Blessing.code`, and the equipment-taxonomy enrichment pass FKs to

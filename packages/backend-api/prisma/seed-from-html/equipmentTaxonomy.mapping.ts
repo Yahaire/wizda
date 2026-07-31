@@ -104,6 +104,7 @@ export const WEAPON_TYPE_TO_CATEGORY: Readonly<Record<string, string>> = {
   Bow: 'BOW',
   Sam_Katana: 'KATANA',
   Sam_Odachi: 'ODACHI',
+  Cesti: 'CESTI',
   Ninjato: 'NINJATO',
   Ninja_Throw: 'THROWING_NINJA_TOOL',
   Tool: 'TOOLS',

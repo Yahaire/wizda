@@ -145,6 +145,11 @@ export const EQUIPMENT_CATEGORIES = [
     equipmentType: EquipmentTypeKind.WEAPON,
   },
   {
+    code: 'CESTI',
+    name: 'Cesti',
+    equipmentType: EquipmentTypeKind.WEAPON,
+  },
+  {
     code: 'TOOLS',
     name: 'Tools',
     equipmentType: EquipmentTypeKind.WEAPON,

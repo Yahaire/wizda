@@ -103,6 +103,7 @@ Backs `vocab.categoryName`. Confirmed against in-game category dropdown screensh
 | TWO_HANDED_SPEAR | Two-Handed Spear | 両手槍 |
 | BOW | Bow | 弓 |
 | ODACHI | Odachi | 大太刀 |
+| CESTI | Cesti | セスタス |
 | TOOLS | Tools | 工具 |
 | SMALL_SHIELD | Small Shield | 小盾 |
 | LIGHT_SHIELD | Light Shield | 軽盾 |

@@ -1,10 +1,11 @@
 'use client';
 
 import {
-    GiBattleAxe, GiBoots, GiBreastplate, GiBroadsword, GiCrocSword, GiFlangedMace, GiGauntlet,
-    GiGavel, GiGloves, GiHatchet, GiHighShot, GiKatana, GiLeatherArmor, GiLeatherBoot, GiLightHelm,
-    GiMailedFist, GiOrbWand, GiPlainDagger, GiPointyHat, GiRing, GiRobe, GiRoundShield, GiSandal,
-    GiShield, GiShuriken, GiStoneSpear, GiTemplarShield, GiVisoredHelm, GiWarPick, GiWizardStaff
+    GiBattleAxe, GiBoots, GiBrassKnuckles, GiBreastplate, GiBroadsword, GiCrocSword, GiFlangedMace,
+    GiGauntlet, GiGavel, GiGloves, GiHatchet, GiHighShot, GiKatana, GiLeatherArmor, GiLeatherBoot,
+    GiLightHelm, GiMailedFist, GiOrbWand, GiPlainDagger, GiPointyHat, GiRing, GiRobe, GiRoundShield,
+    GiSandal, GiShield, GiShuriken, GiStoneSpear, GiTemplarShield, GiVisoredHelm, GiWarPick,
+    GiWizardStaff
 } from 'react-icons/gi';
 
 import { gameIcon, IconComponent, IconComponentProps } from '@/components/icons/iconComponent';
@@ -42,6 +43,7 @@ const EQUIPMENT_CATEGORY_ICONS: Record<EquipmentCategoryCode, IconComponent> = {
   TWO_HANDED_SPEAR: gameIcon(GiStoneSpear),
   BOW: gameIcon(GiHighShot),
   ODACHI: gameIcon(GiKatana),
+  CESTI: gameIcon(GiBrassKnuckles),
   TOOLS: gameIcon(GiWarPick),
 
   // Shields
