@@ -10,6 +10,7 @@ import { Cinzel, Inter, Patrick_Hand } from 'next/font/google';
 import { notFound } from 'next/navigation';
 
 import { DetailProvider } from '@/components/detail/DetailProvider';
+import { FocusModalityWatcher } from '@/components/FocusModalityWatcher';
 import { JapanesePreviewNotice } from '@/components/JapanesePreviewNotice';
 import { MaintenanceGate } from '@/components/MaintenanceGate';
 import { Shell } from '@/components/Shell';
@@ -118,6 +119,7 @@ export default async function RootLayout({
       </head>
       <body>
         <MantineProvider theme={wizdaTheme} forceColorScheme="dark">
+          <FocusModalityWatcher />
           <LanguageProvider lang={lang}>
             <Notifications
               position="bottom-center"

@@ -58,6 +58,30 @@ a {
     drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.65));
 }
 
+/*
+ * Suppresses `:focus-visible` rings while the user is in pointer modality (see
+ * FocusModalityWatcher). Needed on top of the native `:focus-visible` heuristic
+ * because Mantine's focus-trap/return-focus calls happen outside the click that
+ * triggered them, so the browser sometimes can't tell that focus landed there via
+ * a click rather than a keypress. `!important` because Mantine's own focus-ring
+ * rules already carry component-scoped class selectors we'd otherwise need to
+ * out-specificity one by one.
+ *
+ * The sibling/child selectors are not redundant: Chip, Switch, SegmentedControl,
+ * Rating and Tree visually hide the real <input> and paint the ring on the
+ * adjacent label (`input:focus-visible + label`), so the outline sits on an
+ * element that is not itself `:focus-visible`. Matching only the focused element
+ * would leave those rings on screen — the language toggle and the blessing chips
+ * are both such cases. Every Mantine focus indicator uses `outline` (none use
+ * `box-shadow`), so clearing `outline` is enough once the selector reaches the
+ * right element.
+ */
+html[data-focus-modality='pointer'] :focus-visible,
+html[data-focus-modality='pointer'] :focus-visible + *,
+html[data-focus-modality='pointer'] :focus-visible > * {
+  outline: none !important;
+}
+
 .wizda-row-hover {
   cursor: pointer;
   transition: background-color 120ms ease;
