@@ -11,7 +11,6 @@ import { notFound } from 'next/navigation';
 
 import { DetailProvider } from '@/components/detail/DetailProvider';
 import { FocusModalityWatcher } from '@/components/FocusModalityWatcher';
-import { JapanesePreviewNotice } from '@/components/JapanesePreviewNotice';
 import { MaintenanceGate } from '@/components/MaintenanceGate';
 import { Shell } from '@/components/Shell';
 import { VersionLog } from '@/components/VersionLog';
@@ -127,10 +126,6 @@ export default async function RootLayout({
               autoClose={5000}
             />
             <MaintenanceGate />
-            {/* TEMPORARY — see `JapanesePreviewNotice`; delete both when the
-                Japanese copy has been edited. Gated here rather than inside the
-                component so the prerendered English pages never carry it. */}
-            {lang === 'ja' && <JapanesePreviewNotice />}
             <Shell>
               <DetailProvider>{children}</DetailProvider>
             </Shell>

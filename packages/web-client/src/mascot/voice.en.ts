@@ -9,7 +9,7 @@ import type { WizdaLines } from './voice';
  */
 export const wizdaLinesEn = {
   greet: {
-    welcome: "Welcome! I'm Wizda — Hope I can help you on your adventure.",
+    welcome: "Welcome! I'm Wizda, the fairy in charge around here — Hope I can help you on your adventure.",
     daily: [
       "Back for more delving? Let's find your treasure.",
       "The abyss runs deep today — good thing I do the math so you don't have to.",

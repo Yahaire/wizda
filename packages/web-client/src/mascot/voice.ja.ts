@@ -23,28 +23,28 @@ const stringJoin = (
  */
 export const wizdaLinesJa = {
   greet: {
-    welcome: "ようこそ！ 私はウィズダ。あなた様の冒険のお手伝いをさせてね。",
+    welcome: "ようこそ！ 私はウィズダ。ここの管理人の妖精よ。あなた様の冒険のお手伝いをさせてね。",
     daily: [
       "今日も探索に来たの？ じゃ、一緒にお宝を見つけにいきましょう。",
       "今日は深淵が深いみたい…計算は得意だから、私にまかせてね。",
       `また新しいガラクタの山だわ。さあ、あなた様のお目当ての${JA_EQUIPMENT}を一緒に探しましょう。`,
       `あなた様の引きに祝福あれ、${JA_GRADE}が赤くなりますように！`,
       "おかえりなさい、冒険者様。アゴラ様が見ているけど、数字のことなら私のほうが得意よ。",
-      "逆転の準備はできた？確率は私に任せて。",//★
+      "逆転の準備はできた？確率は私に任せて。",
       "周回は気合いじゃない、効率よ。そのために私が一緒にいるんでしょ？",
       "さあ、新しい一日よ。今日は何を狙うの？",
     ],
   },
   oracle: {
-    tagline: "そのピカピカの4★の斧に、ガラクタはいくつ必要か知りたくない？",
+    tagline: `その4★の${JA_EQUIPMENT}に、ガラクタはいくつ必要か知りたくない？`,
     snark: "全部表示は無理！ フィルターを1つか2つ選んでから、もう一度やってみてね。私にも少し楽させて！",
     agoraLine: "忘れないで。偉大なアゴラ様でも、欲しいものが絶対に手に入るって確約はできないのよ。",
     loadError: `ちょっと待って！ ${JA_EQUIPMENT}リストが読み込めなかったの。更新してくれたら、もう一度試してみるわ。`,
     emptyPrompt: "欲しい装備を選んで「計算」を押してね。必要なガラクタがいくつか数えてあげるわ。",
-    emptyPromptWithPicks: "あなた様が選んだものはそのまま残ってるわ。準備ができたら「計算」を押してね。",//★
+    emptyPromptWithPicks: "あなた様が選んだものはそのまま残ってるわ。準備ができたら「計算」を押してね。",
     popularHeading: "だれか他の人の選択を読み込んでもいいのよ。",
     estimateNote: stringJoin([
-      `${JA_BLESSINGS}スロットの枠には常に違う${JA_BLESSINGS}が来るようになってるの。${JA_EQUIPMENT}に同じ${JA_BLESSINGS}が重複してつくことはないわ。`,
+      `${JA_BLESSINGS}スロットの枠には常に違う${JA_BLESSINGS}が来るようになってるの。つまり、${JA_EQUIPMENT}に同じ${JA_BLESSINGS}が重複してつくことはないわ。`,
       `開発元は各スロットの${JA_BLESSINGS}のつく確率を公開しているけど、ひとつめの${JA_BLESSINGS}がでた後、それ以降の${JA_BLESSINGS}がどうやって処理されるかは言っていないわ。`,
       `だから私は、1回でた${JA_BLESSINGS}を省いてスロットを引き直す、って考えて計算してるの。`,
       `もし他の方法で計算していても、計算結果はあまり変わらないわ。大体の場合は1%未満、最大でも10%ぐらいの誤差よ。`,
@@ -55,7 +55,7 @@ export const wizdaLinesJa = {
     noResults: "ええっと…その装備を出せるガラクタはないみたいだわ。もう少し条件を緩めてみて。",
     filterSearchesLoadedOnly: stringJoin([
       "気をつけて。私が探すのはもう掘り出したガラクタだけだから。",
-      "もし欲しいものがここになければ、「もっと見る」って言ってね！",//★
+      "もし欲しいものがここになければ、「もっと見る」のボタンを押してね。",
     ]),
     noFilterMatches: "今のところ掘り出したガラクタのなかに、当てはまるものはないわ。",
     blessingsHelp: stringJoin([
@@ -136,8 +136,8 @@ export const wizdaLinesJa = {
       `${JA_CATEGORY}と${JA_RANK}の選択を外して、指定した${JA_EQUIPMENT}だけを残すこともできるけど…どうする？`,
     ]),
     genericConflict: "選んだ条件のなかに、なにか矛盾してるものがあるみたい。",
-    blessingUnrollableOne: (labels) => `あなた様が選んだ条件だと、どうやっても${labels}の${JA_BLESSINGS}はつかないわ。`,//★
-    blessingUnrollableMany: (labels) => `あなた様が選んだ条件だと、どうやっても${labels}の${JA_BLESSINGS}はつかないわ。`,//★
+    blessingUnrollableOne: (labels) => `あなた様が選んだ条件だと、どうやっても${labels}の${JA_BLESSINGS}はつかないわ。`,
+    blessingUnrollableMany: (labels) => `あなた様が選んだ条件だと、どうやっても${labels}の${JA_BLESSINGS}はつかないわ。`,
     blessingComboUnrollable: (labels) => stringJoin([
       `あら！あなた様が選んだ ${JA_EQUIPMENT}のなかに、${labels}が一緒につくものはないわ。`,
       `${JA_BLESSINGS}は狙っている${JA_EQUIPMENT}についてこそ意味があるの。`,

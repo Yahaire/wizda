@@ -22,29 +22,26 @@ export const uiStringsEn = {
     home: {
       title: (appName: string) => `${appName} — Junk Oracle for Wizardry Variants Daphne`,
       description: [
-        'Work out exactly how much junk you need to farm to guarantee the item you want',
+        'Work out exactly how much junk you need to grind to get the item you want',
         'in Wizardry Variants Daphne. Free, no account, official drop rates.',
       ].join(' '),
     },
     junks: {
       title: (appName: string) => `Junk list — ${appName}`,
       description: [
-        'Every junk in Wizardry Variants Daphne with its drop rates, the equipment it can',
-        'yield, and how many you need for a guarantee.',
+        'Every junk in Wizardry Variants Daphne with its drop rates, the equipment it can yield.',
       ].join(' '),
     },
     equipment: {
       title: (appName: string) => `Equipment list — ${appName}`,
       description: [
-        'Every weapon and armour piece in Wizardry Variants Daphne — rank, category, and',
-        'which junk can drop it.',
+        'Every weapon and armour piece in Wizardry Variants Daphne — rank, category, and which junk can drop it.',
       ].join(' '),
     },
     about: {
       title: (appName: string) => `About — ${appName}`,
       description: [
-        'What Wizda is, how the junk-guarantee math works, where the drop-rate data comes',
-        'from, and our data & privacy approach.',
+        'What Wizda is, how the junk-guarantee math works, where the drop-rate data comes from, and our data & privacy approach.',
       ].join(' '),
     },
   },

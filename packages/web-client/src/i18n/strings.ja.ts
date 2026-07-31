@@ -164,12 +164,12 @@ export const uiStringsJa = {
     subjectRankedTrailing: (noun, ranks) => `${noun}（${ranks}）`,
     resultsCount: (total) => `${total}種類のガラクタで入手可能`,
     columnJunk: 'ガラクタ',
-    columnPercentPerJunk: '％/個',
+    columnPercentPerJunk: '％ / 個',
     columnNumRequired: '必要個数',
     showMoreButton: 'もっと見る',
     filterByNamePlaceholder: '名前で絞り込み',
     backToStartTooltip: 'トップに戻る',
-    blessingOddsTooltip: `${JA_BLESSINGS}の出現率は前提条件により変わります — タップして確認する`,
+    blessingOddsTooltip: `${JA_BLESSINGS}の出現率は前提条件により変わります。タップして確認する`,
     blessingOddsAriaLabel: `この${JA_BLESSINGS}の出現率の前提条件`,
     estimateModalTitle: `${JA_BLESSINGS}の出現率について`,
     calculationDocLinkLabel: '計算についての詳細（英語）',
@@ -290,7 +290,7 @@ export const uiStringsJa = {
     formulaExplanation: [
       'ひとつめは、装備の出現率がPのとき、確率cに到達するのに必要なガラクタの数を計算する式です。',
       'ふたつめは、装備に追加護を付与する際のスロットの計算式です。スロットは1つずつ順番に引かれ、同じ追加護が重複して出ることはありません。スロットでは順次まだ引かれていない追加護のみを対象に出現率の再計算をします。',
-    ].join(''),//★
+    ].join(''),
     docsReferenceLabel: '詳細はこちら：',
     calculationDocLinkLabel: '計算ドキュメント（英語）',
     domainDocLinkLabel: 'ドメインドキュメント（英語）',

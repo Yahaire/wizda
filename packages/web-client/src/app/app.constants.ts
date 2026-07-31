@@ -6,7 +6,7 @@ export const APP_NAME = 'Wizda';
 export const ORACLE_NAME = 'Junk Oracle';
 
 export const APP_DESCRIPTION = TsUtilities.stringJoin([
-  "Work out how much junk to farm to guarantee the item you want in",
+  "Work out how much junk to farm to get the item you want in",
   "Wizardry Variants Daphne.",
 ]);
 
