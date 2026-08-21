@@ -143,6 +143,7 @@ export const uiStringsJa = {
     rowsShown: (n) => `${n}件表示`,
     defaultSearchPlaceholder: '名前で絞り込み',
     defaultEmptyMessage: '一致するものがありません。',
+    shareLabel: '共有',
     justNow: 'たった今',
     any: '指定なし',
     andUp: '+',

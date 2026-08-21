@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useDebouncedSearch } from '@/hooks/useDebouncedSearch';
 import { useSelectOnFocus } from '@/hooks/useSelectOnFocus';
@@ -45,6 +45,16 @@ interface DataTableProps<T> {
    */
   searchTexts: (row: T) => readonly (string | null | undefined)[],
   searchPlaceholder?: string,
+  /** Seeds the search box on mount — e.g. from a shareable `?q=` URL. */
+  initialQuery?: string,
+  /**
+   * Called with the debounced query whenever it settles, e.g. to mirror it into
+   * the URL. Also flushed on blur with the *live* value, so a copy-link click
+   * (which blurs the field first) never copies a stale, pre-debounce query.
+   * Must be stable (`useCallback`) — a fresh function every render would refire
+   * this on every keystroke.
+   */
+  onQueryChange?: (query: string) => void,
   /** Extra filter controls (e.g. a rank select) shown beside the search box. */
   toolbar?: React.ReactNode,
   rowHeight?: number,
@@ -76,6 +86,8 @@ export function DataTable<T>({
   getRowId,
   searchTexts,
   searchPlaceholder,
+  initialQuery,
+  onQueryChange,
   toolbar,
   rowHeight = 48,
   height = 560,
@@ -86,11 +98,18 @@ export function DataTable<T>({
   const resolvedSearchPlaceholder = searchPlaceholder ?? strings.common.defaultSearchPlaceholder;
   const resolvedEmptyMessage = emptyMessage ?? strings.common.defaultEmptyMessage;
   const { value: query, setValue: setQuery, debounced: debouncedQuery, compositionProps } =
-    useDebouncedSearch();
+    useDebouncedSearch(initialQuery);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const scrollRef = useRef<HTMLDivElement>(null);
   const { ref: searchRef, selectOnFocus: selectSearch } = useSelectOnFocus<HTMLInputElement>();
+
+  // Mirrors the settled query into the URL (or wherever the caller wants it).
+  // Fires once on mount too — a harmless no-op re-write of the URL it just came
+  // from, and simpler than special-casing the first run.
+  useEffect(() => {
+    onQueryChange?.(debouncedQuery);
+  }, [debouncedQuery, onQueryChange]);
 
   // Row text never changes between keystrokes, only the query does — so fold it
   // once here rather than re-normalizing the whole catalog on every character.
@@ -201,6 +220,10 @@ export function DataTable<T>({
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
           onFocus={selectSearch}
+          // Flush the *live* value on blur, ahead of the debounce — so clicking a
+          // copy-link button (which blurs the field first) never copies a URL
+          // that's a keystroke or two behind what's on screen.
+          onBlur={(event) => onQueryChange?.(event.currentTarget.value)}
           w={{ base: '100%', xs: 260 }}
           {...compositionProps}
         />

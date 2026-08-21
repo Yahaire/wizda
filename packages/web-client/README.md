@@ -53,10 +53,20 @@ src/
     manifest.ts        PWA web app manifest
     sw.ts              Serwist service worker (excluded from the app tsconfig)
     app.constants.ts   names, tagline, site origin, support/data-source URLs
+    opensearch.xml/route.ts  OpenSearch descriptor — address-bar search into /junks?q=.
+                       Language-less on purpose; see docs/search.md
   components/
     Shell.tsx          responsive AppShell (header + collapsible sidebar/burger, max-width body)
     AdSlot.tsx         reserved ad slot — intentionally renders nothing for now
     AboutContent.tsx
+    PageTitle.tsx      every page's <h2>, with an optional share button
+                       (`shareable`) — only for a page whose URL is worth handing
+                       to someone; off on About
+    ShareButton.tsx    hands off window.location.href — the OS share sheet on
+                       touch-primary devices ((pointer: coarse) + navigator.share),
+                       otherwise a clipboard copy confirmed by a Wizda toast.
+                       Desktop deliberately copies: the URL is already in the
+                       address bar there
     TruncatedText.tsx  single-line text; tooltip only when actually clipped (hover + touch)
     CategoryIcon.tsx   per-gear-type placeholder icon (neutral until categories are seeded)
     oracle/            the Junk Oracle: OraclePage + oracle.logic.ts + filter widgets

@@ -107,6 +107,10 @@ export const wizdaLinesEn = {
       "the gear lists — your work makes this possible!",
     ]),
   },
+  share: {
+    copied: "Link copied! Now go share the good news.",
+    failed: "Hmm, I couldn't copy that — try selecting the address bar instead.",
+  },
   data: {
     freshness: (age) => TsUtilities.stringJoin([
       `I refreshed my notes ${age} from the royal library at Luknalia`,

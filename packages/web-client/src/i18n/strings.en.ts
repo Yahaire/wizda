@@ -66,6 +66,7 @@ export const uiStringsEn = {
     rowsShown: (n) => `${n} shown`,
     defaultSearchPlaceholder: 'Filter by name',
     defaultEmptyMessage: 'Nothing matches.',
+    shareLabel: 'Share',
     justNow: 'just now',
     any: 'Any',
     andUp: '+',

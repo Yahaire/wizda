@@ -65,6 +65,12 @@ export interface UiStrings {
     readonly rowsShown: (n: number) => string,
     readonly defaultSearchPlaceholder: string,
     readonly defaultEmptyMessage: string,
+    /**
+     * Tooltip + `aria-label` for the share button (see `ShareButton`). Names the
+     * intent, not the mechanism — the button opens the OS share sheet where one
+     * exists and falls back to copying the link where it doesn't.
+     */
+    readonly shareLabel: string,
     /** The "under a minute ago" relative-time form (see `utils/relativeTime`). */
     readonly justNow: string,
     /** The level sliders' floor — "this and everything above it" starting from nothing. */

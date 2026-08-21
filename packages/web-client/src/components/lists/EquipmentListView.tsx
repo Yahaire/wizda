@@ -1,17 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { CategoryIcon } from '@/components/CategoryIcon';
 import { useDetail } from '@/components/detail/DetailProvider';
 import {
     categoryName, getRankColor, GradeBadge, QualityStars, RankBadge, rankName
 } from '@/components/gear/gearDisplays';
+import { PageTitle } from '@/components/PageTitle';
 import { Column, DataTable } from '@/components/table/DataTable';
 import { TruncatedText } from '@/components/TruncatedText';
+import { useSearchQueryParam } from '@/hooks/useSearchQueryParam';
 import { useLang, useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, wizdaSay } from '@/mascot/wizda';
-import { Alert, Center, Group, Loader, Select, Stack, Text, Title } from '@mantine/core';
+import { Alert, Center, Group, Loader, Select, Stack, Text } from '@mantine/core';
 import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { IconQuestionMark, IconWorld } from '@tabler/icons-react';
 
@@ -40,6 +42,7 @@ function EquipmentListContent() {
   const strings = useStrings();
   const wizda = useWizda();
   const lang = useLang();
+  const { initialQuery, syncQueryToUrl } = useSearchQueryParam();
   const {
     equipment,
     status,
@@ -156,7 +159,7 @@ function EquipmentListContent() {
 
   return (
     <Stack gap="md">
-      <Title order={2}>{strings.lists.equipmentTitle}</Title>
+      <PageTitle shareable>{strings.lists.equipmentTitle}</PageTitle>
 
       {/* Only junk-dropping gear has localized names — everything else falls back
           to English (see the backend seed). Say so, but only when it matters. */}
@@ -183,6 +186,8 @@ function EquipmentListContent() {
           searchPlaceholder={strings.lists.equipmentSearchPlaceholder}
           emptyMessage={strings.lists.equipmentEmptyMessage}
           onRowClick={(row) => openEquipment(row.name)}
+          initialQuery={initialQuery}
+          onQueryChange={syncQueryToUrl}
           toolbar={(
             <Select
               data={rankOptions}
@@ -199,6 +204,15 @@ function EquipmentListContent() {
   );
 }
 
+/**
+ * `useSearchQueryParam` reads `useSearchParams()`, which needs a `<Suspense>`
+ * boundary above it in a statically prerendered route (or `next build` fails
+ * with the CSR-bailout error) — this wrapper is that boundary.
+ */
 export function EquipmentListView() {
-  return <EquipmentListContent />;
+  return (
+    <Suspense fallback={<Center mih={200}><Loader color="crimson" /></Center>}>
+      <EquipmentListContent />
+    </Suspense>
+  );
 }

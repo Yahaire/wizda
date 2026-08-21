@@ -107,6 +107,15 @@ export default async function RootLayout({
     >
       <head>
         <ColorSchemeScript forceColorScheme="dark" />
+        {/* Address-bar search: type the domain, hit Tab, search without opening
+            the page first. `title` must match the descriptor's `ShortName`
+            (opensearch.xml/route.ts) or Firefox rejects the engine. */}
+        <link
+          rel="search"
+          type="application/opensearchdescription+xml"
+          title={APP_NAME}
+          href="/opensearch.xml"
+        />
         {umamiWebsiteId && (
           <script
             defer

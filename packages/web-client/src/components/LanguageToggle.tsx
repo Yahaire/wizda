@@ -86,7 +86,12 @@ export function LanguageToggle() {
             return;
           }
           rememberLanguage(value);
-          router.push(swapLocalePath(pathname, value));
+          // `window.location.search` rather than `useSearchParams()`: this
+          // toggle sits in `Shell`, i.e. on every page, so reading search
+          // params here would force a Suspense boundary sitewide. A click
+          // handler is client-only by definition, so reading it off `window`
+          // costs nothing.
+          router.push(`${swapLocalePath(pathname, value)}${window.location.search}`);
         }}
         data={data}
       />

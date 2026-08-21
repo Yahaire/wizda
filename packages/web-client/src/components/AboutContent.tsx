@@ -4,6 +4,7 @@ import {
     ANALYTICS_DOC_URL, APP_NAME, CALCULATION_DOC_URL, DATA_SOURCE_URL, DOMAIN_DOC_URL, ISSUES_URL,
     ORACLE_NAME, REPO_URL, SUPPORT_URL
 } from '@/app/app.constants';
+import { PageTitle } from '@/components/PageTitle';
 import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { Anchor, Button, Code, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
 import { IconBrandGithub, IconHeartFilled } from '@tabler/icons-react';
@@ -29,7 +30,7 @@ export function AboutContent() {
   return (
     <Stack gap="lg" maw={720}>
       <div>
-        <Title order={2}>{about.title(APP_NAME)}</Title>
+        <PageTitle>{about.title(APP_NAME)}</PageTitle>
         <Text className="wizda-speech">
           {wizda.about.intro}
         </Text>

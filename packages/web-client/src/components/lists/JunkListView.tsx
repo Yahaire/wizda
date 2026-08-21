@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { Suspense, useCallback, useMemo } from 'react';
 
 import { useDetail } from '@/components/detail/DetailProvider';
 import { GradeBadge, QualityStars } from '@/components/gear/gearDisplays';
+import { PageTitle } from '@/components/PageTitle';
 import { Column, DataTable } from '@/components/table/DataTable';
 import { TruncatedText } from '@/components/TruncatedText';
+import { useSearchQueryParam } from '@/hooks/useSearchQueryParam';
 import { useStrings } from '@/i18n/LanguageProvider';
-import { Alert, Badge, Center, Loader, Stack, Text, Title } from '@mantine/core';
+import { Alert, Badge, Center, Loader, Stack, Text } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 
 import type {
@@ -21,6 +23,7 @@ interface JunkRow extends JunkListItem {
 
 function JunkListContent() {
   const strings = useStrings();
+  const { initialQuery, syncQueryToUrl } = useSearchQueryParam();
   const {
     junks,
     dropsByJunk,
@@ -99,7 +102,7 @@ function JunkListContent() {
 
   return (
     <Stack gap="md">
-      <Title order={2}>{strings.lists.junkTitle}</Title>
+      <PageTitle shareable>{strings.lists.junkTitle}</PageTitle>
 
       {status === 'error' && (
         <Alert color="red" variant="light">{strings.lists.junkLoadError}</Alert>
@@ -118,12 +121,23 @@ function JunkListContent() {
           searchPlaceholder={strings.lists.junkSearchPlaceholder}
           emptyMessage={strings.lists.junkEmptyMessage}
           onRowClick={(row) => openJunk(row.name)}
+          initialQuery={initialQuery}
+          onQueryChange={syncQueryToUrl}
         />
       )}
     </Stack>
   );
 }
 
+/**
+ * `useSearchQueryParam` reads `useSearchParams()`, which needs a `<Suspense>`
+ * boundary above it in a statically prerendered route (or `next build` fails
+ * with the CSR-bailout error) — this wrapper is that boundary.
+ */
 export function JunkListView() {
-  return <JunkListContent />;
+  return (
+    <Suspense fallback={<Center mih={200}><Loader color="crimson" /></Center>}>
+      <JunkListContent />
+    </Suspense>
+  );
 }

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
+import { PageTitle } from '@/components/PageTitle';
 import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
-import { Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
 import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
@@ -487,7 +488,10 @@ export function OraclePage() {
   return (
     <Stack gap="lg">
       <div>
-        <Title order={2}>{ORACLE_NAME}</Title>
+        {/* The Oracle's URL doesn't encode the calculator's picks yet, so this
+            link shares the tool itself rather than a result — still worth
+            having, since it's the page people point friends at. */}
+        <PageTitle shareable>{ORACLE_NAME}</PageTitle>
         <Text className="wizda-speech wizda-speech-muted" c="dimmed">
           {wizda.oracle.tagline}
         </Text>

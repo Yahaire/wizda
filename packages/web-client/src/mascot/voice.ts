@@ -90,6 +90,17 @@ export interface WizdaLines {
   readonly credits: {
     readonly thanks: string,
   },
+  /**
+   * The share button's **clipboard fallback** toast (see `ShareButton`) — where
+   * the OS share sheet exists it is its own feedback and Wizda stays quiet.
+   * Shown on every page that offers the button (the Oracle, the lists), so keep
+   * these state-neutral: true whether the copied URL carries a search or is just
+   * the page itself.
+   */
+  readonly share: {
+    readonly copied: string,
+    readonly failed: string,
+  },
   /** The data-freshness label + toast: when the DB was last (re)seeded. */
   readonly data: {
     /** Her spoken line. `age` is a relative phrase like "2 hours ago". */

@@ -35,11 +35,15 @@ export interface DebouncedSearch {
  * The live `value` is deliberately *not* gated — the field must echo every
  * keystroke, including composition ones, or typing feels broken. Only what we
  * search on waits.
+ *
+ * @param initialValue Seeds `value`/`committed` once, on mount — e.g. from a
+ * shareable `?q=` URL. Changing it on a later render has no effect; after
+ * mount the input owns its own value.
  */
-export function useDebouncedSearch(): DebouncedSearch {
-  const [value, setValueState] = useState('');
+export function useDebouncedSearch(initialValue = ''): DebouncedSearch {
+  const [value, setValueState] = useState(initialValue);
   /** What the debounce watches: the live value, minus anything typed mid-composition. */
-  const [committed, setCommitted] = useState('');
+  const [committed, setCommitted] = useState(initialValue);
   // A ref, not state: the change handler below reads this on the same tick it's
   // set, and a value that only lands on the next render is too late to gate on.
   const isComposing = useRef(false);

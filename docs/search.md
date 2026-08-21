@@ -125,6 +125,17 @@ These are one feature, not two. While a Japanese IME is composing, `onChange` fi
 
 **Mantine already guards its own keyboard handling** — `use-combobox-target-props` returns early on `isComposing` for arrows and on `keyCode === 229` for Enter, so the IME confirm key is not swallowed by the combobox. What it can't know about is our Backspace-removes-pill handler, which runs *before* Mantine's and needs its own `isComposing` check.
 
+## Shareable search URLs
+
+The junk and equipment lists mirror their search box into the URL as `?q=<query>`, so `/en/junks?q=fordraig` is a real, copy-and-shareable link that lands pre-filtered. The same `Url` template backs `opensearch.xml`, which is what lets a browser's address bar search the junk list directly (type the domain, hit Tab, type a query). `src/hooks/useSearchQueryParam.ts` owns the contract; `DataTable`'s `initialQuery`/`onQueryChange` props are the wiring into it.
+
+Two decisions worth not re-litigating:
+
+- **`window.history.replaceState`, not `router.replace` and not `pushState`.** App Router has no shallow routing, so `router.replace` would re-run the route's render on every debounce tick. And it's `replace`, not `push`: the 300 ms debounce fires mid-word on slow typing, so a `pushState` per settled value could leave 2–3 history entries behind one search, and the back button would step through them instead of leaving the page.
+- **`/junks?q=…`, not `/junks/<slug>`.** A query param handles multi-word and Japanese queries without percent-encoding a path segment, and rides through the middleware's locale redirect for free (`search` is preserved — see `docs/i18n.md`). It also keeps `/junks/<slug>` free for a real per-junk detail route later; today the detail is a modal opened by clicking a row, and a shared search link always lands on the filtered list rather than auto-opening one.
+
+The query is seeded once, on mount, from `useSearchParams()` — after that the input owns its value, so there's no two-way binding to keep in sync with a URL that can also change independently (e.g. Back).
+
 ## Known limits
 
 - **Macrons are unsupported.** `tōkyō` passes through unconverted, because wanakana models wāpuro rōmaji (what a keyboard produces) rather than Hepburn. Low-impact in practice — a player who can type `ō` can type `ou`, and the long vowel collapse means either reaches the same place.
