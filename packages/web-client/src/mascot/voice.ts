@@ -20,6 +20,13 @@ export interface WizdaLines {
     /** Playful, Wizardry-lore-flavoured lines — one shown per day on first open. */
     readonly daily: readonly string[],
   },
+  /**
+   * Shown over a page whose controls haven't finished filling in yet — see
+   * `PreparingVeil`. State-neutral on purpose: the same line covers a returning
+   * player's remembered picks arriving and a shared link's being unpacked, and
+   * it has to read sensibly for a first-time visitor who has neither.
+   */
+  readonly preparing: string,
   readonly oracle: {
     /** One-line, in-character intro for the Junk Oracle (and its menu tooltip). */
     readonly tagline: string,

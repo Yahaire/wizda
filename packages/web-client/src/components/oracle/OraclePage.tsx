@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { PageTitle } from '@/components/PageTitle';
+import { PreparingVeil } from '@/components/PreparingVeil';
 import { useOracleUrlState } from '@/hooks/useOracleUrlState';
 import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
@@ -82,6 +83,13 @@ function OracleContent() {
       }
     },
   });
+
+  // False until the page's own state has finished arriving. Neither source is
+  // ready on the first render: `useLocalStorage` above hydrates a returning
+  // player's picks in an effect (`getInitialValueInEffect`), and a shared link's
+  // params are applied in another (see the mount effect below). Drives the
+  // "still filling in" scrim — see `preparing` further down.
+  const [seeded, setSeeded] = useState(false);
 
   // Junk + equipment reference lists are owned by the app-wide DetailProvider
   // (see layout.tsx) — it loads them once and they persist across navigation,
@@ -492,6 +500,12 @@ function OracleContent() {
   // `readStoredCertaintyPct`.
   useEffect(() => {
     applyUrlState(initialParams, readStoredCertaintyPct());
+    // Both sources are settled by the end of this line, so this is where the
+    // scrim comes down: `useLocalStorage`'s own hydration effect is registered
+    // by its hook call above, which means React has already run it by the time
+    // this one fires, and every write from the pair lands in this same flush —
+    // the next render has the final filters and no scrim, together.
+    setSeeded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -603,6 +617,29 @@ function OracleContent() {
   };
 
   const canCalculate = hasAnyFilter(filters);
+
+  /*
+   * Whether to keep the "still filling in" scrim up (see `PreparingVeil`). Two
+   * waits under one cover, because to the player they're the same moment: the
+   * state above arriving, and — only if it turned out to name equipment — the
+   * gear catalogue that turns those stored English keys into the localized
+   * names they actually picked. Nothing else waits on the catalogue; every
+   * other control is complete without it, and the equipment select disables
+   * itself meanwhile.
+   *
+   * Latched rather than plainly derived: a language switch re-pulls the lists
+   * (see `DetailProvider`) with the old ones still on screen and the form long
+   * since filled in, so re-deriving would drop a scrim over a page that isn't
+   * waiting for anything the player can see.
+   */
+  const preparedRef = useRef(false);
+  if (
+    !preparedRef.current
+    && seeded
+    && (filters.equipment.length === 0 || listStatus === 'ready' || listStatus === 'error')
+  ) {
+    preparedRef.current = true;
+  }
 
   const filterPanel = (
     <Paper withBorder p="lg" radius="md">
@@ -748,51 +785,53 @@ function OracleContent() {
         </Text>
       </div>
 
-      <Grid gutter="lg">
-        <Grid.Col span={{ base: 12, md: 5 }}>
-          <div ref={filtersRef} className="wizda-scroll-clear-header">
-            {filterPanel}
-          </div>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 7 }}>
-          <div ref={resultsRef} className="wizda-scroll-clear-header">
-            {result || loading ? (
-              <Paper
-                withBorder
-                p="lg"
-                radius="md"
-                style={resultsMaxHeight ? {
-                  maxHeight: resultsMaxHeight,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                } : undefined}
-              >
-                <ResultsPanel
-                  key={resultVersion}
-                  result={result}
-                  loading={loading}
-                  loadingMore={loadingMore}
-                  onShowMore={showMore}
-                  onOpenJunk={handleOpenJunk}
-                  fillHeight={Boolean(resultsMaxHeight)}
-                  onBack={handleBackToStart}
-                />
-              </Paper>
-            ) : (
-              <Paper withBorder p="lg" radius="md" h="100%">
-                <Stack align="center" justify="center" h="100%" gap="xs" mih={200}>
-                  <IconSparkles size={32} color="var(--mantine-color-crimson-5)" />
-                  <Text className="wizda-speech" ta="center">
-                    {steppedBack ? wizda.oracle.emptyPromptWithPicks : wizda.oracle.emptyPrompt}
-                  </Text>
-                  <PopularQueries onPick={applyPopular} />
-                </Stack>
-              </Paper>
-            )}
-          </div>
-        </Grid.Col>
-      </Grid>
+      <PreparingVeil preparing={!preparedRef.current}>
+        <Grid gutter="lg">
+          <Grid.Col span={{ base: 12, md: 5 }}>
+            <div ref={filtersRef} className="wizda-scroll-clear-header">
+              {filterPanel}
+            </div>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 7 }}>
+            <div ref={resultsRef} className="wizda-scroll-clear-header">
+              {result || loading ? (
+                <Paper
+                  withBorder
+                  p="lg"
+                  radius="md"
+                  style={resultsMaxHeight ? {
+                    maxHeight: resultsMaxHeight,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  } : undefined}
+                >
+                  <ResultsPanel
+                    key={resultVersion}
+                    result={result}
+                    loading={loading}
+                    loadingMore={loadingMore}
+                    onShowMore={showMore}
+                    onOpenJunk={handleOpenJunk}
+                    fillHeight={Boolean(resultsMaxHeight)}
+                    onBack={handleBackToStart}
+                  />
+                </Paper>
+              ) : (
+                <Paper withBorder p="lg" radius="md" h="100%">
+                  <Stack align="center" justify="center" h="100%" gap="xs" mih={200}>
+                    <IconSparkles size={32} color="var(--mantine-color-crimson-5)" />
+                    <Text className="wizda-speech" ta="center">
+                      {steppedBack ? wizda.oracle.emptyPromptWithPicks : wizda.oracle.emptyPrompt}
+                    </Text>
+                    <PopularQueries onPick={applyPopular} />
+                  </Stack>
+                </Paper>
+              )}
+            </div>
+          </Grid.Col>
+        </Grid>
+      </PreparingVeil>
 
       <Modal
         opened={Boolean(conflict)}

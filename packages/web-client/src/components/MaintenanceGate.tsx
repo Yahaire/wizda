@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { APP_NAME } from '@/app/app.constants';
 import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph } from '@/mascot/wizda';
+import { WizdaWait } from '@/mascot/WizdaWait';
 import { api, subscribeMaintenance } from '@/services/api';
 import { Box, Stack, Text, Title } from '@mantine/core';
 
@@ -117,18 +118,13 @@ export function MaintenanceGate() {
         </Text>
       </Stack>
 
-      <Stack align="center" gap="md" maw={420} px="md" style={{ flex: 1, justifyContent: 'center' }}>
-        <Box
-          key={phase}
-          className={isBack ? 'wizda-rise wizda-icon-outline' : 'wizda-float wizda-icon-outline'}
-          style={{ display: 'flex' }}
-        >
-          <Glyph size={96} color="var(--mantine-color-crimson-5)" />
-        </Box>
-        <Text className="wizda-speech" ta="center">
-          {isBack ? wizda.away.back : wizda.away.title}
-        </Text>
-      </Stack>
+      <Box style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+        <WizdaWait
+          glyph={Glyph}
+          line={isBack ? wizda.away.back : wizda.away.title}
+          animation={isBack ? 'rise' : 'float'}
+        />
+      </Box>
     </Box>
   );
 }

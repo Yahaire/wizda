@@ -211,3 +211,48 @@ html[data-focus-modality='pointer'] :focus-visible > * {
     animation: wizda-fade-up 0.32s ease-out both;
   }
 }
+
+/*
+ * The "still filling in" scrim (see PreparingVeil). A page's controls can't all
+ * be right on the first paint: the remembered filters hydrate from localStorage
+ * in an effect, and a shared link's params are applied in another, so what's
+ * underneath is briefly the defaults and then visibly rewrites itself.
+ *
+ * Translucent rather than opaque on purpose — the point is that you watch your
+ * picks land behind her instead of staring at a blank card, so this must never
+ * grow a backdrop blur.
+ *
+ * There is no entrance animation, and that's deliberate: a fade-in leaves the
+ * very frames it exists to cover showing through at low opacity. It appears at
+ * full strength and *leaves* on a fade (Mantine `Transition`'s exit), so a load
+ * that settles immediately reads as a gentle reveal rather than a flicker.
+ */
+.wizda-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(2rem, 10vh, 7rem) var(--mantine-spacing-md) 0;
+  border-radius: var(--mantine-radius-md);
+  background: color-mix(in srgb, var(--mantine-color-body) 70%, transparent);
+}
+
+/*
+ * What the scrim covers, sealed into a stacking context of its own — without
+ * this it isn't covered at all. A z-index only sorts against siblings in the
+ * same context, and a form is full of positioned children carrying their own:
+ * Mantine's slider thumb is `position: absolute; z-index: 3`, so all three
+ * Oracle sliders punched straight through a scrim sitting at 2. Outbidding them
+ * would only work until the next component with a bigger number.
+ *
+ * `isolation` traps every one of those under this element's own level, which is
+ * an ordinary in-flow one, so any positive z-index on the scrim clears the
+ * whole subtree for good. Chosen over `position: relative; z-index: 0` because
+ * it makes the context without touching layout, and over `transform`/`filter`
+ * because those would also make this a containing block for fixed descendants.
+ */
+.wizda-veil-content {
+  isolation: isolate;
+}

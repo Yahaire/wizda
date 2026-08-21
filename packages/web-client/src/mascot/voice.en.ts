@@ -21,6 +21,7 @@ export const wizdaLinesEn = {
       "New day, fresh luck. Let's see what you're hunting.",
     ],
   },
+  preparing: "One moment — I'm still laying your things out!",
   oracle: {
     tagline: "Want to know how much junk you need for that shiny 4★ axe?",
     snark: "I'm not showing all that! Pick a filter or two and save me some work?",
