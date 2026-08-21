@@ -22,6 +22,16 @@ export const MAX_BLESSINGS = 4;
 export const MIN_LEVEL = 1;
 export const MAX_LEVEL = 5;
 
+/**
+ * The category codes / rank kinds the bundled taxonomy currently offers.
+ * Shared by the filters' own stale-storage pruning (a code a game update
+ * retired) and by `oracleUrlState`'s parser (a hand-built or stale shared link
+ * naming a code that no longer, or never did, exist).
+ */
+export const KNOWN_CATEGORY_CODES = new Set<string>(EQUIPMENT_CATEGORIES.map((category) => category.code));
+export const KNOWN_RANK_KINDS = new Set<string>(EQUIPMENT_RANKS.map((rank) => rank.kind));
+export const KNOWN_BLESSING_CODES = new Set<string>(BLESSINGS.map((blessing) => blessing.code));
+
 /** localStorage key for the remembered filter selection (bump on shape change). */
 export const FILTERS_STORAGE_KEY = 'wizda.oracle.filters.v3';
 

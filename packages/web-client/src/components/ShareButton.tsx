@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 
 import { useStrings, useWizda } from '@/i18n/LanguageProvider';
-import { wizdaSay } from '@/mascot/wizda';
+import { WizdaGlyph, wizdaSay } from '@/mascot/wizda';
 import { ActionIcon, Tooltip } from '@mantine/core';
 import { useClipboard } from '@mantine/hooks';
 import { IconCheck, IconShare } from '@tabler/icons-react';
@@ -46,11 +46,22 @@ function prefersShareSheet(): boolean {
  *   a Wizda toast — the toast being the only feedback that reaches a phone,
  *   where there is no hover and so no tooltip.
  *
- * Wizda's line is deliberately state-neutral: this same button sits on the
- * Oracle, whose URL doesn't yet encode the calculator's picks, so the toast
- * never claims to have copied a search.
+ * Wizda's `copied`/`failed` lines are deliberately state-neutral: this same
+ * button sits on the Oracle (whose URL now carries the calculator's picks —
+ * see `docs/sharing.md`) and on the lists (whose URL carries a search), so the
+ * toast never claims anything about *what* got copied, just that it did.
  */
-export function ShareButton() {
+interface ShareButtonProps {
+  /**
+   * When set, the button renders dimmed and a click has Wizda explain this
+   * instead of sharing/copying — e.g. the Oracle's just-run query is too
+   * large to fit in a link. The click still fires (unlike a native `disabled`
+   * button) because saying why is the whole point.
+   */
+  disabledReason?: string,
+}
+
+export function ShareButton({ disabledReason }: ShareButtonProps = {}) {
   const strings = useStrings();
   const wizda = useWizda();
   const clipboard = useClipboard({ timeout: 1500 });
@@ -71,6 +82,11 @@ export function ShareButton() {
   }, [clipboard.error, wizda]);
 
   const handleClick = () => {
+    if (disabledReason) {
+      wizdaSay(disabledReason, { glyph: WizdaGlyph.info });
+      return;
+    }
+
     const url = window.location.href;
 
     if (!prefersShareSheet()) {
@@ -95,13 +111,17 @@ export function ShareButton() {
   };
 
   return (
-    <Tooltip label={strings.common.shareLabel} position="bottom" withArrow openDelay={400}>
+    <Tooltip label={disabledReason ?? strings.common.shareLabel} position="bottom" withArrow openDelay={400}>
       <ActionIcon
         variant="subtle"
         color="gray"
         size="lg"
         onClick={handleClick}
-        aria-label={strings.common.shareLabel}
+        aria-label={disabledReason ?? strings.common.shareLabel}
+        // Not a native `disabled` — that would also block the click, and the
+        // click is how the reason gets explained. Dimmed the same way the
+        // Oracle's own Calculate button is when it can't run yet.
+        style={disabledReason ? { opacity: 0.55, filter: 'grayscale(0.6)' } : undefined}
       >
         {clipboard.copied ? <IconCheck size={18} /> : <IconShare size={18} />}
       </ActionIcon>

@@ -1,18 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { PageTitle } from '@/components/PageTitle';
+import { useOracleUrlState } from '@/hooks/useOracleUrlState';
 import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, WizdaMark, wizdaSay } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
-import { Button, Grid, Group, Modal, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
+import {
+    Button, Center, Grid, Group, Loader, Modal, Paper, SimpleGrid, Stack, Text
+} from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { DEFAULT_GUARANTEE_LIMIT } from '@shared/api/endpoints/junkToGuarantee.models';
-import { EQUIPMENT_CATEGORIES } from '@shared/domain/equipment';
-import { EQUIPMENT_RANKS } from '@shared/domain/rank';
 import { IconSparkles } from '@tabler/icons-react';
 
 import { BlessingsFilter } from './BlessingsFilter';
@@ -24,8 +25,9 @@ import { GradeFilter, GradeReadout } from './GradeFilter';
 import { computeFacets, OracleConflict } from './oracle.facets';
 import {
     activeFilters, DEFAULT_FILTERS, FILTERS_STORAGE_KEY, filtersFromGuarantee, hasAnyFilter,
-    MIN_LEVEL, OracleFilters
+    KNOWN_CATEGORY_CODES, KNOWN_RANK_KINDS, MIN_LEVEL, OracleFilters
 } from './oracle.logic';
+import { filtersFromParams } from './oracleUrlState';
 import { PopularQueries } from './PopularQueries';
 import { QualityFilter, QualityReadout } from './QualityFilter';
 import { RankFilter } from './RankFilter';
@@ -56,10 +58,7 @@ function friendlyError(wizda: WizdaLines, errorCode: string): string {
   }
 }
 
-const KNOWN_CATEGORY_CODES = new Set<string>(EQUIPMENT_CATEGORIES.map((category) => category.code));
-const KNOWN_RANK_KINDS = new Set<string>(EQUIPMENT_RANKS.map((rank) => rank.kind));
-
-export function OraclePage() {
+function OracleContent() {
   const strings = useStrings();
   const wizda = useWizda();
   const [filters, setFilters] = useLocalStorage<OracleFilters>({
@@ -105,6 +104,11 @@ export function OraclePage() {
   // resetting its internal scroll position — instead of inheriting whatever
   // scroll offset the previous result set was left at.
   const [resultVersion, setResultVersion] = useState(0);
+
+  // Set when the just-run query's shareable URL is too big to fit in a link
+  // (see `MAX_SHAREABLE_URL_LENGTH`) — only a large equipment selection can do
+  // this. Drives the Share button's dimmed, explain-instead-of-share state.
+  const [shareDisabledReason, setShareDisabledReason] = useState<string | undefined>(undefined);
 
   // A blocking prompt shown when a filter change makes an existing pick
   // impossible. Confirm → apply the conflict's own fix; cancel → revert to the
@@ -282,8 +286,17 @@ export function OraclePage() {
    * just set new filters passes them explicitly — `setFilters` won't have landed in
    * this render's `filters` yet, so the closure would otherwise run the *previous*
    * selection (see `applyPopular`).
+   *
+   * `push: false` skips writing a history entry — for the two callers that are
+   * *replaying* a URL the address bar already shows (landing on a shared link,
+   * browser Back/Forward) rather than performing a fresh deliberate action.
+   * Pushing there too would double up: the URL already names this state, and
+   * every default (`push: true`) caller already earns its own entry, so
+   * chaining another push on top would either duplicate it or, worse, corrupt
+   * the position Back/Forward is trying to restore.
    */
-  const calculate = async (target: OracleFilters = filters) => {
+  const calculate = async (target: OracleFilters = filters, options: { push?: boolean } = {}) => {
+    const { push = true } = options;
     if (!hasAnyFilter(target)) {
       wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark });
       return;
@@ -297,6 +310,12 @@ export function OraclePage() {
       const fresh = await api.junkToGuarantee(buildQuery(target, 0));
       setQueryFilters(target);
       setResult(fresh);
+      if (push) {
+        const { fit } = pushFilters(target);
+        setShareDisabledReason(fit ? undefined : wizda.share.tooLarge);
+      } else {
+        setShareDisabledReason(undefined);
+      }
     } catch (error) {
       pendingScrollRef.current = false;
       handleApiError(error);
@@ -304,6 +323,55 @@ export function OraclePage() {
       setLoading(false);
     }
   };
+
+  /**
+   * Applies a URL's Oracle params to the page — the single code path for
+   * "landed on a shared link" (mount) and "navigated here via Back/Forward"
+   * (`popstate`), so the two can't drift into separate behaviour. Neither
+   * caller pushes: the URL they're reacting to already represents this state.
+   *
+   * Certainty is the one axis a shared link never carries (see
+   * `oracleUrlState.ts`) — `filters.certaintyPct` is passed as the fallback so
+   * landing on someone else's link keeps *this* player's own certainty rather
+   * than resetting to the default.
+   *
+   * Returns the parsed filters (or `null`) so the caller can react — `null`
+   * only means "no Oracle params on this URL", which the mount effect and the
+   * popstate handler treat differently (see below).
+   */
+  const applyUrlState = (params: URLSearchParams) => {
+    const parsed = filtersFromParams(params, filters.certaintyPct);
+    if (parsed) {
+      setFilters(parsed);
+      calculate(parsed, { push: false });
+    }
+    return parsed;
+  };
+
+  const { initialParams, pushFilters, pushCleared } = useOracleUrlState((params) => {
+    // Browser Back/Forward: unlike the mount effect below, a params-less URL
+    // here is a real destination (the empty state, reached via the UI "Back"
+    // button — see `handleBackToStart`) rather than an ordinary fresh visit,
+    // so it gets `clearResult`'s state reset and scroll cue.
+    if (!applyUrlState(params)) {
+      clearResult();
+    }
+  });
+
+  // Seed the page from the URL it loaded with, once. A fresh visit with no
+  // Oracle params is a no-op here (contrast the popstate handler above) — there's
+  // nothing to clear on a page that hasn't shown a result yet.
+  //
+  // Runs once on mount by design: `filters`/`calculate` are captured as they
+  // stood on the very first render. `useLocalStorage`'s own hydration effect
+  // (`getInitialValueInEffect: true`, see above) races this one for
+  // `filters.certaintyPct`'s fallback value — if that's ever observed to lose
+  // the race, read `FILTERS_STORAGE_KEY` from `localStorage` directly here
+  // instead of trusting `filters`.
+  useEffect(() => {
+    applyUrlState(initialParams);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Replay one of the most-searched queries: adopt its filters wholesale and run it
@@ -338,6 +406,18 @@ export function OraclePage() {
     setQueryFilters(null);
     setSteppedBack(true);
     filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  /**
+   * The UI "Back" button's handler: clears the result *and* pushes a fresh,
+   * params-less history entry, so a later browser Back lands one step further
+   * back — the previous query — rather than replaying this same empty state.
+   * `clearResult` alone is also used by the popstate handler above, which must
+   * NOT push (the URL it's reacting to already is that entry).
+   */
+  const handleBackToStart = () => {
+    clearResult();
+    pushCleared();
   };
 
   const showMore = async () => {
@@ -488,10 +568,16 @@ export function OraclePage() {
   return (
     <Stack gap="lg">
       <div>
-        {/* The Oracle's URL doesn't encode the calculator's picks yet, so this
-            link shares the tool itself rather than a result — still worth
-            having, since it's the page people point friends at. */}
-        <PageTitle shareable>{ORACLE_NAME}</PageTitle>
+        {/* The address bar carries the just-run query (see `useOracleUrlState`),
+            so this shares that result — or, before a first Calculate, the tool
+            itself, same as before. Certainty never rides along: see
+            `oracleUrlState.ts`. */}
+        <PageTitle
+          shareable
+          shareDisabledReason={shareDisabledReason}
+        >
+          {ORACLE_NAME}
+        </PageTitle>
         <Text className="wizda-speech wizda-speech-muted" c="dimmed">
           {wizda.oracle.tagline}
         </Text>
@@ -526,7 +612,7 @@ export function OraclePage() {
                   queryFilters={queryFilters ?? filters}
                   onRequestCurve={requestCurve}
                   fillHeight={Boolean(resultsMaxHeight)}
-                  onBack={clearResult}
+                  onBack={handleBackToStart}
                 />
               </Paper>
             ) : (
@@ -572,5 +658,19 @@ export function OraclePage() {
         </Stack>
       </Modal>
     </Stack>
+  );
+}
+
+/**
+ * `useOracleUrlState` reads `useSearchParams()`, which needs a `<Suspense>`
+ * boundary above it in a statically prerendered route (or `next build` fails
+ * with the CSR-bailout error) — this wrapper is that boundary. Same pattern as
+ * `JunkListView`/`EquipmentListView`.
+ */
+export function OraclePage() {
+  return (
+    <Suspense fallback={<Center mih={200}><Loader color="crimson" /></Center>}>
+      <OracleContent />
+    </Suspense>
   );
 }

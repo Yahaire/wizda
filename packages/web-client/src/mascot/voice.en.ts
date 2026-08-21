@@ -110,6 +110,7 @@ export const wizdaLinesEn = {
   share: {
     copied: "Link copied! Now go share the good news.",
     failed: "Hmm, I couldn't copy that — try selecting the address bar instead.",
+    tooLarge: "That's too big a search to fit in a link! Try sharing a picture of the result instead.",
   },
   data: {
     freshness: (age) => TsUtilities.stringJoin([

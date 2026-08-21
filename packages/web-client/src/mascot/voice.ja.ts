@@ -124,6 +124,7 @@ export const wizdaLinesJa = {
   share: {
     copied: "リンクをコピーしたわ！誰かに教えてあげて。",
     failed: "あら、うまくコピーできなかったみたい…アドレスバーから直接コピーしてみて。",
+    tooLarge: "あら、検索情報が大きすぎて共有リンクが作成できないみたい…かわりに画像を共有してみてね。",
   },
   data: {
     freshness: (age) => stringJoin([

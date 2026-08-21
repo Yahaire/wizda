@@ -94,12 +94,19 @@ export interface WizdaLines {
    * The share button's **clipboard fallback** toast (see `ShareButton`) — where
    * the OS share sheet exists it is its own feedback and Wizda stays quiet.
    * Shown on every page that offers the button (the Oracle, the lists), so keep
-   * these state-neutral: true whether the copied URL carries a search or is just
-   * the page itself.
+   * `copied`/`failed` state-neutral: true whether the copied URL carries a
+   * search/query or is just the page itself.
    */
   readonly share: {
     readonly copied: string,
     readonly failed: string,
+    /**
+     * The Oracle's share button when the just-run query is too big to fit in
+     * a link (see `MAX_SHAREABLE_URL_LENGTH`) — only a large equipment
+     * selection can trigger this. Shown instead of sharing; steers toward the
+     * image export (once it exists), which has no such limit.
+     */
+    readonly tooLarge: string,
   },
   /** The data-freshness label + toast: when the DB was last (re)seeded. */
   readonly data: {

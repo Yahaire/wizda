@@ -9,6 +9,12 @@ interface PageTitleProps {
    * to on its own (About).
    */
   shareable?: boolean,
+  /**
+   * When set alongside `shareable`, the share button renders dimmed and a
+   * click has Wizda explain this instead of sharing — e.g. the Oracle's query
+   * is too large to fit in a link. See `ShareButton`.
+   */
+  shareDisabledReason?: string,
 }
 
 /**
@@ -20,11 +26,11 @@ interface PageTitleProps {
  * be missed entirely. Hugging the title says "share *this*", and keeps one
  * layout across every screen size instead of a breakpoint rule to maintain.
  */
-export function PageTitle({ children, shareable }: PageTitleProps) {
+export function PageTitle({ children, shareable, shareDisabledReason }: PageTitleProps) {
   return (
     <Group gap="xs" wrap="nowrap" align="center">
       <Title order={2}>{children}</Title>
-      {shareable && <ShareButton />}
+      {shareable && <ShareButton disabledReason={shareDisabledReason} />}
     </Group>
   );
 }
