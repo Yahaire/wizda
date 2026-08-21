@@ -19,7 +19,7 @@ const EQUIPMENT_TYPE_NAME_EN = Object.fromEntries(
 /** The sitewide UI-chrome catalog, in English. See `strings.ts` before editing. */
 export const uiStringsEn = {
   meta: {
-    home: {
+    oracle: {
       title: (appName: string) => `${appName} — Junk Oracle for Wizardry Variants Daphne`,
       description: [
         'Work out exactly how much junk you need to grind to get the item you want',

@@ -1,5 +1,5 @@
 import { OraclePage } from '@/components/oracle/OraclePage';
 
-export default function Home() {
+export default function JunkOraclePage() {
   return <OraclePage />;
 }

@@ -45,7 +45,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(false);
 
   const primary: NavItem = {
-    href: '/',
+    // Revert to '/' once a real homepage exists at the root — see
+    // `ROUTE_PATHS.oracle` in pageMetadata.ts for why the Oracle moved off it.
+    href: '/junk-oracle',
     label: ORACLE_NAME,
     icon: <IconSparkles size={20} />,
     tooltip: wizda.oracle.tagline,
@@ -127,11 +129,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
             aria-label={strings.nav.toggleNavigationAriaLabel}
           />
           <Link
-            href={localeHref('/')}
+            // Revert to '/' once a real homepage exists there; see the
+            // `primary` nav item above for why this points at the Oracle.
+            href={localeHref('/junk-oracle')}
             style={{ textDecoration: 'none' }}
             onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
               closeMobile();
-              if (pathname === '/') {
+              if (pathname === '/junk-oracle') {
                 event.preventDefault();
                 window.location.reload();
               }

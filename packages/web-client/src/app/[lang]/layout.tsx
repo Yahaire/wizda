@@ -70,8 +70,10 @@ export async function generateMetadata(
   }
 
   return {
-    // The home route's copy is the sitewide default; each page overrides it.
-    ...buildPageMetadata(lang, 'home'),
+    // The Oracle's copy is the sitewide default; each page overrides it. It
+    // was the site root's copy back when the Oracle lived there — see
+    // `ROUTE_PATHS` in pageMetadata.ts for why it moved to `/junk-oracle`.
+    ...buildPageMetadata(lang, 'oracle'),
     applicationName: APP_NAME,
     icons: { icon: '/icon.svg' },
     appleWebApp: {

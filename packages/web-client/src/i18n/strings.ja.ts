@@ -93,7 +93,7 @@ const JA_STAT_LABEL: Record<StatKind, string> = {
  */
 export const uiStringsJa = {
   meta: {
-    home: {
+    oracle: {
       title: (appName: string) => `${appName} — 「ウィザードリィ ヴァリアンツ ダフネ」ガラクタ計算ツール`,
       description: [
         '「ウィザードリィ ヴァリアンツ ダフネ」で欲しい装備を確実に手に入れるために、',

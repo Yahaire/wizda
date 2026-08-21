@@ -19,9 +19,15 @@ import type { Metadata } from 'next';
 
 export type MetaRouteKey = keyof UiStrings['meta'];
 
-/** The unprefixed path each route lives at. Locale prefixes are added per language. */
+/**
+ * The unprefixed path each route lives at. Locale prefixes are added per
+ * language.
+ *
+ * WARNING: If updating, must also update `middleware.ts` wherever the routes are
+ * used as literals
+ */
 export const ROUTE_PATHS: Record<MetaRouteKey, string> = {
-  home: '/',
+  oracle: '/junk-oracle',
   junks: '/junks',
   equipment: '/equipment',
   about: '/about',

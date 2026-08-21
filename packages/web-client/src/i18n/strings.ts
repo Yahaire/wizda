@@ -27,7 +27,7 @@ export interface UiStrings {
    * step most easily forgotten; `docs/i18n.md` carries the checklist.
    */
   readonly meta: {
-    readonly home: {
+    readonly oracle: {
       readonly title: (appName: string) => string,
       readonly description: string,
     },
