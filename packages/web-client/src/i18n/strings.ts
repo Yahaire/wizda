@@ -71,6 +71,10 @@ export interface UiStrings {
      * exists and falls back to copying the link where it doesn't.
      */
     readonly shareLabel: string,
+    /** The junk detail modal's share menu — "copy/share the link" item. */
+    readonly shareLinkLabel: string,
+    /** The junk detail modal's share menu — "share/save an image" item. */
+    readonly shareImageLabel: string,
     /** The "under a minute ago" relative-time form (see `utils/relativeTime`). */
     readonly justNow: string,
     /** The level sliders' floor — "this and everything above it" starting from nothing. */

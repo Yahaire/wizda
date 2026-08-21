@@ -1,19 +1,26 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { ShareButton } from '@/components/ShareButton';
-import { useStrings } from '@/i18n/LanguageProvider';
+import { APP_NAME } from '@/app/app.constants';
+import { ShareMenu } from '@/components/ShareMenu';
+import { useStrings, useWizda } from '@/i18n/LanguageProvider';
+import { wizdaSay } from '@/mascot/wizda';
 import {
-    Alert, Button, Center, Divider, FocusTrap, Group, Loader, Modal, Stack, Text
+    deliverJunkDetailImage, renderJunkDetailCard, SHARE_CARD_OFFSCREEN_STYLE
+} from '@/utils/shareCard';
+import {
+    Alert, Box, Button, Center, Divider, FocusTrap, Group, Loader, Modal, Stack, Text
 } from '@mantine/core';
 import { IconChevronRight, IconInfoCircle } from '@tabler/icons-react';
 
 import { CertaintyCurve, CURVE_ROW_HEIGHT } from './CertaintyCurve';
+import { JunkShareCard } from './JunkShareCard';
 import { certaintyWindow, formatPercent, OracleFilters } from './oracle.logic';
 import { QuerySummary } from './QuerySummary';
 
 import type {
+  CertaintyCurvePoint,
   CertaintyCurveResult,
   JunkGuaranteeEntry,
 } from '@shared/api/endpoints/junkToGuarantee.models';
@@ -49,11 +56,13 @@ export function JunkDetailModal({
   onSeeFullDetails,
 }: JunkDetailModalProps) {
   const strings = useStrings();
+  const wizda = useWizda();
   const selectedPct = queryFilters.certaintyPct;
   const percents = useMemo(() => certaintyWindow(selectedPct), [selectedPct]);
 
   const [curve, setCurve] = useState<CertaintyCurveResult | null>(null);
   const [status, setStatus] = useState<CurveStatus>('loading');
+  const shareCardRef = useRef<HTMLDivElement>(null);
 
   const junkName = entry?.junkName ?? null;
   useEffect(() => {
@@ -80,19 +89,64 @@ export function JunkDetailModal({
     };
   }, [junkName, percents, onRequestCurve]);
 
+  /**
+   * The three-point window as the share card should draw it, which is not
+   * quite what the modal draws: the card is shareable the instant the modal
+   * is, without waiting on the curve fetch above. The headline number and
+   * chance-per-junk both come straight off `entry`, which is already final;
+   * only the neighbouring two points need the request, and a click fast
+   * enough to beat it (typically near-instant) gets "—" for those —
+   * `CertaintyCurve`'s own null-point rendering — while the selected row is
+   * covered by `entry.junkNeeded` either way.
+   */
+  const shareCardPoints = useMemo<CertaintyCurvePoint[]>(() => percents.map((pct, index) => {
+    const selected = Math.abs(pct - selectedPct) < 1e-9;
+    const fallback = selected ? entry?.junkNeeded ?? null : null;
+    return {
+      certainty: pct / 100,
+      junkNeeded: curve?.points[index]?.junkNeeded ?? fallback,
+    };
+  }), [percents, selectedPct, curve, entry]);
+
+  /**
+   * Rasterizes the off-screen {@link JunkShareCard} and delivers it (see
+   * `shareCard.ts`). The card is mounted for as long as the modal is open
+   * rather than spun up on click, so there is no layout frame to wait for
+   * here and no chance of capturing it half-laid-out.
+   */
+  const handleShareImage = async () => {
+    const card = shareCardRef.current;
+    if (!entry || !card) {
+      return;
+    }
+    try {
+      const blob = await renderJunkDetailCard(card);
+      const method = await deliverJunkDetailImage(blob, {
+        title: `${APP_NAME} — ${entry.junkDisplayName}`,
+        filename: 'wizda-junk-oracle.png',
+      });
+      if (method === 'clipboard') {
+        wizdaSay(wizda.share.imageCopied);
+      } else if (method === 'download') {
+        wizdaSay(wizda.share.imageSaved);
+      }
+    } catch {
+      wizdaSay(wizda.share.imageFailed);
+    }
+  };
+
   return (
-    // The compound API, not the `<Modal title>` shorthand: the share button
+    // The compound API, not the `<Modal title>` shorthand: the share menu
     // needs to sit in the header beside the title, which the shorthand has no
-    // slot for. `entry`'s URL (`&junk=…`) is already live by the time this is
-    // visible — `OraclePage` pushes it in the same handler that opens the
-    // modal — so the button needs no special-casing here, same as everywhere
-    // else it's used.
+    // slot for. Its "Link" item needs no special-casing — `entry`'s URL
+    // (`&junk=…`) is already live by the time this is visible, since
+    // `OraclePage` pushes it in the same handler that opens the modal.
     <Modal.Root opened={Boolean(entry)} onClose={onClose} centered size="md">
       <Modal.Overlay />
       <Modal.Content>
         {/* Mantine's focus trap auto-focuses the first focusable element once
-            the modal opens — without this, that's the share button, so a
-            visitor landing straight on a shared `&junk=` link (having
+            the modal opens — without this, that's the share menu's trigger,
+            so a visitor landing straight on a shared `&junk=` link (having
             clicked/tapped nothing themselves) sees it wearing a focus ring
             for no reason. This invisible marker (tabIndex -1, `data-autofocus`)
             gives the trap somewhere to land that draws nothing. */}
@@ -100,7 +154,7 @@ export function JunkDetailModal({
         <Modal.Header>
           <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
             <Modal.Title>{strings.oracle.junkDetailsTitle}</Modal.Title>
-            {entry && <ShareButton />}
+            {entry && <ShareMenu onShareImage={handleShareImage} />}
           </Group>
           <Modal.CloseButton />
         </Modal.Header>
@@ -146,6 +200,27 @@ export function JunkDetailModal({
               >
                 {strings.oracle.seeFullDetailsButton}
               </Button>
+
+              {/* The shareable picture, parked off-screen (see
+                  `SHARE_CARD_OFFSCREEN_STYLE`) so it is fully laid out the
+                  moment the share menu is used. Mounted here, inside the
+                  modal's own tree, because it renders the very same
+                  components and needs the very same context — the Mantine
+                  theme, the language catalog, and `DetailProvider`'s
+                  equipment list. */}
+              <Box style={SHARE_CARD_OFFSCREEN_STYLE} aria-hidden>
+                <JunkShareCard
+                  ref={shareCardRef}
+                  junkDisplayName={entry.junkDisplayName}
+                  junkNeeded={entry.junkNeeded}
+                  probabilityPerJunk={entry.probabilityPerJunk}
+                  hasMultiplePools={entry.hasMultiplePools}
+                  queryFilters={queryFilters}
+                  matched={curve?.matched ?? null}
+                  points={shareCardPoints}
+                  percents={percents}
+                />
+              </Box>
             </Stack>
           )}
         </Modal.Body>

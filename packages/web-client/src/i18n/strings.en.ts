@@ -67,6 +67,8 @@ export const uiStringsEn = {
     defaultSearchPlaceholder: 'Filter by name',
     defaultEmptyMessage: 'Nothing matches.',
     shareLabel: 'Share',
+    shareLinkLabel: 'Link',
+    shareImageLabel: 'Image',
     justNow: 'just now',
     any: 'Any',
     andUp: '+',

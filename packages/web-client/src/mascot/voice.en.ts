@@ -112,6 +112,9 @@ export const wizdaLinesEn = {
     copied: "Link copied! Now go share the good news.",
     failed: "Hmm, I couldn't copy that — try selecting the address bar instead.",
     tooLarge: "That's too big a search to fit in a link! Try sharing a picture of the result instead.",
+    imageCopied: "Picture copied! Paste it wherever you're bragging.",
+    imageSaved: "Saved the picture for you — go show it off.",
+    imageFailed: "Hmm, I couldn't copy the picture. Give it another go?",
   },
   data: {
     freshness: (age) => TsUtilities.stringJoin([

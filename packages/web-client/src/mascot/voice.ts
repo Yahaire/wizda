@@ -111,9 +111,20 @@ export interface WizdaLines {
      * The Oracle's share button when the just-run query is too big to fit in
      * a link (see `MAX_SHAREABLE_URL_LENGTH`) — only a large equipment
      * selection can trigger this. Shown instead of sharing; steers toward the
-     * image export (once it exists), which has no such limit.
+     * junk detail modal's image export (`ShareMenu`), which has no such limit.
      */
     readonly tooLarge: string,
+    /**
+     * The junk detail modal's "Image" share item (see `ShareMenu`/`shareCard.ts`).
+     * `imageCopied`/`imageSaved` mirror `copied` above — the clipboard-copy and
+     * download fallbacks are silent operations with no OS confirmation of their
+     * own, so Wizda's toast is the only feedback; the OS share sheet path stays
+     * quiet, same as the link flow. `imageFailed` covers a hard failure in any
+     * of the three (canvas rendering, or every delivery path in turn).
+     */
+    readonly imageCopied: string,
+    readonly imageSaved: string,
+    readonly imageFailed: string,
   },
   /** The data-freshness label + toast: when the DB was last (re)seeded. */
   readonly data: {

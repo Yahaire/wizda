@@ -59,7 +59,13 @@ export const SUBJECT_ICON_SIZE = 18;
  * game-icon's fill — see `gameIcon`), so an SVG gradient works as a paint server
  * there exactly as `background-clip: text` does for the subject text.
  */
-export function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
+export function SubjectIcon({
+  identity,
+  size = SUBJECT_ICON_SIZE,
+}: {
+  identity: SubjectIdentity,
+  size?: number,
+}) {
   // `useId` embeds colons, which can't appear in a `url(#…)` fragment reference.
   const gradientId = `rank-${useId().replace(/:/g, '')}`;
 
@@ -75,7 +81,7 @@ export function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
   if (colors.length === 0) {
     return (
       <Icon
-        size={SUBJECT_ICON_SIZE}
+        size={size}
         color="var(--mantine-color-dimmed)"
         className="wizda-icon-outline"
         style={iconStyle}
@@ -85,7 +91,7 @@ export function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
   if (colors.length === 1) {
     return (
       <Icon
-        size={SUBJECT_ICON_SIZE}
+        size={size}
         color={colors[0]}
         className="wizda-icon-outline"
         style={iconStyle}
@@ -105,7 +111,7 @@ export function SubjectIcon({ identity }: { identity: SubjectIdentity }) {
         </defs>
       </svg>
       <Icon
-        size={SUBJECT_ICON_SIZE}
+        size={size}
         color={`url(#${gradientId})`}
         className="wizda-icon-outline"
         style={iconStyle}
@@ -119,21 +125,27 @@ function QualitySeparator({ children }: { children: string }) {
   return <Text span c="dimmed" fz="sm">{children}</Text>;
 }
 
-/** The accepted quality levels — written stars for one, compact notation for several. */
-export function QualityChips({ values }: { values: number[] }) {
+/**
+ * The accepted quality levels — written stars for one, compact notation for several.
+ *
+ * `starSize` overrides both star renderers' own defaults together, so a caller
+ * scaling the subject up (the share card) doesn't leave the stars behind at
+ * whichever of the two shapes it happens to land on.
+ */
+export function QualityChips({ values, starSize }: { values: number[], starSize?: number }) {
   const display = qualityDisplay(values);
   if (!display) {
     return null;
   }
   if (display.kind === 'stars') {
-    return <QualityStarRow value={display.value} />;
+    return <QualityStarRow value={display.value} size={starSize} />;
   }
   if (display.kind === 'range') {
     return (
       <Group gap={4} wrap="nowrap">
-        <QualityStars value={display.from} />
+        <QualityStars value={display.from} size={starSize} />
         <QualitySeparator>–</QualitySeparator>
-        <QualityStars value={display.to} />
+        <QualityStars value={display.to} size={starSize} />
       </Group>
     );
   }
@@ -142,7 +154,7 @@ export function QualityChips({ values }: { values: number[] }) {
       {display.values.map((value, index) => (
         <Group key={value} gap={4} wrap="nowrap">
           {index > 0 && <QualitySeparator>/</QualitySeparator>}
-          <QualityStars value={value} />
+          <QualityStars value={value} size={starSize} />
         </Group>
       ))}
     </Group>

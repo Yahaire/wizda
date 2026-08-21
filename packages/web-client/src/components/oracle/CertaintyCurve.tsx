@@ -21,6 +21,12 @@ interface CertaintyCurveProps {
   percents: number[],
   /** The certainty the player picked — the highlighted row in the window. */
   selectedPct: number,
+  /**
+   * Grow the bars in on mount. Off for the share card (`JunkShareCard`), which
+   * is rasterized the frame after it mounts and would otherwise be captured
+   * mid-animation, with every bar still at zero width.
+   */
+  animated?: boolean,
 }
 
 /**
@@ -36,6 +42,7 @@ export function CertaintyCurve({
   points,
   percents,
   selectedPct,
+  animated = true,
 }: CertaintyCurveProps) {
   const maxNeeded = Math.max(1, ...points.map((point) => point.junkNeeded ?? 0));
 
@@ -75,7 +82,7 @@ export function CertaintyCurve({
                   backgroundColor: selected
                     ? 'var(--mantine-color-crimson-5)'
                     : 'var(--mantine-color-gray-5)',
-                  transition: 'width 220ms ease',
+                  transition: animated ? 'width 220ms ease' : undefined,
                 }}
               />
             </Box>

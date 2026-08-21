@@ -25,17 +25,30 @@ import { IconCheck, IconShare } from '@tabler/icons-react';
  * while a tablet reports `coarse` and gets the sheet. Evaluated per click
  * rather than at render, so there's no hydration mismatch and a convertible
  * flipping into tablet mode is picked up straight away.
+ *
+ * Exported for `shareCard.ts`'s image delivery, which asks the same device
+ * question before deciding between the share sheet, the clipboard and a
+ * download.
  */
-function prefersShareSheet(): boolean {
+export function prefersShareSheet(): boolean {
   return (
     typeof navigator.share === 'function'
     && window.matchMedia('(pointer: coarse)').matches
   );
 }
 
+interface UseShareUrlResult {
+  /** Share/copy the current page's URL. Safe to call directly from an `onClick`. */
+  handleClick: () => void,
+  /** Whether the clipboard fallback just succeeded — drives the check-mark swap. */
+  copied: boolean,
+}
+
 /**
  * Hands the current page's URL to someone else — including any `?q=` search a
- * list view has mirrored into it (see `useSearchQueryParam`).
+ * list view has mirrored into it (see `useSearchQueryParam`). Extracted from
+ * `ShareButton` so `ShareMenu`'s "Link" item can run the exact same flow
+ * rather than a second copy of it.
  *
  * Two paths (see {@link prefersShareSheet} for which runs where):
  *
@@ -47,22 +60,12 @@ function prefersShareSheet(): boolean {
  *   where there is no hover and so no tooltip.
  *
  * Wizda's `copied`/`failed` lines are deliberately state-neutral: this same
- * button sits on the Oracle (whose URL now carries the calculator's picks —
- * see `docs/sharing.md`) and on the lists (whose URL carries a search), so the
- * toast never claims anything about *what* got copied, just that it did.
+ * flow runs from the Oracle (whose URL now carries the calculator's picks —
+ * see `docs/sharing.md`), the lists (whose URL carries a search), and the
+ * junk detail modal (whose URL carries `&junk=`), so the toast never claims
+ * anything about *what* got copied, just that it did.
  */
-interface ShareButtonProps {
-  /**
-   * When set, the button renders dimmed and a click has Wizda explain this
-   * instead of sharing/copying — e.g. the Oracle's just-run query is too
-   * large to fit in a link. The click still fires (unlike a native `disabled`
-   * button) because saying why is the whole point.
-   */
-  disabledReason?: string,
-}
-
-export function ShareButton({ disabledReason }: ShareButtonProps = {}) {
-  const strings = useStrings();
+export function useShareUrl(disabledReason?: string): UseShareUrlResult {
   const wizda = useWizda();
   const clipboard = useClipboard({ timeout: 1500 });
 
@@ -110,6 +113,23 @@ export function ShareButton({ disabledReason }: ShareButtonProps = {}) {
     });
   };
 
+  return { handleClick, copied: clipboard.copied };
+}
+
+interface ShareButtonProps {
+  /**
+   * When set, the button renders dimmed and a click has Wizda explain this
+   * instead of sharing/copying — e.g. the Oracle's just-run query is too
+   * large to fit in a link. The click still fires (unlike a native `disabled`
+   * button) because saying why is the whole point.
+   */
+  disabledReason?: string,
+}
+
+export function ShareButton({ disabledReason }: ShareButtonProps = {}) {
+  const strings = useStrings();
+  const { handleClick, copied } = useShareUrl(disabledReason);
+
   return (
     <Tooltip label={disabledReason ?? strings.common.shareLabel} position="bottom" withArrow openDelay={400}>
       <ActionIcon
@@ -123,7 +143,7 @@ export function ShareButton({ disabledReason }: ShareButtonProps = {}) {
         // Oracle's own Calculate button is when it can't run yet.
         style={disabledReason ? { opacity: 0.55, filter: 'grayscale(0.6)' } : undefined}
       >
-        {clipboard.copied ? <IconCheck size={18} /> : <IconShare size={18} />}
+        {copied ? <IconCheck size={18} /> : <IconShare size={18} />}
       </ActionIcon>
     </Tooltip>
   );

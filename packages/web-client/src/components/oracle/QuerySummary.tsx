@@ -13,7 +13,7 @@ import {
     blessingLabel, gradeName, joinHuman, MIN_LEVEL, OracleFilters, OutcomeCeilings, resolveQuery,
     subjectIdentity, subjectOf, wasNarrowed
 } from './oracle.logic';
-import { gradeTextStyle, QualityChips, SubjectIcon } from './querySubject';
+import { gradeTextStyle, QualityChips, SUBJECT_ICON_SIZE, SubjectIcon } from './querySubject';
 
 import type { MatchedOutcome } from '@shared/api/endpoints/junkToGuarantee.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
@@ -22,7 +22,59 @@ interface QuerySummaryProps {
   filters: OracleFilters,
   /** The query resolved against this junk; null while the request is in flight or failed. */
   matched: MatchedOutcome | null,
+  /**
+   * `'card'` is the share card's (`JunkShareCard`) — a picture rather than a
+   * dialog, which changes three things at once. See {@link SUMMARY_VARIANTS}.
+   */
+  variant?: SummaryVariant,
 }
+
+type SummaryVariant = 'screen' | 'card';
+
+interface SummaryVariantSpec {
+  /** Subject text size. A step up on the card, which has no title bar to anchor it. */
+  text: string,
+  /** Category icon size, moved with the text so it doesn't end up looking undersized. */
+  icon: number,
+  /**
+   * Quality star size. Unset on screen *on purpose*: the two star renderers
+   * behind {@link QualityChips} carry different defaults (a written "4★" row
+   * sits at 13, the compact glyphs at 12), and naming one number here would
+   * silently resize the modal's compact form.
+   */
+  star?: number,
+  /**
+   * Whether the quality/blessing row may take a second line.
+   *
+   * Never on the card, and not as a style choice: `html-to-image` rasterizes
+   * by cloning the row with its computed box frozen inline, and a clone that
+   * lays its contents out even slightly tighter than the original spills a
+   * second flex line out the bottom of a box whose height is already fixed —
+   * straight through the note underneath. On screen the row is free to wrap
+   * because the box grows with it. The row's content (stars, a rule, a few
+   * blessing pills) runs ~285px against the card's ~496px of panel, so there
+   * is ample slack to hold one line.
+   */
+  wrapFacets: boolean,
+  /** Whether the "+N more" affordance is a real button — nothing on a picture is clickable. */
+  interactive: boolean,
+}
+
+const SUMMARY_VARIANTS: Record<SummaryVariant, SummaryVariantSpec> = {
+  screen: {
+    text: 'md',
+    icon: SUBJECT_ICON_SIZE,
+    wrapFacets: true,
+    interactive: true,
+  },
+  card: {
+    text: 'lg',
+    icon: 22,
+    star: 15,
+    wrapFacets: false,
+    interactive: false,
+  },
+};
 
 /**
  * Captions a junk's numbers with the criteria that produced them, so the modal reads
@@ -38,7 +90,12 @@ interface QuerySummaryProps {
  * Reads as the second thing on the card, after the crimson junk count: no accent
  * colour of its own beyond the grade tint on the subject.
  */
-export function QuerySummary({ filters, matched }: QuerySummaryProps) {
+export function QuerySummary({
+  filters,
+  matched,
+  variant = 'screen',
+}: QuerySummaryProps) {
+  const spec = SUMMARY_VARIANTS[variant];
   const strings = useStrings();
   const [expanded, setExpanded] = useState(false);
   const { equipment } = useDetail();
@@ -102,11 +159,11 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
     >
       <Stack gap={8} align="center">
         <Group gap="xs" wrap="nowrap" align="flex-start">
-          <SubjectIcon identity={identity} />
+          <SubjectIcon identity={identity} size={spec.icon} />
           {/* A div, not the default <p>: the "+N more" affordance is a <button>.
               `ta` isn't redundant with the Stack's centring: once the subject is long
               enough to wrap, this box fills the card and its lines rag left. */}
-          <Text component="div" fz="md" ta="center" style={{ minWidth: 0 }}>
+          <Text component="div" fz={spec.text} ta="center" style={{ minWidth: 0 }}>
             <Tooltip
               label={gradeNames.length ? strings.oracle.gradeTooltipLabel(joinHuman(gradeNames, 'or')) : ''}
               disabled={gradeNames.length === 0}
@@ -122,25 +179,31 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
               </Text>
             </Tooltip>
             {!expanded && subject.hidden.length > 0 && (
-              <UnstyledButton
-                onClick={() => setExpanded(true)}
-                ml={6}
-                style={{ verticalAlign: 'baseline' }}
-              >
-                <Text span c="dimmed" fz="sm" td="underline">
+              spec.interactive ? (
+                <UnstyledButton
+                  onClick={() => setExpanded(true)}
+                  ml={6}
+                  style={{ verticalAlign: 'baseline' }}
+                >
+                  <Text span c="dimmed" fz="sm" td="underline">
+                    {strings.common.moreCount(subject.hidden.length)}
+                  </Text>
+                </UnstyledButton>
+              ) : (
+                <Text span c="dimmed" fz="sm" ml={6}>
                   {strings.common.moreCount(subject.hidden.length)}
                 </Text>
-              </UnstyledButton>
+              )
             )}
           </Text>
         </Group>
 
         {(hasQuality || hasBlessings) && (
-          <Group gap="xs" wrap="wrap">
+          <Group gap="xs" wrap={spec.wrapFacets ? 'wrap' : 'nowrap'}>
             {hasQuality && (
               <Tooltip label={strings.oracle.qualityListTooltip} withArrow openDelay={300}>
                 <Group gap={4} wrap="nowrap">
-                  <QualityChips values={query.quality} />
+                  <QualityChips values={query.quality} starSize={spec.star} />
                 </Group>
               </Tooltip>
             )}
@@ -151,7 +214,9 @@ export function QuerySummary({ filters, matched }: QuerySummaryProps) {
 
             {hasBlessings && (
               <Tooltip label={strings.oracle.mustCarryAllTooltip} withArrow openDelay={300}>
-                <Group gap={4} wrap="wrap">
+                {/* The blessing pills are their own flex line and wrap on the
+                    same terms as the row that holds them — see `wrapFacets`. */}
+                <Group gap={4} wrap={spec.wrapFacets ? 'wrap' : 'nowrap'}>
                   {query.blessings.map((code, index) => (
                     <Group key={code} gap={4} wrap="nowrap">
                       {index > 0 && <Text span c="dimmed" fz="sm">+</Text>}
