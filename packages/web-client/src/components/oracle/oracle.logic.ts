@@ -56,6 +56,23 @@ export const DEFAULT_CERTAINTY_PCT = 90;
 export const MAX_CERTAINTY_PCT = 99.99;
 export const MIN_CERTAINTY_PCT = 1;
 
+/**
+ * A certainty of unknown provenance — a stored value from an older build, a
+ * hand-edited `&certainty=` — brought into [{@link MIN_CERTAINTY_PCT},
+ * {@link MAX_CERTAINTY_PCT}], or {@link DEFAULT_CERTAINTY_PCT} when it isn't a
+ * finite number at all. Shared by {@link readStoredCertaintyPct} and
+ * `oracleUrlState`'s parser so the two can't disagree about what range is
+ * usable. (The parser only reaches here once it has a finite number of its
+ * own — an absent or unparseable `&certainty=` falls back to the player's
+ * current setting, not to the default.)
+ */
+export function clampCertaintyPct(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_CERTAINTY_PCT;
+  }
+  return Math.min(MAX_CERTAINTY_PCT, Math.max(MIN_CERTAINTY_PCT, value));
+}
+
 /** How far above/below the selected certainty the detail curve reaches (points). */
 export const CERTAINTY_STEP = 5;
 
@@ -211,6 +228,49 @@ export const DEFAULT_FILTERS: OracleFilters = {
   minQuality: 3,
   minGrade: 3,
 };
+
+/**
+ * The certainty this player has stored, read straight out of `localStorage`
+ * rather than through React state.
+ *
+ * The `useLocalStorage` that owns {@link FILTERS_STORAGE_KEY} runs with
+ * `getInitialValueInEffect: true`, so on the very first render its value is
+ * still {@link DEFAULT_FILTERS} — the stored selection lands a render later.
+ * That's fine for everything the player can see and change, but not for the
+ * one-time, mount-effect seed that replays a shared link (`OraclePage`'s
+ * `applyUrlState`): it runs inside that first render's closure, so reading
+ * `filters.certaintyPct` there hands back {@link DEFAULT_CERTAINTY_PCT} no
+ * matter what the player set — and, because the seed then writes its parsed
+ * filters back through `setFilters`, it doesn't just *display* the wrong
+ * certainty, it overwrites the remembered one with the default.
+ *
+ * Only that seed should call this. Once hydrated, `filters.certaintyPct` is
+ * this same value and is the one to read.
+ *
+ * Everything unreadable falls back to the default: no `window` (this module is
+ * imported during prerender), storage that throws (privacy-locked browsers),
+ * unparseable JSON, or a stored certainty that isn't a number in range.
+ */
+export function readStoredCertaintyPct(): number {
+  if (typeof window === 'undefined') {
+    return DEFAULT_CERTAINTY_PCT;
+  }
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(FILTERS_STORAGE_KEY);
+  } catch {
+    return DEFAULT_CERTAINTY_PCT;
+  }
+  if (!raw) {
+    return DEFAULT_CERTAINTY_PCT;
+  }
+  try {
+    const stored = JSON.parse(raw) as Partial<OracleFilters>;
+    return clampCertaintyPct(stored.certaintyPct);
+  } catch {
+    return DEFAULT_CERTAINTY_PCT;
+  }
+}
 
 /** Whether any accepted-outcome filter is set (certainty alone doesn't count). */
 export function hasAnyFilter(filters: OracleFilters): boolean {

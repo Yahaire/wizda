@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CALCULATION_DOC_URL } from '@/app/app.constants';
-import { useDetail } from '@/components/detail/DetailProvider';
 import { useDebouncedSearch } from '@/hooks/useDebouncedSearch';
 import { useStrings, useWizda } from '@/i18n/LanguageProvider';
 import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
@@ -17,11 +16,9 @@ import {
 } from '@tabler/icons-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { JunkDetailModal } from './JunkDetailModal';
-import { formatPercent, OracleFilters } from './oracle.logic';
+import { formatPercent } from './oracle.logic';
 
 import type {
-  CertaintyCurveResult,
   JunkGuaranteeEntry,
   JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
@@ -41,12 +38,11 @@ interface ResultsPanelProps {
   loadingMore: boolean,
   onShowMore: () => void,
   /**
-   * The filters that produced `result` — snapshotted, not the live selection, so a
-   * later edit can't change what the detail modal describes or fetches.
+   * Opens the detail modal for a row — owned by `OraclePage`, not this
+   * component: which junk (if any) is open is part of the URL (`&junk=`), so
+   * it has to live where the URL wiring does. See `docs/sharing.md`.
    */
-  queryFilters: OracleFilters,
-  /** Fetches a junk's certainty curve for the detail modal (see {@link JunkDetailModal}). */
-  onRequestCurve: (junkName: string, certainties: number[]) => Promise<CertaintyCurveResult>,
+  onOpenJunk: (entry: JunkGuaranteeEntry) => void,
   /**
    * When set, the row list stretches to fill its parent instead of using a
    * fixed height — the parent is expected to cap its own height in that case
@@ -77,8 +73,7 @@ export function ResultsPanel({
   loading,
   loadingMore,
   onShowMore,
-  queryFilters,
-  onRequestCurve,
+  onOpenJunk,
   fillHeight,
   onBack,
 }: ResultsPanelProps) {
@@ -90,26 +85,16 @@ export function ResultsPanel({
     debounced: debouncedNameFilter,
     compositionProps: nameFilterCompositionProps,
   } = useDebouncedSearch();
-  const [detail, setDetail] = useState<JunkGuaranteeEntry | null>(null);
-  // "You were here": the last junk row whose detail we opened, tinted once the
+  // "You were here": the last junk row whose detail was opened, tinted once the
   // modal closes so you re-orient to where you left off. Only the most recent one
   // is tracked — same soft branded highlight the detail modal uses on pop-back.
   const [lastVisited, setLastVisited] = useState<string | null>(null);
   const [estimateOpen, setEstimateOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { openJunk } = useDetail();
 
   // Index of the first freshly-loaded row, captured right before a "Show more"
   // fetch — once the new rows land, we smooth-scroll them into view.
   const showMoreAnchorRef = useRef<number | null>(null);
-
-  // Hand off to the shared junk detail modal (drops list + cross-links). We leave
-  // this compact per-result view mounted behind it and open the shared modal as
-  // "backable", so its Back arrow closes it and reveals this summary again —
-  // reading as a step back in the navigation rather than a plain close.
-  const seeFullJunkDetails = (junkName: string) => {
-    openJunk(junkName, true);
-  };
 
   const entries = useMemo<JunkGuaranteeEntry[]>(() => {
     if (!result) {
@@ -269,7 +254,7 @@ export function ResultsPanel({
                   w="100%"
                   h={ROW_HEIGHT - 8}
                   onClick={() => {
-                    setDetail(entry);
+                    onOpenJunk(entry);
                     setLastVisited(entry.junkName);
                   }}
                 >
@@ -343,15 +328,6 @@ export function ResultsPanel({
           )}
         </Stack>
       </Box>
-
-      {/* Per-junk detail — recovers the full name when it's been truncated. */}
-      <JunkDetailModal
-        entry={detail}
-        onClose={() => setDetail(null)}
-        queryFilters={queryFilters}
-        onRequestCurve={onRequestCurve}
-        onSeeFullDetails={seeFullJunkDetails}
-      />
 
       {/* The one assumption behind blessing-filtered results */}
       <Modal

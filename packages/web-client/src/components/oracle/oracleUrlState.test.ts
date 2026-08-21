@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_CERTAINTY_PCT, EMPTY_FILTERS, MAX_CERTAINTY_PCT, MAX_LEVEL, MIN_LEVEL } from './oracle.logic';
 import {
-    buildOracleUrl, buildShareableOracleUrl, filtersFromParams, filtersToParams, MAX_SHAREABLE_URL_LENGTH
+    DEFAULT_CERTAINTY_PCT, EMPTY_FILTERS, MAX_CERTAINTY_PCT, MAX_LEVEL, MIN_LEVEL
+} from './oracle.logic';
+import {
+    buildJunkUrl, buildOracleUrl, buildShareableOracleUrl, filtersEqual, filtersFromParams,
+    filtersToParams, junkFromParams, MAX_SHAREABLE_URL_LENGTH
 } from './oracleUrlState';
 
 import type { OracleFilters } from './oracle.logic';
@@ -125,14 +128,76 @@ describe('buildOracleUrl', () => {
     expect(url).toBe('/en/junk-oracle?utm_source=reddit&category=cesti#section');
   });
 
-  it('clears every owned key, including a stray certainty, when filters is null', () => {
-    const url = buildOracleUrl('/en/junk-oracle', '?category=cesti&certainty=95&utm_source=reddit', '', null);
+  it('clears every owned key, including a stray certainty and junk, when filters is null', () => {
+    const url = buildOracleUrl(
+      '/en/junk-oracle',
+      '?category=cesti&certainty=95&junk=Some+Junk&utm_source=reddit',
+      '',
+      null,
+    );
     expect(url).toBe('/en/junk-oracle?utm_source=reddit');
   });
 
   it('drops a stray certainty from a hand-built link even when writing filters', () => {
     const url = buildOracleUrl('/en/junk-oracle', '?certainty=95', '', { ...EMPTY_FILTERS, category: ['CESTI'] });
     expect(url).toBe('/en/junk-oracle?category=cesti');
+  });
+
+  it('closes an open detail modal on a fresh Calculate — junk is owned, like certainty', () => {
+    const url = buildOracleUrl(
+      '/en/junk-oracle',
+      '?junk=Some+Junk',
+      '',
+      { ...EMPTY_FILTERS, category: ['CESTI'] },
+    );
+    expect(url).toBe('/en/junk-oracle?category=cesti');
+  });
+});
+
+describe('junkFromParams', () => {
+  it('reads the junk param', () => {
+    expect(junkFromParams(new URLSearchParams('junk=Fordraig%27s+Junk'))).toBe("Fordraig's Junk");
+  });
+
+  it('returns null when absent', () => {
+    expect(junkFromParams(new URLSearchParams('category=cesti'))).toBeNull();
+  });
+});
+
+describe('buildJunkUrl', () => {
+  it('sets junk while preserving the query already in the URL', () => {
+    const url = buildJunkUrl('/en/junk-oracle', '?category=cesti', '', 'Some Junk');
+    expect(url).toBe('/en/junk-oracle?category=cesti&junk=Some+Junk');
+  });
+
+  it('clears junk without touching the rest of the query', () => {
+    const url = buildJunkUrl('/en/junk-oracle', '?category=cesti&junk=Some+Junk', '', null);
+    expect(url).toBe('/en/junk-oracle?category=cesti');
+  });
+
+  it('preserves the hash', () => {
+    const url = buildJunkUrl('/en/junk-oracle', '', '#section', 'Some Junk');
+    expect(url).toBe('/en/junk-oracle?junk=Some+Junk#section');
+  });
+});
+
+describe('filtersEqual', () => {
+  it('is true for the same selection', () => {
+    const a: OracleFilters = { ...EMPTY_FILTERS, category: ['CESTI'], minQuality: 3 };
+    const b: OracleFilters = { ...EMPTY_FILTERS, category: ['CESTI'], minQuality: 3 };
+    expect(filtersEqual(a, b)).toBe(true);
+  });
+
+  it('ignores certainty — it never rides the URL and never changes which junks appear', () => {
+    const a: OracleFilters = { ...EMPTY_FILTERS, category: ['CESTI'], certaintyPct: 90 };
+    const b: OracleFilters = { ...EMPTY_FILTERS, category: ['CESTI'], certaintyPct: 42 };
+    expect(filtersEqual(a, b)).toBe(true);
+  });
+
+  it('is false for a genuinely different query', () => {
+    const a: OracleFilters = { ...EMPTY_FILTERS, category: ['CESTI'] };
+    const b: OracleFilters = { ...EMPTY_FILTERS, category: ['ODACHI'] };
+    expect(filtersEqual(a, b)).toBe(false);
   });
 });
 

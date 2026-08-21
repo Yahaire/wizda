@@ -3,9 +3,16 @@
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef } from 'react';
 
-import { buildShareableOracleUrl } from '@/components/oracle/oracleUrlState';
+import { buildJunkUrl, buildShareableOracleUrl } from '@/components/oracle/oracleUrlState';
 
 import type { OracleFilters } from '@/components/oracle/oracle.logic';
+
+/**
+ * Marks a history entry as one this page itself pushed for an open junk
+ * detail modal — see `closeJunk`. Spread onto `history.state` alongside
+ * whatever App Router already keeps there, never replacing it.
+ */
+const JUNK_PUSH_MARKER = 'oracleJunkPush';
 
 interface PushResult {
   /**
@@ -58,6 +65,23 @@ interface OracleUrlState {
    * rather than replaying whatever query came before.
    */
   pushCleared: () => void,
+  /**
+   * Pushes a fresh history entry with `junk` set on top of whatever query is
+   * already showing — opening the detail modal is a deliberate action
+   * distinct from that query, so (like Calculate) it earns its own entry.
+   * Marks the entry so `closeJunk` can tell it apart from one the visitor
+   * landed on directly.
+   */
+  pushJunk: (junkName: string) => void,
+  /**
+   * Closes the modal. `history.back()` when the entry being left carries this
+   * page's own marker (see `pushJunk`) — that undoes exactly the one entry
+   * opening it added, and is what makes a phone's Back button close the modal
+   * the same way this does. Otherwise (the visitor landed directly on a
+   * `junk=` link, so Back would leave the site entirely) falls back to
+   * `replaceState`, stripping `junk` in place instead.
+   */
+  closeJunk: () => void,
 }
 
 /**
@@ -130,9 +154,26 @@ export function useOracleUrlState(onPopState: (params: URLSearchParams) => void)
     push(null);
   }, [push]);
 
+  const pushJunk = useCallback((junkName: string) => {
+    const url = buildJunkUrl(window.location.pathname, window.location.search, window.location.hash, junkName);
+    window.history.pushState({ ...window.history.state, [JUNK_PUSH_MARKER]: true }, '', url);
+  }, []);
+
+  const closeJunk = useCallback(() => {
+    const state = window.history.state as Record<string, unknown> | null;
+    if (state?.[JUNK_PUSH_MARKER]) {
+      window.history.back();
+      return;
+    }
+    const url = buildJunkUrl(window.location.pathname, window.location.search, window.location.hash, null);
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
+
   return {
     initialParams: initialParamsRef.current,
     pushFilters,
     pushCleared,
+    pushJunk,
+    closeJunk,
   };
 }

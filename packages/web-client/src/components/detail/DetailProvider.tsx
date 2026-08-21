@@ -222,6 +222,12 @@ interface DetailContextValue {
   equipment: EquipmentListItem[] | null,
   junks: JunkListItem[] | null,
   dropsByJunk: Map<string, EquipmentListItem[]>,
+  /**
+   * `junks` indexed by its `@unique` `name` key — already built for internal
+   * use; exposed so a consumer needing one lookup doesn't re-derive its own
+   * copy of the same map.
+   */
+  junkByName: Map<string, JunkListItem>,
   status: LoadStatus,
   openEquipment: (name: string, backable?: boolean) => void,
   openJunk: (name: string, backable?: boolean) => void,
@@ -405,6 +411,7 @@ export function DetailProvider({ children }: { children: React.ReactNode }) {
     equipment,
     junks,
     dropsByJunk,
+    junkByName,
     status,
     openEquipment: (name, backable = false) => {
       setDetailStack([{ kind: 'equipment', item: resolveEquipment(name) }]);

@@ -19,8 +19,8 @@
  */
 
 import {
-    KNOWN_BLESSING_CODES, KNOWN_CATEGORY_CODES, KNOWN_RANK_KINDS, MAX_BLESSINGS, MAX_CERTAINTY_PCT,
-    MAX_LEVEL, MIN_CERTAINTY_PCT, MIN_LEVEL
+    clampCertaintyPct, KNOWN_BLESSING_CODES, KNOWN_CATEGORY_CODES, KNOWN_RANK_KINDS, MAX_BLESSINGS,
+    MAX_LEVEL, MIN_LEVEL
 } from './oracle.logic';
 
 import type { OracleFilters } from './oracle.logic';
@@ -32,8 +32,17 @@ import type { OracleFilters } from './oracle.logic';
  */
 const FILTER_PARAM_KEYS = ['equipment', 'category', 'rank', 'quality', 'grade', 'blessings'] as const;
 
+/**
+ * The deep-linked junk detail modal's param key (see `docs/sharing.md`). Not
+ * one of `FILTER_PARAM_KEYS`: opening the modal doesn't change *what query*
+ * is being asked, only whether one result is expanded on top of it, so it
+ * must never affect `filtersFromParams`'s "is this URL a shared query at all"
+ * check.
+ */
+const JUNK_PARAM_KEY = 'junk';
+
 /** Every param key this module owns — used to clear a stale value on write. */
-const ALL_PARAM_KEYS = [...FILTER_PARAM_KEYS, 'certainty'] as const;
+const ALL_PARAM_KEYS = [...FILTER_PARAM_KEYS, 'certainty', JUNK_PARAM_KEY] as const;
 
 /**
  * The conservative cross-platform length a shared URL should stay under —
@@ -138,7 +147,7 @@ export function filtersFromParams(params: URLSearchParams, fallbackCertaintyPct:
   const rawCertainty = params.get('certainty');
   const parsedCertainty = rawCertainty === null ? Number.NaN : Number.parseFloat(rawCertainty);
   const certaintyPct = Number.isFinite(parsedCertainty)
-    ? Math.min(MAX_CERTAINTY_PCT, Math.max(MIN_CERTAINTY_PCT, parsedCertainty))
+    ? clampCertaintyPct(parsedCertainty)
     : fallbackCertaintyPct;
 
   return {
@@ -179,6 +188,41 @@ export function buildOracleUrl(
   }
   const nextSearch = params.toString();
   return `${pathname}${nextSearch ? `?${nextSearch}` : ''}${hash}`;
+}
+
+/** The deep-linked junk's name (the English public key), or `null` if none is set. */
+export function junkFromParams(params: URLSearchParams): string | null {
+  return params.get(JUNK_PARAM_KEY);
+}
+
+/**
+ * Rebuilds a URL with `junk` set (or cleared, when `junkName` is `null`),
+ * preserving every other param — including the Oracle's own filter params —
+ * and the hash. Deliberately separate from `buildOracleUrl`: that function
+ * replaces the *whole* filter-axis param set at once (a fresh Calculate),
+ * while opening or closing the detail modal only ever touches this one key,
+ * on top of whatever query is already showing.
+ */
+export function buildJunkUrl(pathname: string, search: string, hash: string, junkName: string | null): string {
+  const params = new URLSearchParams(search);
+  if (junkName) {
+    params.set(JUNK_PARAM_KEY, junkName);
+  } else {
+    params.delete(JUNK_PARAM_KEY);
+  }
+  const nextSearch = params.toString();
+  return `${pathname}${nextSearch ? `?${nextSearch}` : ''}${hash}`;
+}
+
+/**
+ * Whether two selections are the same *query* — same accepted-outcome axes,
+ * certainty ignored (it never rides the URL and never determines which junks
+ * appear, only how many of one are needed — see the module doc). Used to tell
+ * "the URL's filter portion is unchanged, only `junk` toggled" (an open/close
+ * via Back/Forward, no refetch needed) apart from an actual new query.
+ */
+export function filtersEqual(a: OracleFilters, b: OracleFilters): boolean {
+  return filtersToParams(a).toString() === filtersToParams(b).toString();
 }
 
 export interface ShareableOracleUrl {

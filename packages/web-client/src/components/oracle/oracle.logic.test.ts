@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { EquipmentRankKind } from '@shared/domain/rank';
 
 import {
-    activeFilters, DEFAULT_FILTERS, EMPTY_FILTERS, gradeFloorFor, hasAnyFilter, levelsFrom,
-    MIN_LEVEL, OracleFilters, qualityDisplay, resolveQuery, subjectIdentity, subjectOf, wasNarrowed
+    activeFilters, DEFAULT_CERTAINTY_PCT, DEFAULT_FILTERS, EMPTY_FILTERS, FILTERS_STORAGE_KEY,
+    gradeFloorFor, hasAnyFilter, levelsFrom, MAX_CERTAINTY_PCT, MIN_CERTAINTY_PCT, MIN_LEVEL,
+    OracleFilters, qualityDisplay, readStoredCertaintyPct, resolveQuery, subjectIdentity, subjectOf,
+    wasNarrowed
 } from './oracle.logic';
 
 import type { MatchedOutcome } from '@shared/api/endpoints/junkToGuarantee.models';
@@ -299,5 +301,58 @@ describe('qualityDisplay', () => {
 
   it('is nothing at all for a wildcard axis', () => {
     expect(qualityDisplay([])).toBeNull();
+  });
+});
+
+// These run in vitest's default `node` environment, where there is no `window`
+// at all — so each case stubs exactly the shape `readStoredCertaintyPct` reads
+// (and the no-`window` case is the real prerender path, not a simulation).
+describe('readStoredCertaintyPct', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function withStorage(getItem: (key: string) => string | null): void {
+    vi.stubGlobal('window', { localStorage: { getItem } });
+  }
+
+  it('returns the remembered certainty — the whole point, since the mount-time seed cannot read state', () => {
+    withStorage((key) => (key === FILTERS_STORAGE_KEY ? JSON.stringify({ certaintyPct: 75 }) : null));
+    expect(readStoredCertaintyPct()).toBe(75);
+  });
+
+  it('defaults during prerender, when there is no window to read', () => {
+    expect(readStoredCertaintyPct()).toBe(DEFAULT_CERTAINTY_PCT);
+  });
+
+  it('defaults when nothing has been stored yet — a first-ever visitor', () => {
+    withStorage(() => null);
+    expect(readStoredCertaintyPct()).toBe(DEFAULT_CERTAINTY_PCT);
+  });
+
+  it('defaults when storage itself throws, as a privacy-locked browser does', () => {
+    withStorage(() => {
+      throw new Error('SecurityError');
+    });
+    expect(readStoredCertaintyPct()).toBe(DEFAULT_CERTAINTY_PCT);
+  });
+
+  it('defaults on unparseable JSON', () => {
+    withStorage(() => '{not json');
+    expect(readStoredCertaintyPct()).toBe(DEFAULT_CERTAINTY_PCT);
+  });
+
+  it('defaults when the stored shape predates the certainty axis, or carries a non-number', () => {
+    withStorage(() => JSON.stringify({ minQuality: 3 }));
+    expect(readStoredCertaintyPct()).toBe(DEFAULT_CERTAINTY_PCT);
+    withStorage(() => JSON.stringify({ certaintyPct: '75' }));
+    expect(readStoredCertaintyPct()).toBe(DEFAULT_CERTAINTY_PCT);
+  });
+
+  it('clamps a stored value that an older build let out of range', () => {
+    withStorage(() => JSON.stringify({ certaintyPct: 100 }));
+    expect(readStoredCertaintyPct()).toBe(MAX_CERTAINTY_PCT);
+    withStorage(() => JSON.stringify({ certaintyPct: 0 }));
+    expect(readStoredCertaintyPct()).toBe(MIN_CERTAINTY_PCT);
   });
 });

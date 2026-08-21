@@ -22,12 +22,13 @@ import { CertaintySlider } from './CertaintySlider';
 import { EquipmentSelect } from './EquipmentSelect';
 import { FilterField } from './FilterField';
 import { GradeFilter, GradeReadout } from './GradeFilter';
+import { JunkDetailModal } from './JunkDetailModal';
 import { computeFacets, OracleConflict } from './oracle.facets';
 import {
     activeFilters, DEFAULT_FILTERS, FILTERS_STORAGE_KEY, filtersFromGuarantee, hasAnyFilter,
-    KNOWN_CATEGORY_CODES, KNOWN_RANK_KINDS, MIN_LEVEL, OracleFilters
+    KNOWN_CATEGORY_CODES, KNOWN_RANK_KINDS, MIN_LEVEL, OracleFilters, readStoredCertaintyPct
 } from './oracle.logic';
-import { filtersFromParams } from './oracleUrlState';
+import { filtersEqual, filtersFromParams, junkFromParams } from './oracleUrlState';
 import { PopularQueries } from './PopularQueries';
 import { QualityFilter, QualityReadout } from './QualityFilter';
 import { RankFilter } from './RankFilter';
@@ -36,6 +37,7 @@ import { ResultsPanel } from './ResultsPanel';
 import type { WizdaLines } from '@/mascot/voice';
 import type {
   GuaranteeFilters,
+  JunkGuaranteeEntry,
   JunkToGuaranteeQuery,
   JunkToGuaranteeResult,
 } from '@shared/api/endpoints/junkToGuarantee.models';
@@ -84,7 +86,15 @@ function OracleContent() {
   // Junk + equipment reference lists are owned by the app-wide DetailProvider
   // (see layout.tsx) — it loads them once and they persist across navigation,
   // so the Oracle just reads them rather than fetching its own copy.
-  const { equipment: equipmentList, status: listStatus } = useDetail();
+  // `junkByName` and `openJunk` back the detail modal below: the former
+  // resolves `hasMultiplePools` for whatever is open (see `openEntryResolved`),
+  // the latter is its "see full details" handoff.
+  const {
+    equipment: equipmentList,
+    status: listStatus,
+    junkByName,
+    openJunk,
+  } = useDetail();
 
   const [result, setResult] = useState<JunkToGuaranteeResult | null>(null);
   // The filters that produced `result` — snapshotted when the result is
@@ -109,6 +119,12 @@ function OracleContent() {
   // (see `MAX_SHAREABLE_URL_LENGTH`) — only a large equipment selection can do
   // this. Drives the Share button's dimmed, explain-instead-of-share state.
   const [shareDisabledReason, setShareDisabledReason] = useState<string | undefined>(undefined);
+
+  // The row currently expanded in the detail modal, or null when it's closed.
+  // Owned here rather than by `ResultsPanel`: which junk is open is part of
+  // the URL (`&junk=`), so it has to live where the URL wiring does — see
+  // `handleOpenJunk`/`handleCloseJunk`/`openJunkByName` below.
+  const [openEntry, setOpenEntry] = useState<JunkGuaranteeEntry | null>(null);
 
   // A blocking prompt shown when a filter change makes an existing pick
   // impossible. Confirm → apply the conflict's own fix; cancel → revert to the
@@ -294,15 +310,27 @@ function OracleContent() {
    * every default (`push: true`) caller already earns its own entry, so
    * chaining another push on top would either duplicate it or, worse, corrupt
    * the position Back/Forward is trying to restore.
+   *
+   * Returns the fetched result (or `undefined` on an early return/error) so a
+   * caller resolving a deep-linked junk (`openJunkByName`, via `applyUrlState`)
+   * can check the *just-fetched* page for it directly — not by reading
+   * `result`/`queryFilters` back out of React state, which wouldn't yet
+   * reflect this call's update by the time an awaited continuation resumes.
    */
-  const calculate = async (target: OracleFilters = filters, options: { push?: boolean } = {}) => {
+  const calculate = async (
+    target: OracleFilters = filters,
+    options: { push?: boolean } = {},
+  ): Promise<JunkToGuaranteeResult | undefined> => {
     const { push = true } = options;
     if (!hasAnyFilter(target)) {
       wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark });
-      return;
+      return undefined;
     }
     setLoading(true);
     setResult(null);
+    // A fresh calculation invalidates whatever the modal was showing — it
+    // described a row from the *previous* result, not this one.
+    setOpenEntry(null);
     setSteppedBack(false);
     setResultVersion((version) => version + 1);
     pendingScrollRef.current = true;
@@ -316,11 +344,81 @@ function OracleContent() {
       } else {
         setShareDisabledReason(undefined);
       }
+      return fresh;
     } catch (error) {
       pendingScrollRef.current = false;
       handleApiError(error);
+      return undefined;
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Resolves `&junk=` against `resultForLookup` — either the just-fetched page
+   * (a fresh calculate) or the already-displayed `result` (a same-query
+   * open/close via Back/Forward, see `applyUrlState`) — and opens the modal.
+   * `null`/not-found closes it, silently: an unresolvable deep link (a typo, a
+   * junk a later scrape dropped) is no different from the 404 the API itself
+   * would give it, and the plan for that is the same as `UNKNOWN_EQUIPMENT`
+   * elsewhere — leave the ranking showing rather than block on it.
+   *
+   * `forFilters` is the *local* value the query was (or is being) run with —
+   * never `queryFilters`/`filters` React state, which can lag behind what
+   * just ran by a render or two (same reasoning as `calculate`'s return value,
+   * above).
+   *
+   * Results only page 50 at a time (`DEFAULT_GUARANTEE_LIMIT`), so a shared
+   * junk ranked past the first page won't be in `resultForLookup` — that's the
+   * fallback below: a single-point `certaintyCurve` request at the current
+   * certainty stands in for the row `junkToGuarantee` would have produced.
+   * That request is also the existence check — it 404s `UNKNOWN_JUNK` on a
+   * name no junk has, which is exactly the case worth closing on. Nothing here
+   * consults the junk catalogue first: on a cold load of a shared link its
+   * fetch is still in flight (`DetailProvider` starts it from an effect on the
+   * same mount), so gating on it would turn every such link into a silent
+   * no-op. The one field it owns, `hasMultiplePools`, is resolved at render
+   * instead — see `openEntryResolved`.
+   */
+  const openJunkByName = async (
+    junkName: string | null,
+    resultForLookup: JunkToGuaranteeResult | null,
+    forFilters: OracleFilters,
+  ) => {
+    if (!junkName) {
+      setOpenEntry(null);
+      return;
+    }
+    const fromResult = resultForLookup?.results.find((entry) => entry.junkName === junkName);
+    if (fromResult) {
+      setOpenEntry(fromResult);
+      return;
+    }
+    try {
+      const curve = await api.certaintyCurve({
+        ...activeFilters(forFilters),
+        junkName,
+        certainties: [forFilters.certaintyPct / 100],
+      });
+      const point = curve.points[0];
+      if (!point || point.junkNeeded === null) {
+        setOpenEntry(null);
+        return;
+      }
+      setOpenEntry({
+        junkName: curve.junkName,
+        junkDisplayName: curve.junkDisplayName,
+        junkNameReading: curve.junkNameReading,
+        // Not on the curve response; `openEntryResolved` fills it in from the
+        // junk catalogue, whenever that lands.
+        hasMultiplePools: false,
+        probabilityPerJunk: curve.probabilityPerJunk,
+        junkNeeded: point.junkNeeded,
+      });
+    } catch {
+      // Same silent-fallback shape as a not-found lookup above — includes a
+      // 404 UNKNOWN_JUNK from a stale/hand-typed name.
+      setOpenEntry(null);
     }
   };
 
@@ -331,29 +429,51 @@ function OracleContent() {
    * caller pushes: the URL they're reacting to already represents this state.
    *
    * Certainty is the one axis a shared link never carries (see
-   * `oracleUrlState.ts`) — `filters.certaintyPct` is passed as the fallback so
-   * landing on someone else's link keeps *this* player's own certainty rather
-   * than resetting to the default.
+   * `oracleUrlState.ts`), so the caller supplies the fallback: landing on
+   * someone else's link must keep *this* player's own certainty rather than
+   * resetting to the default. It's a parameter and not a read of
+   * `filters.certaintyPct` here because the two callers reach this at
+   * different points in the hydration cycle — see each of them below.
+   *
+   * When the popped URL's filter portion is unchanged from what's already on
+   * screen (`filtersEqual` against `queryFilters`), only `&junk=` toggled —
+   * opening or closing the modal via Back/Forward — so this skips straight to
+   * `openJunkByName` against the *existing* `result` rather than refetching
+   * the same query a second time.
    *
    * Returns the parsed filters (or `null`) so the caller can react — `null`
-   * only means "no Oracle params on this URL", which the mount effect and the
-   * popstate handler treat differently (see below).
+   * only means "no filter axis is present" (`junk` alone doesn't count, same
+   * as `hasAnyFilter`), which the mount effect and the popstate handler treat
+   * differently (see below). A `junk=` with no filters alongside it — never
+   * produced by `pushJunk`, which only ever adds it on top of an existing
+   * query — is therefore silently ignored rather than opened against nothing.
    */
-  const applyUrlState = (params: URLSearchParams) => {
-    const parsed = filtersFromParams(params, filters.certaintyPct);
+  const applyUrlState = (params: URLSearchParams, fallbackCertaintyPct: number) => {
+    const parsed = filtersFromParams(params, fallbackCertaintyPct);
+    const junkName = junkFromParams(params);
     if (parsed) {
       setFilters(parsed);
-      calculate(parsed, { push: false });
+      if (queryFilters && filtersEqual(parsed, queryFilters)) {
+        void openJunkByName(junkName, result, parsed);
+      } else {
+        void calculate(parsed, { push: false }).then((fresh) => openJunkByName(junkName, fresh ?? null, parsed));
+      }
     }
     return parsed;
   };
 
-  const { initialParams, pushFilters, pushCleared } = useOracleUrlState((params) => {
+  const {
+    initialParams, pushFilters, pushCleared, pushJunk, closeJunk,
+  } = useOracleUrlState((params) => {
     // Browser Back/Forward: unlike the mount effect below, a params-less URL
     // here is a real destination (the empty state, reached via the UI "Back"
     // button — see `handleBackToStart`) rather than an ordinary fresh visit,
     // so it gets `clearResult`'s state reset and scroll cue.
-    if (!applyUrlState(params)) {
+    //
+    // `filters.certaintyPct` is the right fallback here: this callback is kept
+    // fresh on every render (see `useOracleUrlState`), so by the time a Back
+    // can happen the stored selection has long since hydrated into it.
+    if (!applyUrlState(params, filters.certaintyPct)) {
       clearResult();
     }
   });
@@ -363,13 +483,15 @@ function OracleContent() {
   // nothing to clear on a page that hasn't shown a result yet.
   //
   // Runs once on mount by design: `filters`/`calculate` are captured as they
-  // stood on the very first render. `useLocalStorage`'s own hydration effect
-  // (`getInitialValueInEffect: true`, see above) races this one for
-  // `filters.certaintyPct`'s fallback value — if that's ever observed to lose
-  // the race, read `FILTERS_STORAGE_KEY` from `localStorage` directly here
-  // instead of trusting `filters`.
+  // stood on the very first render — which is exactly why the fallback
+  // certainty is read from `localStorage` rather than from `filters`.
+  // `useLocalStorage`'s hydration effect (`getInitialValueInEffect: true`, see
+  // above) hasn't landed in *this* closure's `filters` and never will, so
+  // trusting it here would replay every shared link at the default certainty
+  // and then write that default back over the player's remembered one. See
+  // `readStoredCertaintyPct`.
   useEffect(() => {
-    applyUrlState(initialParams);
+    applyUrlState(initialParams, readStoredCertaintyPct());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -404,6 +526,7 @@ function OracleContent() {
   const clearResult = () => {
     setResult(null);
     setQueryFilters(null);
+    setOpenEntry(null);
     setSteppedBack(true);
     filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -419,6 +542,48 @@ function OracleContent() {
     clearResult();
     pushCleared();
   };
+
+  /** A result row was clicked: open its detail and push `&junk=` for it. */
+  const handleOpenJunk = (entry: JunkGuaranteeEntry) => {
+    setOpenEntry(entry);
+    pushJunk(entry.junkName);
+  };
+
+  /**
+   * The modal's close (× or backdrop): clear it here *and* let `closeJunk`
+   * settle the URL — `history.back()` when this page pushed the entry being
+   * left, `replaceState` otherwise (a visitor who landed directly on a
+   * `junk=` link). See `useOracleUrlState`.
+   */
+  const handleCloseJunk = () => {
+    setOpenEntry(null);
+    closeJunk();
+  };
+
+  /**
+   * What the detail modal actually shows: `openEntry` with `hasMultiplePools`
+   * re-read from the junk catalogue whenever that's loaded.
+   *
+   * It's resolved here, at render, rather than baked in when the modal opens,
+   * because the two are not reliably ordered: `openJunkByName`'s paging-gap
+   * fallback can run before `DetailProvider`'s lists have arrived (a cold load
+   * of a shared `&junk=` link races them). Reading it on every render means the
+   * caveat appears as soon as the lists land, in either order, instead of the
+   * open being gated on a fetch it doesn't otherwise need.
+   *
+   * A row that came from the results page is unaffected: `junkToGuarantee`
+   * already sent the same flag, off the same column.
+   */
+  const openEntryResolved = useMemo(() => {
+    if (!openEntry) {
+      return null;
+    }
+    const known = junkByName.get(openEntry.junkName);
+    if (!known) {
+      return openEntry;
+    }
+    return { ...openEntry, hasMultiplePools: known.hasMultiplePools };
+  }, [openEntry, junkByName]);
 
   const showMore = async () => {
     if (!result || !queryFilters) {
@@ -609,8 +774,7 @@ function OracleContent() {
                   loading={loading}
                   loadingMore={loadingMore}
                   onShowMore={showMore}
-                  queryFilters={queryFilters ?? filters}
-                  onRequestCurve={requestCurve}
+                  onOpenJunk={handleOpenJunk}
                   fillHeight={Boolean(resultsMaxHeight)}
                   onBack={handleBackToStart}
                 />
@@ -657,6 +821,16 @@ function OracleContent() {
           </Group>
         </Stack>
       </Modal>
+
+      {/* Per-junk detail — recovers the full name when it's been truncated,
+          and deep-links via `&junk=` (see `handleOpenJunk`/`handleCloseJunk`). */}
+      <JunkDetailModal
+        entry={openEntryResolved}
+        onClose={handleCloseJunk}
+        queryFilters={queryFilters ?? filters}
+        onRequestCurve={requestCurve}
+        onSeeFullDetails={(junkName) => openJunk(junkName, true)}
+      />
     </Stack>
   );
 }
