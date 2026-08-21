@@ -12,7 +12,8 @@ A comparative reference so anyone revising a language catalog (`packages/web-cli
 
 | Term | Description | EN main | EN alternates | JA main | JA alternates |
 | --- | --- | --- | --- | --- | --- |
-| Junk | The loot boxes players farm and "reverse" into gear | Junk | loot box | ガラクタ | — |
+| Junk | The loot boxes players grind and "reverse" into gear | Junk | loot box | ガラクタ | — |
+| Grind | (To farm) To repeatedly do something to get items/EXP/junk | Grind | farm | 周回 | 集める |
 | Reverse | To open a junk box, converting it into a piece of equipment | Reverse | open | 逆転 | — |
 | Blessing | Bonus stat rolled onto a piece of gear (max 4, one per active slot) | Blessing | bonus stat | 追加護 | slot: 追加護枠 |
 | Slot | An active blessing slot on a piece of gear; starting count is set by Grade, but all equipment has 4 after being fully upgraded | Slot | blessing slot | スロット | 追加護枠 |
@@ -22,7 +23,13 @@ A comparative reference so anyone revising a language catalog (`packages/web-cli
 | Adventurer rank | A separate character-level "Rank" — **not** the gear rank | Adventurer rank | — | 冒険者ランク | — |
 | Equipment | A piece of gear | Equipment | gear | 装備 | — |
 | Category | The kind of gear (dagger, heavy armor, …) | Category | type | 装備種別 | カテゴリ, 種類 |
+| Guarantee | The app's core promise: enough junk to reach your target confidence (never literal 100%) | Guarantee | confirm | 確定 | — |
 | Certainty | Target confidence the guarantee math aims for | Certainty | confidence | 確実性 | — |
+| Drop rate | Chance a junk box yields a specific piece of gear | Drop rate | drop chance | ドロップ率 | — |
+| Blessing odds | Chance a blessing slot rolls a specific stat — a *different* rate from Drop rate, don't conflate the two | Blessing odds | blessing chance | 出現率 | — |
+| Pull | A single junk open — gacha-community slang, flavour only | Pull | open, roll | 引き | — |
+| Delve / Delving | Flavour term for playing/adventuring in-game | Delve | adventure | 探索 | — |
+| Hunt / Hunting | Flavour term for chasing a specific item | Hunt | chase, target | 狙う | — |
 | Luknalia | The royal capital (lore flavour in Wizda's voice) | Luknalia | the royal capital | ルクナリア | — |
 | GREAT Agora | A patron figure the community invokes for luck | GREAT Agora | Agora | 偉大なアゴラ | アゴラ |
 
