@@ -136,6 +136,8 @@ Two decisions worth not re-litigating:
 
 The query is seeded once, on mount, from `useSearchParams()` — after that the input owns its value, so there's no two-way binding to keep in sync with a URL that can also change independently (e.g. Back).
 
+How that URL then gets handed to someone — the share button, and the Oracle's own much larger URL-state contract — is [`docs/sharing.md`](./sharing.md).
+
 ## Known limits
 
 - **Macrons are unsupported.** `tōkyō` passes through unconverted, because wanakana models wāpuro rōmaji (what a keyboard produces) rather than Hepburn. Low-impact in practice — a player who can type `ō` can type `ou`, and the long vowel collapse means either reaches the same place.

@@ -86,5 +86,6 @@ math module thinks.**
 | Scraper / seed (writes to DB) | `packages/backend-api/prisma/seed-from-html/` |
 | API endpoints (reads DB, calls the math) | `packages/backend-api/src/` |
 | Search matching (see [`docs/search.md`](./search.md)) | `packages/web-client/src/utils/search.ts` |
+| Sharing: links, URL state, share card (see [`docs/sharing.md`](./sharing.md)) | `packages/web-client/src/components/Share*.tsx`, `src/components/oracle/oracleUrlState.ts`, `src/hooks/useOracleUrlState.ts`, `src/utils/shareCard.ts` |
 | Language resolution + catalogs (see [`docs/i18n.md`](./i18n.md)) | `packages/web-client/src/i18n/`, `src/middleware.ts` |
 | UI (routes are per-locale: `app/[lang]/…`) | `packages/web-client/` |
