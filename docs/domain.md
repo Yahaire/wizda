@@ -210,6 +210,13 @@ truth for the stat/blessing catalog, mirrored in
 (evasion) is easy to overlook — it doesn't appear in casual stat lists but is a
 full flat-and-% blessing here.
 
+### Blessing *values* live elsewhere
+
+This table says *which* blessing lands in a slot, never what number it carries.
+The per-value probabilities — and what an enhancement milestone does to them —
+are on the same source page in twelve tables this parser deliberately skips.
+See [`docs/milestone-blessings.md`](./milestone-blessings.md).
+
 ### Blessings don't stack (draws are without replacement)
 
 The header notes *"Additional Blessings applied to a single piece of equipment

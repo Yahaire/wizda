@@ -1,14 +1,14 @@
 import * as cheerio from 'cheerio';
-import type { Element } from 'domhandler';
 
-import { BLESSINGS, getBlessingCode, StatKind } from '@shared/domain/stats';
+import { BLESSINGS } from '@shared/domain/stats';
 
+import { parseBlessingLabel } from './blessingLabels';
 import { ParsedEquipmentBlessingDropRateRow } from './equipmentBlessingDropRate.models';
 import { isCloseToOne, parsePercent } from './rateParsing';
 
+import type { Element } from 'domhandler';
+
 const EXPECTED_COLUMN_COUNT = 2 + BLESSINGS.length;
-const HEADER_LABEL_PATTERN = /^(.+) Increase \((%|fixed)\)$/;
-const STAT_LABELS = Object.values(StatKind) as string[];
 
 /** Row that starts a new equipment block: equipment + slot + 19 blessing rates. */
 const BLOCK_START_CELL_COUNT = 2 + BLESSINGS.length;
@@ -36,18 +36,11 @@ function tryGetColumnBlessingCodes($: cheerio.CheerioAPI, table: Element): strin
 
   const columnBlessingCodes: string[] = [];
   for (const header of headers.slice(2)) {
-    const match = HEADER_LABEL_PATTERN.exec(header);
-    if (!match) {
+    const code = parseBlessingLabel(header);
+    if (!code) {
       return undefined;
     }
-
-    const label = match[1]!;
-    const variant = match[2]!;
-    if (!STAT_LABELS.includes(label)) {
-      return undefined;
-    }
-
-    columnBlessingCodes.push(getBlessingCode(label as StatKind, variant === '%'));
+    columnBlessingCodes.push(code);
   }
 
   const expectedCodes = new Set(BLESSINGS.map((b) => b.code));
