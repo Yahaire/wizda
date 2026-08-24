@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    convolve, deriveIncrement, isUniform, normalizeDistribution, uniformDistribution,
-    ValueDistribution, verifyIncrement
+    composeSlotValue, convolve, deriveIncrement, isUniform, normalizeDistribution,
+    uniformDistribution, ValueDistribution, valueRange, verifyIncrement
 } from './enhancementMath';
+import { getStoneValueRange } from './stoneValues';
 
 /** Builds a distribution from raw source percentages (e.g. "33.3333"), matching how the seed will read them. */
 function fromPercentages(minValue: number, percentages: number[]): ValueDistribution {
@@ -160,5 +161,198 @@ describe('verifyIncrement', () => {
       throw new Error('expected verification to fail');
     }
     expect(result.reason).toMatch(/does not reproduce fas at value/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Composition. Fixtures use RANK_1_5 / quality 3 / flat ATK throughout, whose
+// published numbers Milestone 1 verified: drop 5-7, increment 2-8, so
+// lfas = 7-15 and fas = 9-23. See docs/stones.md for the mechanics.
+// ---------------------------------------------------------------------------
+
+const DROP_Q3_FLAT = uniformDistribution(5, 7);
+const INCREMENT_Q3_FLAT = uniformDistribution(2, 8);
+const LFAS_Q3_FLAT = convolve(DROP_Q3_FLAT, INCREMENT_Q3_FLAT);
+const FAS_Q3_FLAT = convolve(LFAS_Q3_FLAT, INCREMENT_Q3_FLAT);
+
+/** A 3★ Alteration/Refinement stone for a flat blessing: 3-5. */
+function flatStone(stoneQuality: number): ValueDistribution {
+  const range = getStoneValueRange('ATK', stoneQuality)!;
+  return uniformDistribution(range.minValue, range.maxValue);
+}
+
+describe('composeSlotValue', () => {
+  it('is exactly drop ⊛ increment for an untouched, enhanced slot (Milestone 1 regression)', () => {
+    // The existing behaviour must not shift now that a composition wrapper exists.
+    const composed = composeSlotValue({
+      base: DROP_Q3_FLAT,
+      refine: null,
+      increment: INCREMENT_Q3_FLAT,
+    });
+
+    expect(composed).toEqual(convolve(DROP_Q3_FLAT, INCREMENT_Q3_FLAT));
+    expect(valueRange(composed)).toEqual({ minValue: 7, maxValue: 15 });
+  });
+
+  it('returns the base alone when nothing else applies', () => {
+    const composed = composeSlotValue({ base: DROP_Q3_FLAT, refine: null, increment: null });
+
+    expect(valueRange(composed)).toEqual({ minValue: 5, maxValue: 7 });
+  });
+
+  it('altered before the checkpoint, then enhanced, is stone ⊛ increment', () => {
+    // 3★ stone 3-5, increment 2-8 => 5-13.
+    const composed = composeSlotValue({
+      base: flatStone(3),
+      refine: null,
+      increment: INCREMENT_Q3_FLAT,
+    });
+
+    expect(valueRange(composed)).toEqual({ minValue: 5, maxValue: 13 });
+  });
+
+  it('altered after the checkpoint is the stone alone — the increment is forfeited', () => {
+    const composed = composeSlotValue({ base: flatStone(3), refine: null, increment: null });
+
+    expect(valueRange(composed)).toEqual({ minValue: 3, maxValue: 5 });
+  });
+
+  it('refined and enhanced is drop ⊛ stone ⊛ increment (refinement retained since 1.12.1)', () => {
+    // drop 5-7, 3★ refine stone 3-5, increment 2-8 => 10-20.
+    const composed = composeSlotValue({
+      base: DROP_Q3_FLAT,
+      refine: flatStone(3),
+      increment: INCREMENT_Q3_FLAT,
+    });
+
+    expect(valueRange(composed)).toEqual({ minValue: 10, maxValue: 20 });
+  });
+
+  it('reproduces the worked Alteration comparison in docs/milestone-blessings.md', () => {
+    // That doc's 3★ SILVER_OTHER slot-3 table: flat initial 5-8, increment 2-10,
+    // 3★ alteration stone 3-5.
+    const silverOtherDrop = uniformDistribution(5, 8);
+    const silverOtherIncrement = uniformDistribution(2, 10);
+    const stone = flatStone(3);
+
+    const presentAtDropThenEnhanced = composeSlotValue({
+      base: silverOtherDrop,
+      refine: null,
+      increment: silverOtherIncrement,
+    });
+    const alteredBeforeThenEnhanced = composeSlotValue({
+      base: stone,
+      refine: null,
+      increment: silverOtherIncrement,
+    });
+    const milestoneFilled = composeSlotValue({ base: silverOtherDrop, refine: null, increment: null });
+    const alteredAfter = composeSlotValue({ base: stone, refine: null, increment: null });
+
+    expect(valueRange(presentAtDropThenEnhanced)).toEqual({ minValue: 7, maxValue: 18 });
+    expect(valueRange(alteredBeforeThenEnhanced)).toEqual({ minValue: 5, maxValue: 15 });
+    expect(valueRange(milestoneFilled)).toEqual({ minValue: 5, maxValue: 8 });
+    expect(valueRange(alteredAfter)).toEqual({ minValue: 3, maxValue: 5 });
+  });
+});
+
+describe('composeSlotValue — full alteration stones', () => {
+  it('picks the base per slot, not per piece: a FAS at +20 leaves slots 1-2 above slots 3-4', () => {
+    // The grade-3 (blue) axe: 2 slots occupied at drop, taken to +20, then FAS'd.
+    // Slots 1-2 were entitled to a milestone increment so the stone re-applies one
+    // (the `fas` table); slots 3-4 were merely milestone-FILLED and never earned an
+    // increment, so they land on `lfas`. This is the case that breaks if anyone
+    // "simplifies" the base choice into a single per-piece distribution.
+    const occupiedAtDrop = composeSlotValue({ base: FAS_Q3_FLAT, refine: null, increment: null });
+    const milestoneFilled = composeSlotValue({ base: LFAS_Q3_FLAT, refine: null, increment: null });
+
+    expect(valueRange(occupiedAtDrop)).toEqual({ minValue: 9, maxValue: 23 });
+    expect(valueRange(milestoneFilled)).toEqual({ minValue: 7, maxValue: 15 });
+    expect(valueRange(occupiedAtDrop).minValue).toBeGreaterThan(valueRange(milestoneFilled).minValue);
+    expect(valueRange(occupiedAtDrop).maxValue).toBeGreaterThan(valueRange(milestoneFilled).maxValue);
+  });
+
+  it('double-dips when a FAS lands before the checkpoint: fas ⊛ increment beats the natural ceiling', () => {
+    const fasThenEnhanced = composeSlotValue({
+      base: FAS_Q3_FLAT,
+      refine: null,
+      increment: INCREMENT_Q3_FLAT,
+    });
+    const naturalCeiling = composeSlotValue({
+      base: DROP_Q3_FLAT,
+      refine: null,
+      increment: INCREMENT_Q3_FLAT,
+    });
+
+    // drop ⊛ increment³ = 11-31, against a natural drop ⊛ increment of 7-15.
+    expect(valueRange(fasThenEnhanced)).toEqual({ minValue: 11, maxValue: 31 });
+    expect(valueRange(fasThenEnhanced).maxValue).toBeGreaterThan(valueRange(naturalCeiling).maxValue);
+  });
+
+  it('an LFAS leaves every slot on the band it already had — occupied and milestone-filled alike', () => {
+    // Observed, not assumed: a 4★ Steel Ring of the Warrior Princess that started
+    // blue (2 blessings) and was taken to +20, then LFAS'd, came back with slots
+    // 1-2 above the drop ceiling and slot 3 below the lfas floor. So a Lesser
+    // stone restores an occupied slot's earned increment and gives a
+    // milestone-filled slot none — i.e. it re-rolls identities at unchanged value
+    // odds. See docs/stones.md.
+    const occupiedBefore = composeSlotValue({
+      base: DROP_Q3_FLAT,
+      refine: null,
+      increment: INCREMENT_Q3_FLAT,
+    });
+    const filledBefore = composeSlotValue({ base: DROP_Q3_FLAT, refine: null, increment: null });
+
+    const occupiedAfterLesser = composeSlotValue({ base: LFAS_Q3_FLAT, refine: null, increment: null });
+    const filledAfterLesser = composeSlotValue({ base: DROP_Q3_FLAT, refine: null, increment: null });
+
+    expect(valueRange(occupiedAfterLesser)).toEqual(valueRange(occupiedBefore));
+    expect(valueRange(filledAfterLesser)).toEqual(valueRange(filledBefore));
+  });
+
+  it('reproduces the observed Ring of the Warrior Princess split (RANK_1_5, quality 4)', () => {
+    // drop 8-10, increment 3-10 => lfas 11-20 for a flat blessing. The recorded
+    // values were ACC+12 and RES+17 on the two slots occupied at drop, and ATK+8
+    // on a milestone-filled one. 12 and 17 are impossible without an increment;
+    // 8 is impossible with one. That contrast is the whole per-slot rule.
+    const drop = uniformDistribution(8, 10);
+    const increment = uniformDistribution(3, 10);
+    const lfas = convolve(drop, increment);
+
+    const occupied = valueRange(composeSlotValue({ base: lfas, refine: null, increment: null }));
+    const filled = valueRange(composeSlotValue({ base: drop, refine: null, increment: null }));
+
+    expect(occupied).toEqual({ minValue: 11, maxValue: 20 });
+    expect(filled).toEqual({ minValue: 8, maxValue: 10 });
+
+    for (const observed of [12, 17]) {
+      expect(observed, `slot occupied at drop saw ${observed}`).toBeGreaterThan(filled.maxValue);
+      expect(observed).toBeGreaterThanOrEqual(occupied.minValue);
+    }
+    expect(8, 'milestone-filled slot saw 8').toBeLessThan(occupied.minValue);
+  });
+
+  it('a FAS improves every slot by one increment, occupied or milestone-filled', () => {
+    // The uniform shift is the entire difference between the two stones — and the
+    // reason a Full stone is worth saving for good gear.
+    const occupiedAfterLesser = composeSlotValue({ base: LFAS_Q3_FLAT, refine: null, increment: null });
+    const occupiedAfterFull = composeSlotValue({ base: FAS_Q3_FLAT, refine: null, increment: null });
+    const filledAfterLesser = composeSlotValue({ base: DROP_Q3_FLAT, refine: null, increment: null });
+    const filledAfterFull = composeSlotValue({ base: LFAS_Q3_FLAT, refine: null, increment: null });
+
+    expect(valueRange(occupiedAfterFull).minValue).toBeGreaterThan(valueRange(occupiedAfterLesser).minValue);
+    expect(valueRange(filledAfterFull).minValue).toBeGreaterThan(valueRange(filledAfterLesser).minValue);
+    // A milestone-filled slot after a FAS lands exactly where an occupied slot
+    // sits after an LFAS — one increment behind its neighbours, as it always was.
+    expect(valueRange(filledAfterFull)).toEqual(valueRange(occupiedAfterLesser));
+  });
+});
+
+describe('valueRange', () => {
+  it('reports the inclusive support of a distribution', () => {
+    expect(valueRange(uniformDistribution(3, 9))).toEqual({ minValue: 3, maxValue: 9 });
+  });
+
+  it('handles a single-point distribution', () => {
+    expect(valueRange({ minValue: 4, probabilities: [1] })).toEqual({ minValue: 4, maxValue: 4 });
   });
 });

@@ -3,8 +3,12 @@
  * blessing end up at after enhancing?".
  *
  * Derivation, rationale, and the milestone model are documented in
- * `docs/milestone-blessings.md`. Keep this module free of DB/HTTP concerns so
+ * `docs/milestone-blessings.md`; the stone mechanics {@link composeSlotValue}
+ * models are in `docs/stones.md`. Keep this module free of DB/HTTP concerns so
  * it stays trivially unit-testable (see `enhancementMath.test.ts`).
+ *
+ * Notation: `⊛` is convolution — `A ⊛ B` is the distribution of `a + b` with
+ * `a` and `b` drawn independently. That is exactly what {@link convolve} does.
  */
 
 /**
@@ -142,6 +146,67 @@ export function deriveIncrement(
     return null;
   }
   return uniformDistribution(lo, hi);
+}
+
+/**
+ * The independent terms that add up to one slot's **final** value, once every
+ * remaining enhancement milestone has been applied. Convolving whichever terms
+ * are present gives the slot's value distribution — see {@link composeSlotValue}.
+ *
+ * Two rules decide what goes in here, and both are subtle enough that callers
+ * should not reproduce them inline (see `docs/stones.md`):
+ *
+ * **Which `base`** — whatever roll last set the slot:
+ * - never altered, never stone-rerolled ⇒ the `drop` distribution
+ * - altered ⇒ the Alteration Stone's uniform range
+ * - LFAS/FAS ⇒ chosen **per slot, not per piece**, because the published tables
+ *   all describe a slot that was *occupied at drop*. A slot occupied at drop
+ *   takes `lfas` under a Lesser stone and `fas` under a Full one; a
+ *   milestone-filled slot takes `drop` under a Lesser stone and `lfas` under a
+ *   Full one. Equivalently: a Lesser stone leaves every slot's band untouched
+ *   (it re-rolls identities, not value odds) and a Full stone lifts every slot
+ *   by exactly one increment. Observed in game — see `docs/stones.md`.
+ *
+ * **Whether `increment` is present** — iff the slot's milestone checkpoint
+ * falls *after* whatever event set its base:
+ * - a `drop` base ⇒ always present (the checkpoint is always later)
+ * - altered *before* its checkpoint ⇒ present; altered *after* ⇒ absent, and
+ *   permanently so: that slot is never enhanced again
+ * - LFAS/FAS ⇒ present iff the piece had not yet passed that checkpoint when
+ *   the stone was used
+ */
+export interface SlotValueComposition {
+  /** The roll that last set this slot: drop, an alteration stone, or an LFAS/FAS re-roll. */
+  base: ValueDistribution,
+  /** The refinement stone's roll, or null if the slot is unrefined. */
+  refine: ValueDistribution | null,
+  /** The milestone increment, or null if this slot will never receive one. */
+  increment: ValueDistribution | null,
+}
+
+/**
+ * A slot's final value distribution: `base ⊛ refine ⊛ increment`, skipping
+ * whichever terms are absent. The terms are independent rolls, so this is a
+ * plain convolution chain — see {@link SlotValueComposition} for how a caller
+ * decides what to put in each field.
+ *
+ * Edge cases: with `refine` and `increment` both null this is just `base`
+ * (normalised).
+ */
+export function composeSlotValue(composition: SlotValueComposition): ValueDistribution {
+  const terms = [composition.base, composition.refine, composition.increment]
+    .filter((term): term is ValueDistribution => term !== null);
+
+  return terms.reduce((total, term) => convolve(total, term));
+}
+
+/**
+ * The inclusive range of values a distribution can produce — what the UI needs
+ * to constrain a value input, and to label which band a player's own number
+ * falls into.
+ */
+export function valueRange(dist: ValueDistribution): { minValue: number, maxValue: number } {
+  return { minValue: dist.minValue, maxValue: maxValue(dist) };
 }
 
 export type VerifyIncrementResult =

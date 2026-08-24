@@ -2,11 +2,13 @@
 
 What happens to a piece of equipment's **blessings** when it is enhanced to an enhancement milestone (+5, +10, +15, +20), and where every number behind that comes from. This is the data foundation for the planned **Enhancement Oracle**, the sister tool to the Junk Oracle: it answers *"what are the odds this blessing ends up at the value I want?"* rather than *"how much junk do I farm?"*.
 
-Read [`docs/domain.md`](./domain.md) first for the game model — rank, quality, grade, blessings. This document assumes all of it and covers only what that one does not: the *values* blessings take, and how enhancing changes them.
+Read [`docs/domain.md`](./domain.md) first for the game model — rank, quality, grade, blessings. This document assumes all of it and covers only what that one does not: the *values* blessings take, and how enhancing changes them. For what **Alteration and Refinement Stones** do to a blessing's value, see [`docs/stones.md`](./stones.md).
+
+**Notation.** `⊛` is **convolution**: `A ⊛ B` is the distribution of `a + b`, where `a` and `b` are rolled independently from `A` and `B`. Plainly, *"roll one, roll the other, add them."* So `drop ⊛ increment` means a drop-value roll plus an independent increment roll. In code it is `convolve()` in `packages/shared/src/domain/enhancementMath.ts`.
 
 **Basis.** Two sources, in this order. The **official drop-rate tables** at wizardry.info supply every number here, directly or by derivation. **Ten in-game observations** made on 2026-08-22 settled the one case those tables do not describe. Both were afterwards cross-checked against the Fasterthoughts community guide — see [Corroboration](#corroboration-2026-08-22).
 
-**Status.** Nothing here is implemented yet. One stated assumption remains, flagged in [The model](#the-model).
+**Status.** The scraping and the derivation are implemented — the parser reads all 12 value tables and recovers the increment, re-verifying it 380/380 on every run. The Enhancement Oracle itself is not built yet. One stated assumption remains, flagged in [The model](#the-model).
 
 ## The model
 
