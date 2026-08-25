@@ -26,7 +26,7 @@ export interface ValueDistribution {
  * *same* underlying values — either "is this uniform?" or "does a reconvolved
  * distribution reproduce a published one?". The source publishes percentages
  * to 4 decimal places, so a single cell can be off by ~1e-6, and `fas`
- * (`drop ⊛ increment ⊛ increment`, a double convolution) compounds that to
+ * (`drop ⊛ bonus ⊛ bonus`, a double convolution) compounds that to
  * ~6e-7 per cell — observed against the live page, worst case across 380
  * (group, quality, blessing) rows. `SUM_TOLERANCE` (0.005, `rateParsing.ts`)
  * allows for a distribution's own rounding when summing to ~100% and is far
@@ -124,19 +124,23 @@ function findFirstMismatch(expected: ValueDistribution, actual: ValueDistributio
 }
 
 /**
- * Recovers the milestone increment from the supports of two published
- * distributions: `lesserFas = drop ⊛ increment`, and every `drop` distribution
- * is uniform, so `increment`'s support is exactly
+ * Recovers the **bonus** from the supports of two published distributions:
+ * `lesserFas = drop ⊛ bonus`, and every `drop` distribution is uniform, so
+ * `bonus`'s support is exactly
  * `[lesserFas.min − drop.min, lesserFas.max − drop.max]` (see
- * docs/milestone-blessings.md, "Deriving the milestone increment"). Assumes
- * the increment itself is uniform — true for every group checked so far;
- * {@link verifyIncrement} is what proves that for a given row rather than just
- * asserting it.
+ * docs/milestone-blessings.md, "Deriving the bonus"). Assumes the bonus itself
+ * is uniform — true for every group checked so far; {@link verifyBonus} is what
+ * proves that for a given row rather than just asserting it.
+ *
+ * One distribution, two roles: a **milestone bonus** is what enhancing to +5n
+ * grants a slot that held a blessing at drop, and a **FAS bonus** is what a Full
+ * Alteration Stone grants. They are independent draws from this same range,
+ * which is why `fas = drop ⊛ bonus ⊛ bonus`.
  *
  * Edge cases: returns `null` if the derived range is empty (`lesserFas`
- * narrower than `drop`) — a pair that cannot describe an added increment.
+ * narrower than `drop`) — a pair that cannot describe an added bonus.
  */
-export function deriveIncrement(
+export function deriveBonus(
   drop: ValueDistribution,
   lesserFas: ValueDistribution,
 ): ValueDistribution | null {
@@ -159,42 +163,56 @@ export function deriveIncrement(
  * **Which `base`** — whatever roll last set the slot:
  * - never altered, never stone-rerolled ⇒ the `drop` distribution
  * - altered ⇒ the Alteration Stone's uniform range
- * - LFAS/FAS ⇒ chosen **per slot, not per piece**, because the published tables
- *   all describe a slot that was *occupied at drop*. A slot occupied at drop
- *   takes `lfas` under a Lesser stone and `fas` under a Full one; a
- *   milestone-filled slot takes `drop` under a Lesser stone and `lfas` under a
- *   Full one. Equivalently: a Lesser stone leaves every slot's band untouched
- *   (it re-rolls identities, not value odds) and a Full stone lifts every slot
- *   by exactly one increment. Observed in game — see `docs/stones.md`.
+ * - LFAS/FAS ⇒ chosen **per slot, not per piece**. A stone re-rolls the slot's
+ *   base and re-applies whatever that slot has already *earned*: the milestone
+ *   bonus, if the piece had passed that slot's milestone when the stone landed.
+ *   A Full stone additionally grants its own FAS bonus, always. So for a slot
+ *   occupied at drop: `lfas` under a Lesser stone and `fas` under a Full one if
+ *   the milestone had been reached, else `drop` and `lfas` respectively, with
+ *   `bonus` below supplying the milestone when it arrives.
+ * - A slot **empty at drop** never collects either term. Before its milestone a
+ *   stone passes over it entirely — there is no blessing there to re-roll; after
+ *   it, the stone re-rolls it onto plain `drop`. Both give `drop`, so it takes
+ *   that base in every combination.
  *
- * **Whether `increment` is present** — iff the slot's milestone checkpoint
- * falls *after* whatever event set its base:
- * - a `drop` base ⇒ always present (the checkpoint is always later)
+ * **Whether `bonus` is present** — iff the slot is entitled to one *and* its
+ * milestone checkpoint falls *after* whatever event set its base:
+ * - a slot empty at drop ⇒ never: its milestone *fills* the slot rather than
+ *   boosting it (see `docs/milestone-blessings.md`)
+ * - a `drop` base on a slot occupied at drop ⇒ always present (the checkpoint is
+ *   always later)
  * - altered *before* its checkpoint ⇒ present; altered *after* ⇒ absent, and
  *   permanently so: that slot is never enhanced again
- * - LFAS/FAS ⇒ present iff the piece had not yet passed that checkpoint when
- *   the stone was used
+ * - LFAS/FAS on a slot occupied at drop ⇒ present iff the piece had not yet
+ *   reached that checkpoint when the stone was used; if it had, the stone's own
+ *   table already includes that milestone bonus and adding one here would count
+ *   it twice
+ *
+ * The two orders therefore agree: an occupied slot ends on `drop ⊛ bonus` under
+ * a Lesser stone and `drop ⊛ bonus ⊛ bonus` under a Full one whether the stone
+ * was used before or after that slot's milestone. Two bonuses is the ceiling —
+ * there is no third.
  */
 export interface SlotValueComposition {
-  /** The roll that last set this slot: drop, an alteration stone, or an LFAS/FAS re-roll. */
+  /** The roll that last set this slot: drop, an alteration stone, or a LFAS/FAS re-roll. */
   base: ValueDistribution,
   /** The refinement stone's roll, or null if the slot is unrefined. */
   refine: ValueDistribution | null,
-  /** The milestone increment, or null if this slot will never receive one. */
-  increment: ValueDistribution | null,
+  /** The milestone bonus, or null if this slot will never receive one. */
+  bonus: ValueDistribution | null,
 }
 
 /**
- * A slot's final value distribution: `base ⊛ refine ⊛ increment`, skipping
+ * A slot's final value distribution: `base ⊛ refine ⊛ bonus`, skipping
  * whichever terms are absent. The terms are independent rolls, so this is a
  * plain convolution chain — see {@link SlotValueComposition} for how a caller
  * decides what to put in each field.
  *
- * Edge cases: with `refine` and `increment` both null this is just `base`
+ * Edge cases: with `refine` and `bonus` both null this is just `base`
  * (normalised).
  */
 export function composeSlotValue(composition: SlotValueComposition): ValueDistribution {
-  const terms = [composition.base, composition.refine, composition.increment]
+  const terms = [composition.base, composition.refine, composition.bonus]
     .filter((term): term is ValueDistribution => term !== null);
 
   return terms.reduce((total, term) => convolve(total, term));
@@ -209,47 +227,47 @@ export function valueRange(dist: ValueDistribution): { minValue: number, maxValu
   return { minValue: dist.minValue, maxValue: maxValue(dist) };
 }
 
-export type VerifyIncrementResult =
+export type VerifyBonusResult =
   | { isVerified: true }
   | { isVerified: false, reason: string };
 
 /**
- * Proves a derived increment by reconvolution: checks that `drop` is itself
- * uniform, that `drop ⊛ increment` reproduces `lesserFas`, and that
- * `drop ⊛ increment ⊛ increment` reproduces `fas` — the two independent
+ * Proves a derived bonus by reconvolution: checks that `drop` is itself
+ * uniform, that `drop ⊛ bonus` reproduces `lesserFas`, and that
+ * `drop ⊛ bonus ⊛ bonus` reproduces `fas` — the two independent
  * confirmations `docs/milestone-blessings.md` describes ("380/380" for each,
  * across all four value groups). Fails closed (returns `isVerified: false`
  * with a `reason` naming the first divergence, never throws) the moment any
  * check doesn't hold, the way `alignLocalizedNames.ts` fails closed on name
  * alignment.
  */
-export function verifyIncrement(
+export function verifyBonus(
   drop: ValueDistribution,
   lesserFas: ValueDistribution,
   fas: ValueDistribution,
-  increment: ValueDistribution,
-): VerifyIncrementResult {
+  bonus: ValueDistribution,
+): VerifyBonusResult {
   if (!isUniform(drop)) {
     return { isVerified: false, reason: 'the drop distribution is not uniform' };
   }
 
-  const reconvolvedLesserFas = convolve(drop, increment);
+  const reconvolvedLesserFas = convolve(drop, bonus);
   const lesserFasMismatch = findFirstMismatch(lesserFas, reconvolvedLesserFas);
   if (lesserFasMismatch) {
     return {
       isVerified: false,
-      reason: 'drop ⊛ increment does not reproduce lesserFas at value '
+      reason: 'drop ⊛ bonus does not reproduce lesserFas at value '
         + `${lesserFasMismatch.value} (expected ${(lesserFasMismatch.expectedProbability * 100).toFixed(4)}%, `
         + `got ${(lesserFasMismatch.actualProbability * 100).toFixed(4)}%)`,
     };
   }
 
-  const reconvolvedFas = convolve(reconvolvedLesserFas, increment);
+  const reconvolvedFas = convolve(reconvolvedLesserFas, bonus);
   const fasMismatch = findFirstMismatch(fas, reconvolvedFas);
   if (fasMismatch) {
     return {
       isVerified: false,
-      reason: 'drop ⊛ increment ⊛ increment does not reproduce fas at value '
+      reason: 'drop ⊛ bonus ⊛ bonus does not reproduce fas at value '
         + `${fasMismatch.value} (expected ${(fasMismatch.expectedProbability * 100).toFixed(4)}%, `
         + `got ${(fasMismatch.actualProbability * 100).toFixed(4)}%)`,
     };
