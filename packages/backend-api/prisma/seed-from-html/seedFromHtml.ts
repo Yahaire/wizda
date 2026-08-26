@@ -4,13 +4,17 @@ import path from 'path';
 import { PrismaClient } from '@local-prisma/generated/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { SOURCE_LANGUAGE } from '@shared/domain/language';
-import { EQUIPMENT_RANKS } from '@shared/domain/rank';
+import { EQUIPMENT_RANKS, EquipmentRankKind } from '@shared/domain/rank';
 
+import { buildBlessingValueBonuses } from './blessingValueBonuses';
+import { assignValueGroups } from './blessingValueGroups.mapping';
+import { parseBlessingValueRates } from './blessingValueRates.parser';
+import { seedBlessingValueRates } from './blessingValueRates.seed';
 import { parseDropRatesByJunk } from './dropRatesByJunk.parser';
 import { seedDropRatesByJunk } from './dropRatesByJunk.seed';
 import { parseEquipmentBlessingDropRates } from './equipmentBlessingDropRate.parser';
 import { seedEquipmentBlessingDropRates } from './equipmentBlessingDropRate.seed';
-import { buildTaxonomyByName, hasTaxonomyDrift, TaxonomyDrift } from './equipmentTaxonomy.mapping';
+import { buildTaxonomyByName, TaxonomyDrift } from './equipmentTaxonomy.mapping';
 import { seedEquipmentTaxonomy } from './equipmentTaxonomy.seed';
 import { loadCsv } from './loadCsv';
 import { loadHtml } from './loadHtml';
@@ -42,16 +46,25 @@ const BLESSING_DROP_RATES_URI = process.env.OFFICIAL_BLESSING_DROP_RATES_URI;
 const WEAPON_TAXONOMY_SOURCE = process.env.WEAPON_TAXONOMY_SOURCE_URL;
 const ARMOR_TAXONOMY_SOURCE = process.env.ARMOR_TAXONOMY_SOURCE_URL;
 
+/** One named block of drifted values for {@link logActionRequired}. */
+interface ActionRequiredSection {
+  heading: string;
+  values: readonly string[];
+}
+
 /**
- * Print unmapped source values as a loud, delimited block. Deliberately the last
- * thing the seed writes: above it sit hundreds of `unmatchedNames` lines, and
- * this is the one section that needs a human. It is *not* a failure — the seed
- * completed and the site is up (a non-zero exit would make
- * `scripts/seed-with-maintenance.mjs` hold `.maintenance`, taking the whole site
- * down over a missing category label).
+ * Print every unmapped/unresolved value from every seed pass as ONE loud,
+ * delimited block. Deliberately the last thing the seed writes, and
+ * deliberately one block rather than several: above it sit hundreds of
+ * `unmatchedNames` lines, and the whole point of this section is that a human
+ * reads all of it in one place rather than catching part of it before the
+ * terminal scrolls past. It is *not* a failure — the seed completed and the
+ * site is up (a non-zero exit would make `scripts/seed-with-maintenance.mjs`
+ * hold `.maintenance`, taking the whole site down over a missing label).
  */
-function logTaxonomyDrift(drift: TaxonomyDrift): void {
-  if (!hasTaxonomyDrift(drift)) {
+function logActionRequired(sections: readonly ActionRequiredSection[]): void {
+  const nonEmpty = sections.filter((section) => section.values.length > 0);
+  if (nonEmpty.length === 0) {
     return;
   }
 
@@ -59,35 +72,38 @@ function logTaxonomyDrift(drift: TaxonomyDrift): void {
   const lines: string[] = [
     '',
     rule,
-    '[seed] ACTION REQUIRED — the taxonomy CSVs used values we do not map.',
+    '[seed] ACTION REQUIRED — some scraped values could not be mapped.',
     '[seed] The seed COMPLETED and the site is up. The items below were stored,',
     '[seed] just without the field we could not resolve.',
     '',
   ];
 
-  const section = (heading: string, values: readonly string[]): void => {
-    if (values.length === 0) {
-      return;
-    }
+  for (const { heading, values } of nonEmpty) {
     lines.push(`[seed]   ${heading}`);
     for (const value of values) {
       lines.push(`[seed]     - ${value}`);
     }
-  };
-
-  section('Unknown weapon Type (stored without a category):', drift.weaponTypes);
-  section('Unknown armor weight class (stored without a category):', drift.armorWeightClasses);
-  section('Unknown armor Type — a NEW GEAR SLOT, needs a Prisma migration:', drift.armorTypes);
-  section('Unknown Rank (each item KEPT its previous rank):', drift.ranks);
+  }
 
   lines.push(
     '',
-    '[seed] Fix: see "Adding a new equipment category" in docs/domain.md,',
-    '[seed] then re-run the seed so the affected items pick the new codes up.',
+    '[seed] Fix: for taxonomy drift see "Adding a new equipment category" in docs/domain.md;',
+    '[seed] for blessing-value drift see docs/domain.md and docs/milestone-blessings.md.',
+    '[seed] Then re-run the seed so the affected items pick the new codes/links up.',
     rule,
     '',
   );
   console.log(lines.join('\n'));
+}
+
+/** `TaxonomyDrift` -> its four `ActionRequiredSection`s. */
+function taxonomyDriftSections(drift: TaxonomyDrift): ActionRequiredSection[] {
+  return [
+    { heading: 'Unknown weapon Type (stored without a category):', values: drift.weaponTypes },
+    { heading: 'Unknown armor weight class (stored without a category):', values: drift.armorWeightClasses },
+    { heading: 'Unknown armor Type — a NEW GEAR SLOT, needs a Prisma migration:', values: drift.armorTypes },
+    { heading: 'Unknown Rank (each item KEPT its previous rank):', values: drift.ranks },
+  ];
 }
 
 async function main(): Promise<void> {
@@ -199,6 +215,37 @@ async function main(): Promise<void> {
       }
     }
 
+    // After the taxonomy pass: assignment needs rank + categoryCode, which the
+    // taxonomy pass just filled in. Reuses `blessingHtml` already loaded above —
+    // the value tables live on the same "alternations.html" page as the
+    // per-equipment blessing drop rates, nothing is fetched twice.
+    console.log('[seed] parsing additional-blessing value rates (what number a blessing lands on)...');
+    const equipmentForBlessingValues = (await prisma.equipment.findMany({
+      select: { id: true, name: true, rank: true, categoryCode: true },
+    })).map((item) => ({ ...item, rank: item.rank as EquipmentRankKind | null }));
+    const blessingValueEquipmentNames = new Set(equipmentForBlessingValues.map((item) => item.name));
+    const parsedValues = parseBlessingValueRates(blessingHtml, { equipmentNames: blessingValueEquipmentNames });
+    console.log(`[seed] parsed ${parsedValues.rows.length} blessing value row(s) across `
+      + `${parsedValues.sources.length} source(s) and ${parsedValues.groups.length} group(s).`);
+
+    const { bonuses, missingSources } = buildBlessingValueBonuses(parsedValues.rows);
+    const unverifiedBonuses = bonuses.filter((bonus) => !bonus.isVerified);
+    console.log(`[seed] derived ${bonuses.length} milestone bonus(es) `
+      + `(${unverifiedBonuses.length} unverified, ${missingSources.length} not derivable at all).`);
+
+    const { groupCodeById, drift: groupAssignmentDrift } =
+      assignValueGroups(parsedValues.groups, equipmentForBlessingValues);
+
+    const blessingValues = await seedBlessingValueRates(prisma, {
+      sources: parsedValues.sources,
+      groups: parsedValues.groups,
+      rows: parsedValues.rows,
+      bonuses,
+      groupCodeById,
+    });
+    console.log(`[seed] blessing values: stored ${blessingValues.rates} rate row(s) and `
+      + `${blessingValues.bonuses} bonus(es), linked ${blessingValues.equipmentAssigned} equipment to a value group.`);
+
     // Stamp the completion time as the final DB write, so a failed or partial
     // seed above never bumps it. Surfaced to players as "data last updated".
     const seededAt = new Date();
@@ -218,7 +265,32 @@ async function main(): Promise<void> {
     console.log(`[seed] done. Stamped data update time: ${seededAt.toISOString()}`);
 
     // Last, so it can't scroll away above the unmatched-name dump.
-    logTaxonomyDrift(drift);
+    logActionRequired([
+      ...taxonomyDriftSections(drift),
+      { heading: 'Unrecognised <h1> source heading in the value tables (stored under a derived code):',
+        values: parsedValues.drift.unknownSourceHeadings },
+      { heading: 'Unclassifiable <h2> value-group heading (rates stored, equipment left unlinked):',
+        values: parsedValues.drift.unclassifiedGroupHeadings },
+      { heading: 'Value-group heading token matching neither a category nor an equipment name:',
+        values: parsedValues.drift.unknownSelectorTokens },
+      { heading: 'Unrecognised blessing label in a value table (that one row skipped):',
+        values: parsedValues.drift.unknownBlessingLabels },
+      { heading: 'Equipment with a rank but no blessing-value group (a rank-range gap):',
+        values: groupAssignmentDrift.withoutGroup },
+      { heading: 'Equipment with no rank at all (no blessing-value group derivable):',
+        values: groupAssignmentDrift.withoutRank },
+      { heading: 'Named value-group token matching no equipment in the current catalog:',
+        values: groupAssignmentDrift.namedTokensUnmatched },
+      { heading: "Named value-group token whose matched equipment's rank sits outside the group's range:",
+        values: groupAssignmentDrift.namedOutsideRange },
+      { heading: '(group, quality, blessing) with no LFAS counterpart — bonus not derivable at all:',
+        values: missingSources.map(({ groupCode, quality, blessingCode }) => `${groupCode} / q${quality} / ${blessingCode}`) },
+      { heading: 'Blessing-value bonus that failed reconvolution verification (stored anyway, flagged unverified):',
+        values: unverifiedBonuses.map(
+          ({ groupCode, quality, blessingCode, verificationNote }) =>
+            `${groupCode} / q${quality} / ${blessingCode}: ${verificationNote}`,
+        ) },
+    ]);
   } finally {
     await prisma.$disconnect();
   }

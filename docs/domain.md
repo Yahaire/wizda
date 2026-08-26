@@ -214,8 +214,67 @@ full flat-and-% blessing here.
 
 This table says *which* blessing lands in a slot, never what number it carries.
 The per-value probabilities — and what an enhancement milestone does to them —
-are on the same source page in twelve tables this parser deliberately skips.
-See [`docs/milestone-blessings.md`](./milestone-blessings.md).
+are on the same source page, in twelve tables this parser deliberately skips
+(`blessingValueRates.parser.ts` reads those instead — see
+[`docs/milestone-blessings.md`](./milestone-blessings.md) for the model, and
+below for how it's stored).
+
+#### The blessing-value tables
+
+Four models, seeded by `blessingValueRates.seed.ts` and orchestrated from
+`seedFromHtml.ts` right after the equipment-taxonomy pass (assignment below
+needs `rank` + `categoryCode`, which that pass just filled in):
+
+- **`BlessingValueSource`** — one row per `<h1>` section (`DROP`, `LFAS`,
+  `FAS`). A table, not an enum, for the same reason `EquipmentCategory` is a
+  table: the devs have already added `<h1>` sections once (the two
+  Alteration-Stone ones), so a new source is a new row, never a migration.
+- **`BlessingValueGroup`** — one row per `<h2>` value group (`RANK_1_5`,
+  `RANK_6_NAMED`, `RANK_6_CATEGORY`, `RANK_6_FALLBACK` today). Also a table,
+  for the same reason: a new Silver banner piece can add a group without our
+  code changing. `selectorKind` (a genuinely closed vocabulary, so it *is* a
+  Prisma enum: `RANK_RANGE` / `NAMED` / `CATEGORY` / `FALLBACK` / `UNKNOWN`)
+  plus `selectorTokens` (category codes or equipment names, verbatim from the
+  heading) are exactly what `blessingValueGroups.mapping.ts` reads to assign
+  `Equipment.blessingValueGroupCode`.
+- **`BlessingValueRate`** — one row per (group, source, quality, blessing,
+  value): the cell of a value table. Long/normalized like
+  `EquipmentBlessingDropRate` — only nonzero rates are stored, a "-" in the
+  source is simply an absent row.
+- **`BlessingValueBonus`** — the derived **milestone bonus** for one (group,
+  quality, blessing), stored as a full distribution (`minValue` +
+  `probabilities`, the exact shape of `@shared/domain/enhancementMath`'s
+  `ValueDistribution`) rather than a min/max range. The bonus is uniform for
+  every group checked so far, but so was `lfas` until it wasn't (see
+  `docs/milestone-blessings.md`) — a min/max shape can't express a future
+  non-uniform bonus without a migration, a distribution can. `isVerified` +
+  `verificationNote` record whether reconvolving the bonus against `DROP`
+  reproduced `LFAS`/`FAS` cell-for-cell (`verifyBonus` in
+  `enhancementMath.ts`); a bonus **still stores** when verification fails —
+  the degradation ladder's stated behaviour, not a skip, so a case-2 answer
+  can carry a warning instead of silently losing its bonus.
+
+`Equipment.blessingValueGroupCode` links a piece to the group it rolls on —
+seed-computed and nullable, exactly like `categoryCode`. Null means one of two
+things: the piece has no `rank` yet (routine, same as an un-enriched
+`categoryCode`), or it has a rank but the parsed groups' rank ranges didn't
+cover it (a genuine gap — see `blessingValueGroups.mapping.ts`'s
+`withoutGroup` drift). Assignment order is NAMED, then CATEGORY, then
+RANK_RANGE, then FALLBACK — checking the named list before the category rule
+matters, since a piece can satisfy both (see `docs/milestone-blessings.md`,
+"The four value groups").
+
+**Drift reporting.** Every unresolved case from this pass — an unrecognised
+`<h1>`, an unclassifiable `<h2>`, a selector token matching neither a category
+nor an equipment name, equipment left without a group, a bonus that failed
+verification — is recorded rather than thrown (mirroring the equipment-
+taxonomy pass's "recorded, not thrown" contract below) and printed in the
+seed's single `ACTION REQUIRED` block (`logActionRequired` in
+`seedFromHtml.ts`, which now covers both this pass and the taxonomy one — one
+block, so a human reads all of it rather than catching part of it before the
+terminal scrolls past). None of it is a hard failure; the only case that is,
+per the parser's degradation ladder, is finding no `DROP` rows at all —
+nothing downstream is computable without the base drop values.
 
 ### Blessings don't stack (draws are without replacement)
 

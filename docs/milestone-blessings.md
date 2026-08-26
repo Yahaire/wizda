@@ -10,7 +10,7 @@ Read [`docs/domain.md`](./domain.md) first for the game model — rank, quality,
 
 **Basis.** Two sources, in this order. The **official drop-rate tables** at wizardry.info supply every number here, directly or by derivation. **Ten in-game observations** made on 2026-08-22 settled the one case those tables do not describe. Both were afterwards cross-checked against the Fasterthoughts community guide — see [Corroboration](#corroboration-2026-08-22).
 
-**Status.** The scraping and the derivation are implemented — the parser reads all 12 value tables and recovers the bonus, re-verifying it 380/380 on every run. The Enhancement Oracle itself is not built yet. One stated assumption remains, flagged in [The model](#the-model).
+**Status.** The scraping, derivation, and storage are implemented — the parser reads all 12 value tables, recovers the bonus, and re-verifies it 380/380 on every seed run (`blessingValueBonuses.ts`, persisted by `blessingValueRates.seed.ts` into the DB — see `docs/domain.md`'s "Blessing values live elsewhere" for the data model). The Enhancement Oracle's endpoint and UI are not built yet. One stated assumption remains, flagged in [The model](#the-model).
 
 ## The model
 
@@ -101,7 +101,7 @@ The bonus is recovered from the supports alone, then **proved** by reconvolving 
 | `drop ⊛ bonus` reproduces `lfas` | **380/380** |
 | `drop ⊛ bonus ⊛ bonus` reproduces `fas` | **380/380** |
 
-Two independent confirmations, zero failures, across all four value groups. The seed pass should keep this check and fail closed, the way `alignLocalizedNames.ts` does.
+Two independent confirmations, zero failures, across all four value groups. The seed pass keeps this check on every run and fails closed per-row (a bonus that doesn't reconvolve cleanly stores anyway, flagged `isVerified: false`, rather than being dropped or aborting the seed), the way `alignLocalizedNames.ts` does.
 
 **What this proves and what it does not.** It proves the distribution of *the term a Full Alteration Stone adds*, and that the full stone adds it twice where the lesser adds it once. Identifying that term with *the enhancement milestone bonus* rests on the game's own statement that a FAS re-applies milestone bonuses, plus the agreement noted under [Corroboration](#corroboration-2026-08-22). Strong, but an identification rather than a proof.
 

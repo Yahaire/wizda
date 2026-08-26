@@ -111,8 +111,10 @@ model Blessing {
   statKind  StatKind
   isPercent Boolean
 
-  stat      Stat                        @relation(fields: [statKind], references: [kind])
-  dropRates EquipmentBlessingDropRate[]
+  stat         Stat                        @relation(fields: [statKind], references: [kind])
+  dropRates    EquipmentBlessingDropRate[]
+  valueRates   BlessingValueRate[]
+  valueBonuses BlessingValueBonus[]
 
   @@unique([statKind, isPercent])
 }
@@ -195,11 +197,16 @@ model EquipmentRank {
 /// `rank`, `categoryCode`, `maxDropQuality` and `maxDropGrade` are enrichment,
 /// hence nullable: the core "how much junk?" calc doesn't require them.
 model Equipment {
-  id           String             @id @default(cuid())
-  name         String             @unique
-  rank         EquipmentRankKind?
+  id                     String             @id @default(cuid())
+  name                   String             @unique
+  rank                   EquipmentRankKind?
   /// FK to the item's category (e.g. "TWO_HANDED_AXE"); null until enriched.
-  categoryCode String?
+  categoryCode           String?
+  /// FK to the `BlessingValueGroup` this piece's blessing values roll on;
+  /// null until enriched (needs `rank`, and for Silver also `categoryCode`) or
+  /// if the piece's group couldn't be resolved — see docs/domain.md and
+  /// docs/milestone-blessings.md. Seed-computed, exactly like `categoryCode`.
+  blessingValueGroupCode String?
 
   /// Highest quality (★1–5) this equipment is known to drop at; null if unknown.
   /// Denormalised summary of the per-pool quality distributions.
@@ -231,11 +238,13 @@ model Equipment {
   /// and German are matched by the client normalizer as-is.
   nameJaReading String?
 
-  category      EquipmentCategory?          @relation(fields: [categoryCode], references: [code])
-  dropRates     EquipmentDropRate[]
-  blessingRates EquipmentBlessingDropRate[]
+  category           EquipmentCategory?          @relation(fields: [categoryCode], references: [code])
+  blessingValueGroup BlessingValueGroup?         @relation(fields: [blessingValueGroupCode], references: [code])
+  dropRates          EquipmentDropRate[]
+  blessingRates      EquipmentBlessingDropRate[]
 
   @@index([categoryCode])
+  @@index([blessingValueGroupCode])
 }
 
 /// A specific loot pool ("junk"), e.g. "Beginning Junk". Deduplicated by name.
@@ -350,6 +359,131 @@ model EquipmentBlessingDropRate {
 }
 
 // ---------------------------------------------------------------------------
+// Blessing *values* — what number a blessing lands on, as opposed to which
+// blessing lands (that's `EquipmentBlessingDropRate` above). Parsed from the
+// same `alternations.html` "Drop Rates Related to Additional Blessings" page
+// by `blessingValueRates.parser.ts`. See docs/milestone-blessings.md for the
+// model (value groups, sources, the derived milestone bonus) and docs/domain.md
+// for the data-model rationale.
+// ---------------------------------------------------------------------------
+
+/// How a `<h2>` value-group heading's parenthetical was classified. Ours, not
+/// the source's — a new member here means new parsing code, unlike
+/// `BlessingValueGroup`/`BlessingValueSource`, which mirror the source and can
+/// grow by data alone (source-controlled vocabularies are tables; ours are
+/// enums). Mirrors the TS enum of the same name in `blessingValueRates.models.ts`.
+enum BlessingValueSelectorKind {
+  /// No parenthetical — the group is defined by rank range alone (e.g. "Equipment Rank 1-5").
+  RANK_RANGE
+  /// The parenthetical lists specific equipment names verbatim.
+  NAMED
+  /// Every parenthetical token matches an `EquipmentCategory` name verbatim.
+  CATEGORY
+  /// The parenthetical reads "Excluding weapons listed above" or similar.
+  FALLBACK
+  /// The parenthetical didn't match any known shape — rates still store, unlinked.
+  UNKNOWN
+}
+
+/// One `<h1>` section of the value tables — "DROP", "LFAS", "FAS". A table, not
+/// an enum: the devs have already added `<h1>` sections once (the two
+/// Alteration-Stone ones), so a new source is a new row, never a migration.
+model BlessingValueSource {
+  /// Derived code, e.g. "DROP", "LFAS", "FAS".
+  code       String @id
+  /// Verbatim `<h1>` heading text.
+  label      String
+  orderIndex Int
+
+  rates BlessingValueRate[]
+}
+
+/// One `<h2>` value group beneath a source section, e.g. "Equipment Rank 1-5"
+/// or "Equipment Rank 6 (Librarian Rod, …)". A table for the same reason as
+/// `BlessingValueSource`: the devs can add a group (a new Silver banner piece)
+/// without our code changing. `selectorKind`/`selectorTokens` are exactly what
+/// `blessingValueGroups.mapping.ts` reads to assign `Equipment.blessingValueGroupCode`.
+model BlessingValueGroup {
+  /// Derived code, e.g. "RANK_1_5", "RANK_6_NAMED".
+  code           String                    @id
+  /// Verbatim `<h2>` heading text. English, kept for provenance only — never
+  /// shown to players (see docs/milestone-blessings.md, "value groups: internal
+  /// or player-facing?").
+  label          String
+  orderIndex     Int
+  /// `EquipmentRankInfo.orderIndex` lower bound this group covers (1-6).
+  rankOrderMin   Int
+  /// `EquipmentRankInfo.orderIndex` upper bound this group covers (1-6).
+  rankOrderMax   Int
+  selectorKind   BlessingValueSelectorKind
+  /// Category codes (selectorKind = CATEGORY) or equipment names (selectorKind
+  /// = NAMED); empty otherwise.
+  selectorTokens String[]
+
+  rates     BlessingValueRate[]
+  bonuses   BlessingValueBonus[]
+  equipment Equipment[]
+}
+
+/// One cell of a value table: the probability a blessing lands on a given
+/// value, for one (group, source, quality, blessing). Long/normalized like
+/// `EquipmentBlessingDropRate` — only nonzero rates are stored (a "-" in the
+/// source is simply an absent row). Rebuilt from scratch on every scrape
+/// (TRUNCATE + reinsert), so it has no natural key beyond the full tuple.
+model BlessingValueRate {
+  id           String @id @default(cuid())
+  groupCode    String
+  sourceCode   String
+  /// 1-5.
+  quality      Int
+  blessingCode String
+  /// The number the blessing lands on.
+  value        Int
+  /// P(value | group, source, quality, blessing). Always > 0.
+  rate         Float
+
+  group    BlessingValueGroup  @relation(fields: [groupCode], references: [code])
+  source   BlessingValueSource @relation(fields: [sourceCode], references: [code])
+  blessing Blessing            @relation(fields: [blessingCode], references: [code])
+
+  @@unique([groupCode, sourceCode, quality, blessingCode, value])
+  @@index([blessingCode])
+}
+
+/// The **milestone bonus** for one (group, quality, blessing): not published by
+/// the source, but derivable from the `DROP`/`LFAS`/`FAS` rates it does publish
+/// (`lfas = drop ⊛ bonus`, `fas = drop ⊛ bonus ⊛ bonus`) and proved by
+/// reconvolving against `FAS` — see docs/milestone-blessings.md, "Deriving the
+/// bonus". Stored as a full distribution (`minValue` + `probabilities`, the
+/// exact shape of shared's `ValueDistribution`) rather than a min/max range:
+/// the bonus is uniform for every group checked so far, but that was also true
+/// of `lfas` until it wasn't, and a min/max shape can't express a future
+/// non-uniform bonus without a migration. `probabilities[i]` is
+/// P(minValue + i); `maxValue` is derived as `minValue + probabilities.length - 1`.
+model BlessingValueBonus {
+  id               String  @id @default(cuid())
+  groupCode        String
+  /// 1-5.
+  quality          Int
+  blessingCode     String
+  minValue         Int
+  probabilities    Float[]
+  /// Whether reconvolving this bonus against `DROP` reproduced `LFAS` and
+  /// `FAS` cell-for-cell (see `verifyBonus` in `enhancementMath.ts`). A bonus
+  /// still stores when this is false — the degradation ladder's stated
+  /// behaviour, not a skip — so a case-2 answer can carry a warning instead of
+  /// silently going missing.
+  isVerified       Boolean
+  /// `verifyBonus`'s failure reason when `isVerified` is false; null otherwise.
+  verificationNote String?
+
+  group    BlessingValueGroup @relation(fields: [groupCode], references: [code])
+  blessing Blessing           @relation(fields: [blessingCode], references: [code])
+
+  @@unique([groupCode, quality, blessingCode])
+}
+
+// ---------------------------------------------------------------------------
 // Popularity tracking (our own, not Umami) — see docs/analytics.md.
 //
 // Umami's `guarantee_query` event (packages/backend-api/src/analytics.ts)
@@ -380,7 +514,7 @@ model PopularJunkOracleQuery {
 /// level) — never an internal equipment id, which regenerates on every
 /// reseed.
 model PopularJunkOracleQueryTerm {
-  id      String                 @id @default(cuid())
+  id      String @id @default(cuid())
   queryId String
   /// "equipment" | "blessing" | "rank" | "category" | "quality" | "grade".
   kind    String
