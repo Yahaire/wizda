@@ -1,9 +1,10 @@
 # Wizda architecture
 
 How the code is layered and why. For the *game/data* model see
-[`docs/domain.md`](./domain.md); for the *probability formula* see
-[`docs/calculation.md`](./calculation.md). This doc is about **where work
-happens** — which layer does what, and the principles behind that split.
+[`docs/domain.md`](./domain.md); for the *probability formulas* see
+[`docs/calculation.md`](./calculation.md), which indexes one derivation per tool.
+This doc is about **where work happens** — which layer does what, and the
+principles behind that split.
 
 ## The three layers
 
@@ -46,7 +47,7 @@ step 3 folds a per-equipment "presence" factor into the grade term
 (`blessingPresenceByGrade`). It's still read-then-compute — one extra indexed
 read, all the probability logic stays in the pure module — and because the
 blessing joint is a modelling estimate, the response is flagged `estimated`
-(see [`docs/calculation.md`](./calculation.md)).
+(see [`docs/calculation/junk.md`](./calculation/junk.md)).
 
 ### Why this split
 
@@ -54,7 +55,7 @@ blessing joint is a modelling estimate, the response is flagged `estimated`
   Monte-Carlo cross-check) run instantly with hand-made numbers — no Postgres,
   no Docker. If the math lived inside a SQL query or an Express handler, it
   couldn't be exercised that cheaply. The tests are the module's contract: green
-  tests mean it does what [`docs/calculation.md`](./calculation.md) says.
+  tests mean it does what [`docs/calculation/junk.md`](./calculation/junk.md) says.
 - **Reusable.** Living in `shared`, the same functions could recompute values in
   the web-client if we ever wanted to (e.g. a live-updating slider) without
   duplicating the logic.
@@ -80,7 +81,9 @@ math module thinks.**
 | Concern | Location |
 |---------|----------|
 | Domain reference data (stats, blessings, gear) | `packages/shared/src/domain/` |
-| Drop-rate math (the formula) | `packages/shared/src/domain/dropRateMath.ts` |
+| Junk Oracle math (see [`calculation/junk.md`](./calculation/junk.md)) | `packages/shared/src/domain/dropRateMath.ts` |
+| Enhancement Oracle math (see [`calculation/enhancement.md`](./calculation/enhancement.md)) | `packages/shared/src/domain/enhancementMath.ts` |
+| Blessing-slot chain, shared by both | `packages/shared/src/domain/blessingSlots.ts` |
 | Request/response models (API contract) | `packages/shared/src/api/` |
 | DB schema | `packages/backend-api/prisma/schema.prisma` |
 | Scraper / seed (writes to DB) | `packages/backend-api/prisma/seed-from-html/` |

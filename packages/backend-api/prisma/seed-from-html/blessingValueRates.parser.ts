@@ -1,5 +1,8 @@
 import * as cheerio from 'cheerio';
 
+import {
+    BLESSING_VALUE_SOURCE_CODES, BlessingValueSourceRole
+} from '@shared/domain/blessingValueSources';
 import { BLESSINGS } from '@shared/domain/stats';
 
 import { parseBlessingLabel } from './blessingLabels';
@@ -21,11 +24,24 @@ const EXPECTED_ROWS_PER_TABLE = QUALITY_LEVEL_COUNT * BLESSINGS.length;
  * Matches each `<h1>` to our source code. Order matters: "Lesser Full
  * Alteration" must be checked before the broader "Full Alteration", which it
  * would otherwise also match.
+ *
+ * The codes come from `BLESSING_VALUE_SOURCE_CODES` rather than being spelled
+ * out here, because the API resolves the stored codes back to the same roles —
+ * see that module for why a scrape-derived code must not be duplicated.
  */
 const SOURCE_CODE_PATTERNS: readonly { pattern: RegExp, code: string }[] = [
-  { pattern: /Lesser Full Alteration/i, code: 'LFAS' },
-  { pattern: /Full Alteration/i, code: 'FAS' },
-  { pattern: /Value Drop Rates by Equipment Rank/i, code: 'DROP' },
+  {
+    pattern: /Lesser Full Alteration/i,
+    code: BLESSING_VALUE_SOURCE_CODES[BlessingValueSourceRole.LESSER_FAS],
+  },
+  {
+    pattern: /Full Alteration/i,
+    code: BLESSING_VALUE_SOURCE_CODES[BlessingValueSourceRole.FAS],
+  },
+  {
+    pattern: /Value Drop Rates by Equipment Rank/i,
+    code: BLESSING_VALUE_SOURCE_CODES[BlessingValueSourceRole.DROP],
+  },
 ];
 
 function resolveSourceCode(headingText: string): { code: string, matched: boolean } {
@@ -309,10 +325,11 @@ export function parseBlessingValueRates(
     unknownBlessingLabels.push(...tableUnknownLabels);
   }
 
-  if (!rows.some((row) => row.sourceCode === 'DROP')) {
+  const dropCode = BLESSING_VALUE_SOURCE_CODES[BlessingValueSourceRole.DROP];
+  if (!rows.some((row) => row.sourceCode === dropCode)) {
     throw new Error(
-      'Found no rows under "Additional Blessing Value Drop Rates by Equipment Rank" (source DROP) — '
-      + 'nothing is computable without the base drop values.',
+      'Found no rows under "Additional Blessing Value Drop Rates by Equipment Rank" '
+      + `(source ${dropCode}) — nothing is computable without the base drop values.`,
     );
   }
 

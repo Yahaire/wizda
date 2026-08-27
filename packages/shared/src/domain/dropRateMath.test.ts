@@ -375,7 +375,7 @@ describe('matchProbabilityForJunk with gradePresence', () => {
 // match the frequency of the sequential without-replacement process it models.
 // (This proves we compute the MODEL correctly; whether the game rerolls a single
 // slot on a collision, as we assume, or restarts the whole piece, is the
-// documented, response-flagged assumption. See `docs/calculation.md`.)
+// documented, response-flagged assumption. See `docs/calculation/junk.md`.)
 // ---------------------------------------------------------------------------
 
 describe('blessing Monte-Carlo cross-check', () => {

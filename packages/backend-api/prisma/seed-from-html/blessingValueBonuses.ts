@@ -1,3 +1,6 @@
+import {
+    BLESSING_VALUE_SOURCE_CODES, BlessingValueSourceRole
+} from '@shared/domain/blessingValueSources';
 import { deriveBonus, ValueDistribution, verifyBonus } from '@shared/domain/enhancementMath';
 
 import { ParsedValueRow } from './blessingValueRates.models';
@@ -94,12 +97,17 @@ export function buildBlessingValueBonuses(rows: readonly ParsedValueRow[]): Buil
 
   for (const [key, drop] of distributions) {
     const [groupCode, sourceCode, qualityText, blessingCode] = key.split(KEY_SEPARATOR) as [string, string, string, string];
-    if (sourceCode !== 'DROP') {
+    if (sourceCode !== BLESSING_VALUE_SOURCE_CODES[BlessingValueSourceRole.DROP]) {
       continue;
     }
     const quality = Number(qualityText);
 
-    const lesserFas = distributions.get(distributionKey(groupCode, 'LFAS', quality, blessingCode));
+    const lesserFas = distributions.get(distributionKey(
+      groupCode,
+      BLESSING_VALUE_SOURCE_CODES[BlessingValueSourceRole.LESSER_FAS],
+      quality,
+      blessingCode,
+    ));
     if (!lesserFas) {
       missingSources.push({ groupCode, quality, blessingCode });
       continue;
@@ -119,7 +127,12 @@ export function buildBlessingValueBonuses(rows: readonly ParsedValueRow[]): Buil
       continue;
     }
 
-    const fas = distributions.get(distributionKey(groupCode, 'FAS', quality, blessingCode));
+    const fas = distributions.get(distributionKey(
+      groupCode,
+      BLESSING_VALUE_SOURCE_CODES[BlessingValueSourceRole.FAS],
+      quality,
+      blessingCode,
+    ));
     const verification = fas
       ? verifyBonus(drop, lesserFas, fas, bonus)
       : { isVerified: false as const, reason: 'no matching FAS distribution to verify against' };

@@ -2,7 +2,7 @@
  * Request/response contract for the "how much junk to guarantee item X?"
  * endpoints. Pure types shared by the backend (which produces them) and the
  * web-client (which consumes them). The math behind the numbers is in
- * `packages/shared/src/domain/dropRateMath.ts`; see `docs/calculation.md`.
+ * `packages/shared/src/domain/dropRateMath.ts`; see `docs/calculation/junk.md`.
  */
 
 import { EquipmentRankKind } from '../../domain/rank';
@@ -49,7 +49,7 @@ export interface GuaranteeFilters {
    * slots to hold it. The odds are exact arithmetic on the published per-slot
    * rates, resting on one documented assumption about an unpublished mechanic —
    * responses to blessing queries set {@link JunkToGuaranteeResult.estimated}.
-   * See `docs/calculation.md`. Omitted/empty = no blessing requirement.
+   * See `docs/calculation/junk.md`. Omitted/empty = no blessing requirement.
    */
   blessings?: string[],
   /**

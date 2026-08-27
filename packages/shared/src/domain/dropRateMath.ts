@@ -3,12 +3,17 @@
  * guarantee item X?" calculation.
  *
  * Derivation, rationale, and the blessing extension are documented in
- * `docs/calculation.md`. Keep this module free of DB/HTTP concerns so it stays
+ * `docs/calculation/junk.md`. Keep this module free of DB/HTTP concerns so it stays
  * trivially unit-testable (see `dropRateMath.test.ts`).
  */
 
+import { forEachSlotAssignment } from './blessingSlots';
+
 /** Number of quality (★) levels and grade levels; both are 1–5. */
 export const RATE_LEVEL_COUNT = 5;
+
+/** No slot identity is known up front here — see {@link jointBlessingPresence}. */
+const NOTHING_PINNED: readonly null[] = [];
 
 /**
  * One drop-table row's per-equipment distributions, as fractions in [0, 1].
@@ -30,7 +35,7 @@ export interface DropRateRow {
    * {@link blessingPresenceByGrade}. It rides on the row because it's a property
    * of the row's *equipment* (blessing odds are junk-independent). Absent means
    * "no blessing filter" and is treated as all-ones (no effect on the grade
-   * factor). See `docs/calculation.md`.
+   * factor). See `docs/calculation/junk.md`.
    */
   gradePresence?: readonly number[],
 }
@@ -74,7 +79,7 @@ function selectedRateMass(
  * query's required blessings are all present at that grade (from
  * {@link blessingPresenceByGrade}). With no blessing filter (`gradePresence`
  * absent) every scale is 1, so this reduces exactly to
- * `selectedRateMass(gradeRates, acceptedGrades)`. See `docs/calculation.md`.
+ * `selectedRateMass(gradeRates, acceptedGrades)`. See `docs/calculation/junk.md`.
  */
 function gradeFactorForRow(
   row: DropRateRow,
@@ -96,7 +101,7 @@ function gradeFactorForRow(
 
 /**
  * P(all `required` blessings present | grade), for each grade 1..5 at indices
- * 0..4 — the blessing extension of the grade factor (`docs/calculation.md`).
+ * 0..4 — the blessing extension of the grade factor (`docs/calculation/junk.md`).
  *
  * A grade-`g` piece has `m = g − 1` active slots, rolled in order top-to-bottom
  * (slot 1 first), so it uses `slotRates[0..m-1]`. `slotRates[s]` maps each
@@ -113,7 +118,7 @@ function gradeFactorForRow(
  *
  * The chain already sums to 1 over the valid assignments, so — unlike a model
  * that rerolls the *whole* piece on a collision — there is no global normaliser
- * to divide out. See `docs/calculation.md` for why we model it this way, and for
+ * to divide out. See `docs/calculation/junk.md` for why we model it this way, and for
  * the one assumption it rests on.
  *
  * Edge cases: `required` empty ⇒ 1 at every grade (so the grade factor collapses
@@ -140,6 +145,12 @@ export function blessingPresenceByGrade(
  * Core of {@link blessingPresenceByGrade} for a fixed active-slot count: the
  * sequential without-replacement chain over the given slots, summed over the
  * assignments covering `required`. See that function's doc.
+ *
+ * The chain itself lives in `blessingSlots.ts` — the Enhancement Oracle walks
+ * the same slots to ask which blessing a milestone will drop into an empty one.
+ * Nothing is pinned here (the Junk Oracle knows no identities up front), and
+ * `required` is passed as the pruning set, so only covering assignments are
+ * visited and the sum below is exactly the presence probability.
  */
 function jointBlessingPresence(
   slots: readonly ReadonlyMap<string, number>[],
@@ -153,48 +164,9 @@ function jointBlessingPresence(
   }
 
   let total = 0;
-  const taken = new Set<string>();
-
-  const walk = (slotIndex: number, chained: number, stillNeeded: number): void => {
-    if (stillNeeded > slots.length - slotIndex) {
-      return; // too few slots left to fit what's still required
-    }
-    if (slotIndex === slots.length) {
-      total += chained; // stillNeeded is 0 here, or the guard above returned
-      return;
-    }
-    const slotRates = slots[slotIndex];
-    if (!slotRates) {
-      return; // an empty slot admits no assignment → this path contributes 0
-    }
-
-    // What this slot can still roll: its published row minus the blessings
-    // earlier slots took. Sum the survivors rather than subtracting the taken
-    // ones from 1 — the published rows only sum to 100% up to their rounding.
-    let available = 0;
-    for (const [blessing, rate] of slotRates) {
-      if (rate > 0 && !taken.has(blessing)) {
-        available += rate;
-      }
-    }
-    if (available <= 0) {
-      return; // nothing left for this slot to roll
-    }
-
-    for (const [blessing, rate] of slotRates) {
-      if (rate <= 0 || taken.has(blessing)) {
-        continue;
-      }
-      taken.add(blessing);
-      walk(
-        slotIndex + 1,
-        (chained * rate) / available,
-        stillNeeded - (required.has(blessing) ? 1 : 0),
-      );
-      taken.delete(blessing);
-    }
-  };
-  walk(0, 1, required.size);
+  forEachSlotAssignment(slots, NOTHING_PINNED, required, (_assignment, probability) => {
+    total += probability;
+  });
 
   return total;
 }
@@ -206,7 +178,7 @@ function jointBlessingPresence(
  * (already equipment-filtered) rows, where `gradeFactor` is the accepted-grade
  * mass optionally coupled to required blessings via `row.gradePresence` (see
  * {@link gradeFactorForRow}). Rows are mutually exclusive, so the sum needs no
- * inclusion–exclusion correction — see `docs/calculation.md`.
+ * inclusion–exclusion correction — see `docs/calculation/junk.md`.
  */
 export function matchProbabilityForJunk(
   rows: readonly DropRateRow[],

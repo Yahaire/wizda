@@ -4,7 +4,7 @@
  * Grade is shown in-game as a color (White…Red) and dictates how many blessing
  * slots are active. NOTE the off-by-one: the grade *number* is 1–5, but the
  * number of active blessing slots is number − 1 (White 0 … Red 4). See
- * docs/domain.md and docs/calculation.md.
+ * docs/domain.md and docs/calculation/junk.md.
  *
  * Grade is stored in the DB as per-grade probability columns (grade1Rate…), not
  * as an enum, so there's no Prisma mirror — this is a display/reference catalog

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { MAX_BLESSING_SLOTS } from './blessingSlots';
 import {
-    composeSlotValue, convolve, deriveBonus, isUniform, normalizeDistribution, uniformDistribution,
-    ValueDistribution, valueRange, verifyBonus
+    composeSlotValue, convolve, deriveBonus, enhancementOdds, EnhancementOddsInput,
+    EnhancementOddsResult, EnhancementSlotInput, isUniform, normalizeDistribution, pointMass,
+    probabilityAtLeast, uniformDistribution, ValueDistribution, valueRange, verifyBonus
 } from './enhancementMath';
 import { getStoneValueRange } from './stoneValues';
 
@@ -383,5 +385,289 @@ describe('valueRange', () => {
 
   it('handles a single-point distribution', () => {
     expect(valueRange({ minValue: 4, probabilities: [1] })).toEqual({ minValue: 4, maxValue: 4 });
+  });
+});
+
+describe('pointMass', () => {
+  it('is a distribution with all its weight on one value', () => {
+    expect(pointMass(12)).toEqual({ minValue: 12, probabilities: [1] });
+    expect(valueRange(pointMass(12))).toEqual({ minValue: 12, maxValue: 12 });
+  });
+});
+
+describe('probabilityAtLeast', () => {
+  it('sums the tail at and above the threshold', () => {
+    // 3-10 is eight values; 8, 9 and 10 clear a threshold of 8.
+    expect(probabilityAtLeast(uniformDistribution(3, 10), 8)).toBeCloseTo(3 / 8, 12);
+  });
+
+  it('is 1 below the support and 0 above it', () => {
+    expect(probabilityAtLeast(uniformDistribution(3, 10), 3)).toBeCloseTo(1, 12);
+    expect(probabilityAtLeast(uniformDistribution(3, 10), 11)).toBe(0);
+  });
+
+  it('normalises first, so unnormalised weights still give a probability', () => {
+    expect(probabilityAtLeast({ minValue: 1, probabilities: [2, 2] }, 2)).toBeCloseTo(0.5, 12);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enhancementOdds
+//
+// A deliberately small catalogue — five blessings, equal per-slot rates — so
+// every expected number below is a fraction that can be checked by hand rather
+// than by re-running the implementation. Value bands are the real published
+// ones for RANK_1_5 quality 4 (docs/milestone-blessings.md).
+// ---------------------------------------------------------------------------
+
+const CATALOG = ['ATK', 'DEF', 'MAG', 'ACC', 'SUR'];
+
+/** Every slot rolls the whole catalogue at equal odds. */
+const EQUAL_SLOT_RATES: readonly ReadonlyMap<string, number>[] = Array.from(
+  { length: MAX_BLESSING_SLOTS },
+  () => new Map(CATALOG.map((code) => [code, 1 / CATALOG.length])),
+);
+
+/** RANK_1_5, quality 4: flat blessings drop at 8-10, SUR at 4-5. */
+const DROP_BY_BLESSING = new Map<string, ValueDistribution>([
+  ['ATK', uniformDistribution(8, 10)],
+  ['DEF', uniformDistribution(8, 10)],
+  ['MAG', uniformDistribution(8, 10)],
+  ['ACC', uniformDistribution(8, 10)],
+  ['SUR', uniformDistribution(4, 5)],
+]);
+
+/** RANK_1_5, quality 4: the derived milestone bonus — flat 3-10, SUR 1-3. */
+const BONUS_BY_BLESSING = new Map<string, ValueDistribution>([
+  ['ATK', uniformDistribution(3, 10)],
+  ['DEF', uniformDistribution(3, 10)],
+  ['MAG', uniformDistribution(3, 10)],
+  ['ACC', uniformDistribution(3, 10)],
+  ['SUR', uniformDistribution(1, 3)],
+]);
+
+/** A slot holding `blessingCode` at `value`, or an empty one when both are null. */
+function slotState(
+  slot: number,
+  blessingCode: string | null,
+  value: number | null,
+  planRefineStoneQuality: number | null = null,
+): EnhancementSlotInput {
+  return { slot, blessingCode, value, planRefineStoneQuality };
+}
+
+/** The four slots of a piece whose occupied prefix is `occupied`. */
+function piece(occupied: readonly (readonly [string, number])[]): EnhancementSlotInput[] {
+  return Array.from({ length: MAX_BLESSING_SLOTS }, (_unused, index) => {
+    const held = occupied[index];
+    return held ? slotState(index + 1, held[0], held[1]) : slotState(index + 1, null, null);
+  });
+}
+
+function oddsFor(overrides: Partial<EnhancementOddsInput>): EnhancementOddsResult {
+  return enhancementOdds({
+    enhancementLevel: 0,
+    targetEnhancementLevel: 20,
+    slots: piece([]),
+    targets: [],
+    alteredSlot: null,
+    alteredFrom: null,
+    slotBlessingRates: EQUAL_SLOT_RATES,
+    dropByBlessing: DROP_BY_BLESSING,
+    bonusByBlessing: BONUS_BY_BLESSING,
+    ...overrides,
+  });
+}
+
+describe('enhancementOdds', () => {
+  it("reproduces docs/milestone-blessings.md's worked example exactly", () => {
+    // A 4* RANK_1_5 piece at +0 with flat ATK at 8 on slot 1, wanting ATK >= 16.
+    // Slot 1's +5 milestone adds a bonus uniform over 3-10, so reaching 16 needs
+    // 8, 9 or 10 -> 3/8. The three empty slots cannot perturb it: ATK is already
+    // on the piece, and the draw chain never repeats a blessing.
+    const result = oddsFor({
+      slots: piece([['ATK', 8]]),
+      targets: [{ blessingCode: 'ATK', minValue: 16 }],
+    });
+
+    expect(result.probability).toBeCloseTo(0.375, 12);
+    expect(result.remainingMilestones).toEqual([5, 10, 15, 20]);
+  });
+
+  it('gives an occupied slot with its milestone still ahead the bonus, and one past it nothing', () => {
+    const stillToCome = oddsFor({ slots: piece([['ATK', 8]]), enhancementLevel: 0 });
+    const alreadyDone = oddsFor({ slots: piece([['ATK', 8]]), enhancementLevel: 5 });
+
+    // 8 + Uniform(3, 10) = 11-18, versus a value that is already final.
+    expect(valueRange(stillToCome.slots[0]?.valueDistribution ?? pointMass(0)))
+      .toEqual({ minValue: 11, maxValue: 18 });
+    expect(stillToCome.slots[0]?.isFinal).toBe(false);
+
+    expect(valueRange(alreadyDone.slots[0]?.valueDistribution ?? pointMass(0)))
+      .toEqual({ minValue: 8, maxValue: 8 });
+    expect(alreadyDone.slots[0]?.isFinal).toBe(true);
+  });
+
+  it('fills an empty slot from the plain drop band with no bonus on top', () => {
+    const result = oddsFor({ targets: [{ blessingCode: 'DEF', minValue: null }] });
+
+    // A White piece at +0: every slot is filled by a milestone, and a filled
+    // slot collects an initial roll and nothing more (docs/milestone-blessings.md).
+    const candidate = result.slots[0]?.candidates?.find((entry) => entry.blessingCode === 'DEF');
+    expect(valueRange(candidate?.valueDistribution ?? pointMass(0)))
+      .toEqual({ minValue: 8, maxValue: 10 });
+  });
+
+  it('draws the empty slots without replacement across the whole piece', () => {
+    // Four slots drawn from five equally-likely blessings: exactly one blessing
+    // is left out, so any given one appears with probability 4/5.
+    const result = oddsFor({ targets: [{ blessingCode: 'DEF', minValue: null }] });
+
+    expect(result.probability).toBeCloseTo(4 / 5, 12);
+  });
+
+  it('renormalises a filled slot to exclude what the piece already carries', () => {
+    // Slot 1 holds ATK, so slots 2-4 share the other four blessings between
+    // them: three of the four appear, and each does so with probability 3/4.
+    const result = oddsFor({
+      slots: piece([['ATK', 8]]),
+      targets: [{ blessingCode: 'DEF', minValue: null }],
+    });
+
+    expect(result.probability).toBeCloseTo(3 / 4, 12);
+  });
+
+  it('cannot reach a blessing already fixed below its target, since no other slot can roll it', () => {
+    // ATK is final at 8 and the no-stack rule keeps it out of every other slot,
+    // so wanting ATK >= 16 on this piece is flatly impossible.
+    const result = oddsFor({
+      slots: piece([['ATK', 8]]),
+      enhancementLevel: 5,
+      targets: [{ blessingCode: 'ATK', minValue: 16 }],
+    });
+
+    expect(result.probability).toBe(0);
+  });
+
+  it('stops at targetEnhancementLevel, leaving the later slots untouched', () => {
+    const result = oddsFor({ targetEnhancementLevel: 10 });
+
+    expect(result.remainingMilestones).toEqual([5, 10]);
+    expect(result.slots[1]?.candidates).not.toBeNull();
+    // Slots 3 and 4 are never reached, so they stay empty and final.
+    expect(result.slots[2]?.candidates).toBeNull();
+    expect(result.slots[2]?.isFinal).toBe(true);
+    expect(result.slots[3]?.blessingCode).toBeNull();
+  });
+
+  it('reports which blessings it lacked data for instead of quietly scoring them zero', () => {
+    const result = oddsFor({
+      slots: piece([['ATK', 8]]),
+      bonusByBlessing: new Map(),
+      targets: [{ blessingCode: 'ATK', minValue: 16 }],
+    });
+
+    expect(result.missingBlessingData).toContain('ATK');
+  });
+
+  // -------------------------------------------------------------------------
+  // Alteration. The identity chain runs on what each slot ORIGINALLY rolled, so
+  // an altered slot can be duplicated by a later milestone — see finding 2 in
+  // the milestone plan and docs/milestone-blessings.md.
+  // -------------------------------------------------------------------------
+
+  describe('an altered slot', () => {
+    /** Blue at drop (slots 1-2), at +10, wanting two ATK — one good, one anything. */
+    const twoAtk = [
+      { blessingCode: 'ATK', minValue: 12 },
+      { blessingCode: 'ATK', minValue: 8 },
+    ];
+    const blueAtPlusTen = {
+      slots: piece([['ATK', 12], ['SUR', 6]]),
+      enhancementLevel: 10,
+      targets: twoAtk,
+    };
+
+    it('lets a later milestone roll the blessing the stone put there', () => {
+      // Slot 1 was ACC at drop and was altered to ATK, so the chain still avoids
+      // ACC rather than ATK: slots 3 and 4 share {ATK, DEF, MAG}, and two slots
+      // out of three carry ATK with probability 2/3.
+      const result = oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: 'ACC' });
+
+      expect(result.probability).toBeCloseTo(2 / 3, 12);
+    });
+
+    it('is what separates a possible second ATK from an impossible one', () => {
+      // The very same piece, not declared as altered: the chain then treats slot
+      // 1's ATK as its original roll, no other slot can repeat it, and a second
+      // ATK becomes flatly impossible. This pair is the regression test — if the
+      // exclusion set is ever "simplified" back to the displayed blessings, the
+      // number above silently collapses to this one.
+      const result = oddsFor(blueAtPlusTen);
+
+      expect(result.probability).toBe(0);
+    });
+
+    it('averages over what the slot might have been when the player cannot say', () => {
+      const marginalised = oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: null });
+
+      // Slot 2 is pinned to SUR, so the original of slot 1 is uniform over the
+      // four remaining blessings — and the answer must be their plain mean.
+      const perOrigin = CATALOG
+        .filter((code) => code !== 'SUR')
+        .map((code) => oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: code }).probability);
+      const mean = perOrigin.reduce((sum, value) => sum + value, 0) / perOrigin.length;
+
+      expect(marginalised.probability).toBeCloseTo(mean, 12);
+      // An original of ATK makes a second ATK impossible; the other three give
+      // 2/3 each, so the average lands exactly on a half.
+      expect(marginalised.probability).toBeCloseTo(0.5, 12);
+    });
+
+    it('needs two distinct slots for two targets on one blessing, not one counted twice', () => {
+      // Slot 1's ATK is 12, which clears both thresholds on its own — but two
+      // targets still need two slots, so this is not a certainty.
+      const result = oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: 'ACC' });
+
+      expect(result.probability).toBeLessThan(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Planned refinement — the one action v1 lets a player try out.
+  // -------------------------------------------------------------------------
+
+  describe('a planned refinement', () => {
+    it('convolves the stone band onto a slot that has finished enhancing', () => {
+      const result = oddsFor({
+        slots: [
+          slotState(1, 'ATK', 12, 3), // a *3 stone: flat blessings gain 3-5
+          slotState(2, null, null),
+          slotState(3, null, null),
+          slotState(4, null, null),
+        ],
+        enhancementLevel: 5,
+      });
+
+      expect(valueRange(result.slots[0]?.valueDistribution ?? pointMass(0)))
+        .toEqual({ minValue: 15, maxValue: 17 });
+      expect(result.slots[0]?.isFinal).toBe(false); // a stone is still to be spent
+    });
+
+    it('stacks with a milestone bonus that has yet to land', () => {
+      const result = oddsFor({
+        slots: [
+          slotState(1, 'ATK', 12, 3),
+          slotState(2, null, null),
+          slotState(3, null, null),
+          slotState(4, null, null),
+        ],
+        enhancementLevel: 0,
+      });
+
+      // 12 + bonus 3-10 + stone 3-5 = 18-27.
+      expect(valueRange(result.slots[0]?.valueDistribution ?? pointMass(0)))
+        .toEqual({ minValue: 18, maxValue: 27 });
+    });
   });
 });

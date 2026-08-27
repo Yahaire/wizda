@@ -20,6 +20,19 @@ export enum ErrorCode {
   UNKNOWN_CATEGORY = 'UNKNOWN_CATEGORY',
   /** One or more requested rank kinds don't exist */
   UNKNOWN_RANK = 'UNKNOWN_RANK',
+  /**
+   * The described piece isn't one the game can produce — a gap between filled
+   * blessing slots, a slot left empty past its own milestone, or a grade at drop
+   * that disagrees with how many slots hold a blessing. See
+   * `checkBlessingSlotState` in `@shared/domain/blessingSlots`.
+   */
+  INVALID_SLOT_STATE = 'INVALID_SLOT_STATE',
+  /**
+   * A refinement was planned for a slot that already carries one. A new stone
+   * replaces the old, so answering needs the existing refinement subtracted out
+   * first — not yet supported (see docs/calculation/enhancement.md).
+   */
+  ALREADY_REFINED = 'ALREADY_REFINED',
   /** An unexpected server-side error */
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }

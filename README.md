@@ -100,7 +100,7 @@ Unit tests run with [vitest](https://vitest.dev/). Run the whole suite from the
 
 Tests live next to the code they cover — e.g. the drop-rate "how much junk?"
 calculation in `packages/shared/src/domain/dropRateMath.test.ts` (the math itself
-is documented in [`docs/calculation.md`](./docs/calculation.md)).
+is documented in [`docs/calculation/junk.md`](./docs/calculation/junk.md)).
 
 > Run test commands from the root, not from inside a package — this repo has no
 > per-package `test` script, and vitest is configured once at the root.

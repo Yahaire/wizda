@@ -170,7 +170,7 @@ e.g. 99%, and consider exposing it).
 
 The full "how much junk?" calculation — how the per-junk match probability is
 assembled from a query, how junks are combined and ranked, and the blessing
-extension — is written up in **`docs/calculation.md`**.
+extension — is written up in **[`docs/calculation/junk.md`](./calculation/junk.md)**.
 
 ## "Drop Rates Related to Additional Blessings" structure
 

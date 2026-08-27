@@ -3,16 +3,16 @@ import express from 'express';
 import { existsSync } from 'fs';
 import path from 'path';
 
-import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
-import { MaintenanceResponse } from '@shared/api/endpoints/endpoint.models';
-import { BUILD_TIME, GIT_COMMIT, VERSION_LABEL } from '@shared/generated/version';
-
 import { sendErrorResponse } from '@app/http';
 import { localeMiddleware } from '@app/locale';
 import { dataStatusRouter, readDataUpdatedAt } from '@app/routes/dataStatus';
+import { enhancementOddsRouter } from '@app/routes/enhancementOdds';
 import { junkToGuaranteeRouter } from '@app/routes/junkToGuarantee';
 import { listsRouter } from '@app/routes/lists';
 import { popularRouter } from '@app/routes/popular';
+import { ErrorCode, HttpStatusCode } from '@shared/api/endpoints/endpoint.constants';
+import { MaintenanceResponse } from '@shared/api/endpoints/endpoint.models';
+import { BUILD_TIME, GIT_COMMIT, VERSION_LABEL } from '@shared/generated/version';
 
 // Load root .env file — path differs between dev (src/) and prod (dist/backend-api/src/)
 dotenv.config({ path: [
@@ -67,6 +67,7 @@ app.get('/', (_req, res, next) => {
 app.use(localeMiddleware);
 
 app.use('/junk-to-guarantee', junkToGuaranteeRouter);
+app.use('/enhancement-odds', enhancementOddsRouter);
 app.use(dataStatusRouter);
 app.use(listsRouter);
 app.use(popularRouter);

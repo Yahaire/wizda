@@ -42,7 +42,7 @@ flashing English first.
 ### 1. Page views (web-client)
 
 A single self-hosted [Umami](https://umami.is/) script tag, loaded in
-[`layout.tsx`](../packages/web-client/src/app/layout.tsx). Umami is
+[`layout.tsx`](../packages/web-client/src/app/%5Blang%5D/layout.tsx). Umami is
 cookieless by design — it counts visits and page paths without a persistent
 visitor ID. It's **env-gated**: the script only renders once a website ID is
 configured, so it's a no-op in local development.

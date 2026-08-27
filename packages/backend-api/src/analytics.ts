@@ -1,24 +1,24 @@
 import express from 'express';
 
 /**
- * Fire-and-forget a `guarantee_query` custom event to Umami so we can see how the
- * Junk Oracle is actually used — including direct API consumers, since this runs
- * server-side (browser-side events would miss them and be blocked by ad-blockers).
+ * Fire-and-forget a custom event to Umami so we can see how the tools are
+ * actually used — including direct API consumers, since this runs server-side
+ * (browser-side events would miss them and be blocked by ad-blockers).
  *
- * Dormant until `UMAMI_API_URL` + `UMAMI_API_WEBSITE_ID` are set, so it's a no-op
- * in dev / until analytics is provisioned. Cookieless; no IPs are stored by us.
- * Mirrors the conjapo pattern (`trackVerbLookup`).
+ * Dormant until `UMAMI_API_URL` + `UMAMI_API_WEBSITE_ID` are set, so it's a
+ * no-op in dev / until analytics is provisioned. Cookieless; no IPs are stored
+ * by us. Mirrors the conjapo pattern (`trackVerbLookup`).
+ *
+ * `data` carries **counts and settings only, never item identities** — which
+ * axes were used and how broadly, not what was searched for. See
+ * `docs/analytics.md` for what we deliberately don't collect; the
+ * `PopularJunkOracleQuery` tables are where actual query shapes live.
  */
-export function trackGuaranteeQuery(
+function sendEvent(
   req: express.Request,
-  summary: {
-    equipmentCount: number,
-    qualityCount: number,
-    gradeCount: number,
-    blessingCount: number,
-    certainty: number,
-    total: number,
-  },
+  eventName: string,
+  url: string,
+  data: Record<string, unknown>,
 ): void {
   // Read env lazily so it resolves after dotenv.config() has run in index.ts.
   const umamiApiUrl = process.env.UMAMI_API_URL;
@@ -44,10 +44,10 @@ export function trackGuaranteeQuery(
         website: umamiApiWebsiteId,
         hostname: req.hostname,
         language: primaryLanguage,
-        url: '/junk-to-guarantee',
+        url,
         referrer: req.headers.referer ?? '',
-        name: 'guarantee_query',
-        data: summary,
+        name: eventName,
+        data,
       },
     }),
   })
@@ -58,4 +58,39 @@ export function trackGuaranteeQuery(
       }
     })
     .catch((error) => console.error('[analytics] umami send failed:', error));
+}
+
+/** How the Junk Oracle is being used — filter breadth and certainty, no item names. */
+export function trackGuaranteeQuery(
+  req: express.Request,
+  summary: {
+    equipmentCount: number,
+    qualityCount: number,
+    gradeCount: number,
+    blessingCount: number,
+    certainty: number,
+    total: number,
+  },
+): void {
+  sendEvent(req, 'guarantee_query', '/junk-to-guarantee', summary);
+}
+
+/**
+ * How the Enhancement Oracle is being used — how much of a piece the player
+ * described, how far they mean to take it, and whether we could answer. No
+ * equipment or blessing names, matching {@link trackGuaranteeQuery}.
+ */
+export function trackEnhancementQuery(
+  req: express.Request,
+  summary: {
+    slotCount: number,
+    freeSlotCount: number,
+    targetCount: number,
+    enhancementLevel: number,
+    targetEnhancementLevel: number,
+    hasAlteredSlot: boolean,
+    hasProbability: boolean,
+  },
+): void {
+  sendEvent(req, 'enhancement_query', '/enhancement-odds', summary);
 }

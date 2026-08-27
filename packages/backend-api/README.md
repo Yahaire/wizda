@@ -21,7 +21,7 @@ For seeding, see root README → *Updating data*.
 The request/response contracts are the shared models — the source of truth — in
 [`packages/shared/src/api/endpoints/`](../shared/src/api/endpoints/); the math
 behind the guarantee numbers is in
-[`docs/calculation.md`](../../docs/calculation.md). All bodies are JSON.
+[`docs/calculation/junk.md`](../../docs/calculation/junk.md). All bodies are JSON.
 
 | Method & path | Purpose | Models |
 |---------------|---------|--------|
@@ -36,7 +36,7 @@ Notes:
   (`UNKNOWN_EQUIPMENT` / `UNKNOWN_BLESSING`); an unknown curve `junkName` is a
   `404` (`UNKNOWN_JUNK`). Filter axes are OR-sets; `blessings` is an AND-set.
 - Blessing queries flag their response `estimated: true` — the blessing joint is
-  a modelling estimate (see `docs/calculation.md`).
+  a modelling estimate (see `docs/calculation/junk.md`).
 - `POST /junk-to-guarantee` requires **at least one** filter (equipment / quality
   / grade / blessing) — a query with none is a `400` (`NO_QUERY`). Results are
   **paged**: `limit` is defaulted and hard-capped (`DEFAULT_GUARANTEE_LIMIT` /
@@ -55,7 +55,7 @@ It's **dormant** unless `UMAMI_API_URL` + `UMAMI_API_WEBSITE_ID` are set — see
 The core "how much junk to guarantee item X?" calculation is pure, Prisma-free
 math kept in `packages/shared`
 ([`dropRateMath.ts`](../shared/src/domain/dropRateMath.ts), documented in
-[`docs/calculation.md`](../../docs/calculation.md)) so it can be unit-tested
+[`docs/calculation/junk.md`](../../docs/calculation/junk.md)) so it can be unit-tested
 without a DB. Its tests sit alongside it and run with
 [vitest](https://vitest.dev/) from the **monorepo root**:
 

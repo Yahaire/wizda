@@ -10,7 +10,7 @@ Read [`docs/domain.md`](./domain.md) first for the game model — rank, quality,
 
 **Basis.** Two sources, in this order. The **official drop-rate tables** at wizardry.info supply every number here, directly or by derivation. **Ten in-game observations** made on 2026-08-22 settled the one case those tables do not describe. Both were afterwards cross-checked against the Fasterthoughts community guide — see [Corroboration](#corroboration-2026-08-22).
 
-**Status.** The scraping, derivation, and storage are implemented — the parser reads all 12 value tables, recovers the bonus, and re-verifies it 380/380 on every seed run (`blessingValueBonuses.ts`, persisted by `blessingValueRates.seed.ts` into the DB — see `docs/domain.md`'s "Blessing values live elsewhere" for the data model). The Enhancement Oracle's endpoint and UI are not built yet. One stated assumption remains, flagged in [The model](#the-model).
+**Status.** The scraping, derivation, and storage are implemented — the parser reads all 12 value tables, recovers the bonus, and re-verifies it 380/380 on every seed run (`blessingValueBonuses.ts`, persisted by `blessingValueRates.seed.ts` into the DB — see `docs/domain.md`'s "Blessing values live elsewhere" for the data model). The Enhancement Oracle's **endpoint** is built on top of it — `POST /enhancement-odds` and `GET /enhancement-odds/reference`, derived in [`docs/calculation/enhancement.md`](./calculation/enhancement.md). Its UI is not built yet. One stated assumption remains, flagged in [The model](#the-model).
 
 ## The model
 
@@ -39,6 +39,53 @@ Two consequences worth carrying into the tool:
 ### Worked example
 
 A 4★ Ebonsteel dagger with a flat ATK blessing at **+8** on slot 1, enhanced to +5. Value group `RANK_1_5`, quality 4, Flat → the bonus is uniform over `3-10`, eight possible values. Reaching **≥16** needs a bonus of ≥8, so 8, 9 or 10 → **3/8 = 37.5%**.
+
+This is the Enhancement Oracle's pinned regression case, asserted both as a unit test and against the live API with a real Ebonsteel Dagger.
+
+## Grade at drop is not the grade you see
+
+Two different numbers, and the source distinguishes them: its stone conditions read "**Initial** equipment Grade `n`+1 or higher", and the footnote *"This does not apply to Grade 1 equipment that has become Grade 2 after enhancement"* exists precisely because a milestone that fills a slot **raises the displayed grade**.
+
+- **Current grade** = `1 + blessings currently on the piece`. A White piece taken to +10 shows Grade 3.
+- **Initial grade** = what it was when obtained. It decides which slots were occupied at drop, and therefore which slots collect a milestone bonus and which a Full Alteration Stone will bonus.
+
+The pair is not recoverable from the piece alone: a blue-at-drop piece at +15 and a White-at-drop piece at +15 **both** show three filled slots. Since both prefixes fill top-to-bottom, the count is always
+
+```
+filled slots = max(initialGrade − 1, floor(enhancementLevel / 5))
+```
+
+which is also why the filled slots are always a contiguous prefix — a gap between them is impossible, and a slot cannot still be empty once its own milestone has passed. `checkBlessingSlotState` in `packages/shared/src/domain/blessingSlots.ts` is that rule in code.
+
+## Duplicate blessings, and what the draw chain actually avoids
+
+Additional blessings don't stack, but **a piece can still end up carrying the same blessing twice**, and it isn't rare. It takes an alteration:
+
+- **By surprise** — a slot altered to ATK, and a later milestone independently rolls ATK into an empty slot.
+- **Deliberately** — the milestones gave you 1 or more blessings that are not as desired, so you alter a weak slot into something good, accepting that it will only have the low alteration-plus-refinement value.
+
+What that tells us is more than a UI caveat: **an Alteration Stone changes what a slot displays without feeding back into the draw.** The game keeps drawing against what each slot *originally* rolled. So the exclusion set for a milestone fill is the originals, not what the piece currently shows — which is why the Enhancement Oracle asks *which* slot was altered, and ideally what it used to be. Under the other reading a second ATK would be flatly impossible rather than merely unlikely; the difference is `P = 0` versus a real number, not a rounding correction. See [`docs/calculation/enhancement.md`](./calculation/enhancement.md).
+
+At most one slot is ever in the altered state, since every stone granting a fresh alteration first wipes the previous one (see [`docs/stones.md`](./stones.md)).
+
+### What the milestone actually draws against
+
+The rule, in one line:
+
+> **A milestone fill avoids the piece's *initial* blessings — and a standard Alteration Stone's result is not one of them.**
+
+"Initial" means what the piece rolled naturally: the blessings it dropped with, or — after a Lesser or Full Alteration Stone — **the blessings that stone produced**, since those re-rolls replace the natural set wholesale. A standard Alteration Stone is the odd one out: it overwrites what a slot *shows* without joining the initial set, and without removing the blessing it replaced from it.
+
+So for the altered slot, both halves matter and they point opposite ways:
+
+| | in the exclusion set? |
+|---|---|
+| what the slot originally rolled | **yes** — still there, even though nothing displays it any more |
+| what the Alteration Stone put there | **no** — a later milestone can roll it, giving the piece two |
+
+That is why the Enhancement Oracle asks *which* slot was altered, and ideally *what it used to be*: the answer changes a second copy from impossible (`P = 0`) to merely unlikely. Not a rounding correction.
+
+The Lesser/Full stones need no such handling. They re-roll every blessing on the piece, so afterwards what the piece displays *is* its initial set, and any prior alteration has been wiped — which is exactly what the calculation assumes when nothing is declared as altered.
 
 ## Where the numbers come from
 
