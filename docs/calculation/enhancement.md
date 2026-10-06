@@ -12,7 +12,7 @@ The pure implementation lives in `packages/shared/src/domain/enhancementMath.ts`
 
 Mostly what the item screen shows: the piece, its quality, its enhancement level, and per slot a blessing and a number. Plus what they intend — how far they mean to enhance, and which blessings they want at which values.
 
-The player may also optionally share what they remember about each slot. Particularly, if they altered it, what blessing it had beforehand to help with accurate calculations.
+Nothing about a slot's past is asked for — not whether it was altered, nor what it held before. A milestone draws against what the piece displays and remembers nothing else, so the item screen is the whole input.
 
 Everything else is either inferred or genuinely irrelevant. Which is the surprising part, so it gets its own section.
 
@@ -91,42 +91,20 @@ The same without-replacement chain the Junk Oracle uses (`blessingSlots.ts`, sha
 P(b₁ … b_m) = Π_s  rate_s(b_s) / Σ_{x ∉ {b₁ … b_{s−1}}} rate_s(x)
 ```
 
-with two differences from the Junk Oracle's use of it.
+with one difference from the Junk Oracle's use of it.
 
-**Slots the player reported are pinned**, and the rest enumerated. A pinned slot keeps its *real* chain factor rather than 1, because a free slot earlier in the chain can consume the very blessing a later pinned slot reports, and those histories are impossible given what was observed. So the answer is a conditional:
+**The chain starts from what the piece displays.** Every blessing on the piece now is handed to the chain as already taken, and only the slots milestones will fill are enumerated — the chain simply continues from where the piece's own history left off. That is the rule in [`docs/milestone-blessings.md`](../milestone-blessings.md):
 
-```
-total = Σ over assignments consistent with the pinned slots  of  P(assignment)
-hit   = Σ over those assignments  of  P(assignment) · P(all targets met | assignment)
+> A milestone fill avoids the blessings the piece *currently displays* — and remembers nothing else.
 
-P(targets | observed) = hit / total
-```
+Two things follow, and the code gets both from a single exclusion set:
 
-That degenerates to a plain product when nothing free precedes anything pinned.
+- **A milestone never duplicates what the piece shows**, whatever put it there. A slot altered to ATK excludes ATK from every later fill exactly as a natural ATK would, so "a second ATK from enhancing" is always `P = 0` — and the client greys that wish out rather than letting a player ask for it.
+- **A blessing an alteration removed can come back.** Nothing displays it, so nothing excludes it. The wand in the milestone doc is exactly this.
 
-**The chain runs on what each slot *originally* rolled.** This is the load-bearing one, and it is not obvious.
+Duplicate blessings across slots remain legal input, since an Alteration Stone can put one there, and a target may name the same blessing more than once. The exclusion set is a *set*, so a piece showing MAG twice excludes MAG once, which is all the game does with it.
 
-An Alteration Stone changes what a slot *displays* without feeding back into the draw. So a later milestone can land on the blessing an altered slot shows, and a piece ends up carrying the same blessing twice — which happens in ordinary play, both by surprise and deliberately (altering a useless slot into a second copy of something good, accepting the low alter-plus-refine value it will have). Duplicate blessings across slots are therefore legal input, and a target may name the same blessing more than once.
-
-The consequence for the odds is not marginal. Take a blue piece whose slot 1 was ACC at drop and was altered to ATK, and ask for a second ATK:
-
-| | what the chain excludes for slots 3-4 | a second ATK |
-|---|---|---|
-| the alteration is declared | ACC — what slot 1 *originally* rolled | possible |
-| the alteration isn't declared | ATK — what slot 1 *displays* | impossible, `P = 0` |
-
-So `alteredSlot` is a real input, not bookkeeping. `alteredFrom` pins the original when the player remembers it; omitted, the original becomes one more free variable in the same walk and the answer averages over it, flagged `ALTERED_ORIGIN_UNKNOWN`. At most one slot is ever in the altered state, since every stone that grants a fresh alteration first wipes the previous one — so this is one field per piece, not per slot.
-
-**The rule this implements**, stated in [`docs/milestone-blessings.md`](../milestone-blessings.md):
-
-> A milestone fill avoids the piece's *initial* blessings — and a standard Alteration Stone's result is not one of them.
-
-Two consequences the code has to get right, and they pull opposite ways for the same slot:
-
-- The altered slot's **original** blessing stays in the exclusion set, though nothing displays it any more. That is what `alteredFrom` pins, and what the walk marginalises over when it isn't given.
-- The blessing the **stone put there** is *not* in the exclusion set, so a later milestone may roll it and hand the piece two copies.
-
-A Lesser or Full Alteration Stone is the opposite case and needs no handling: it re-rolls every blessing on the piece, so afterwards the displayed blessings **are** the initial set and any prior alteration has been wiped. That is exactly what the walk assumes when no slot is declared altered — pin the displayed blessings and draw against them.
+Because occupied slots are always a prefix and the slots still to be filled follow them, no enumerated slot ever precedes a known one. The conditioning an earlier version of this model needed — pinning each known slot at its real chain factor and dividing `hit / total` — collapses to a plain product. The chain renormalises over the survivors, so its total is 1 up to rounding; the code still divides by it, which keeps the answer exact and makes a slot with no published row read as 0 rather than as a number computed on nothing.
 
 ### Meeting the targets
 
@@ -146,7 +124,7 @@ Notes come in **two tiers**, and conflating them would make the tool read as les
 
 | tier | what it means | examples |
 |---|---|---|
-| **note** | how the model works — stable | the empty-slot rule is empirical; slots 2-4 are assumed to behave like slot 1; a milestone avoids what originally rolled |
+| **note** | how the model works — stable | the empty-slot rule is empirical; slots 2-4 are assumed to behave like slot 1; a milestone avoids what the piece displays |
 | **warning** | our data is incomplete right now — temporary | no value group resolved; a bonus failed its reconvolution check; missing value rows |
 
 A normal answer carries notes and no warnings, and is **not** marked `estimated` — unlike the Junk Oracle's blessing queries, these numbers are official. When a warning means the answer would rest on gaps, `probability` is `null` rather than a number computed on missing data.
@@ -169,7 +147,7 @@ Every rejection is a state the game cannot produce, or an ask we can't answer ho
 |---|---|
 | `UNKNOWN_EQUIPMENT` / `UNKNOWN_BLESSING` | a name or code that isn't in the catalog — these come from selects, so it means a stale client |
 | `INVALID_SLOT_STATE` | a gap between filled slots; a slot left empty past its own milestone; an `initialGrade` disagreeing with the filled count |
-| `INVALID_QUERY` | a target level below the current one; `alteredSlot` naming an empty slot; `alteredFrom` without `alteredSlot`; a slot given twice; a blessing with no value |
+| `INVALID_QUERY` | a target level below the current one; a slot given twice; a blessing with no value |
 | `ALREADY_REFINED` | a planned refinement on a slot that already carries one (see above) |
 | `NO_QUERY` | no targets — there'd be nothing to compute |
 
@@ -181,7 +159,7 @@ The pure math is checked in `enhancementMath.test.ts` and `blessingSlots.test.ts
 
 1. **The worked example**, pinned exactly. A 4★ `RANK_1_5` piece at +0 with flat ATK at 8, wanting ATK ≥ 16: the bonus is uniform over `3-10`, so 8, 9 or 10 will do — `3/8`, to the last digit. Confirmed against the live API with a real Ebonsteel Dagger.
 2. **The without-replacement chain**: four slots drawn from five equally likely blessings leave exactly one out, so any given blessing appears with probability `4/5`; with one slot already occupied the remaining three share four blessings, giving `3/4`.
-3. **The duplicate pair**, which is the regression test for the originals rule. The same blue piece with and without `alteredSlot` must give a positive number and `0` respectively. If the exclusion set is ever "simplified" back to the displayed blessings, the first silently collapses into the second.
-4. **The marginalisation**: with `alteredFrom` omitted, the answer must equal the plain mean of the answers for each blessing the slot could originally have been.
+3. **What a milestone avoids.** A blue piece showing ATK and SUR at +10, wanting two ATK, gives exactly `0` — there is no longer any way to say slot 1 was altered, and it would make no difference — and its empty slots' candidates must not list ATK. The wand: a piece showing MAG alone at +5, asked for SUR by +10, gives exactly `1/4`. A piece showing MAG twice is ordinary input: a third MAG gives `0`, any ATK gives `1/2`, and neither is `NaN` — the walk used to pin each known slot, and two slots pinned to one blessing visited nothing at all.
+4. **Two targets need two slots.** ATK 12 and ATK 9 at +10 meet `≥ 12` and `≥ 8` with certainty; ATK 12 and ATK 6 do not, since the 12 may not count twice.
 5. **`initialGrade` inertness**: the same query with the grade stated and omitted must return the identical probability.
 6. **The extraction guard**: `dropRateMath.test.ts` must pass untouched, since `blessingSlots.ts` was lifted out of it and the Junk Oracle's numbers must not move.

@@ -12,8 +12,8 @@ import { forEachSlotAssignment } from './blessingSlots';
 /** Number of quality (★) levels and grade levels; both are 1–5. */
 export const RATE_LEVEL_COUNT = 5;
 
-/** No slot identity is known up front here — see {@link jointBlessingPresence}. */
-const NOTHING_PINNED: readonly null[] = [];
+/** Nothing is on the piece before it rolls — see {@link jointBlessingPresence}. */
+const NOTHING_EXCLUDED: ReadonlySet<string> = new Set();
 
 /**
  * One drop-table row's per-equipment distributions, as fractions in [0, 1].
@@ -148,9 +148,9 @@ export function blessingPresenceByGrade(
  *
  * The chain itself lives in `blessingSlots.ts` — the Enhancement Oracle walks
  * the same slots to ask which blessing a milestone will drop into an empty one.
- * Nothing is pinned here (the Junk Oracle knows no identities up front), and
- * `required` is passed as the pruning set, so only covering assignments are
- * visited and the sum below is exactly the presence probability.
+ * Nothing is excluded here (a drop starts from an empty piece), and `required`
+ * is passed as the pruning set, so only covering assignments are visited and
+ * the sum below is exactly the presence probability.
  */
 function jointBlessingPresence(
   slots: readonly ReadonlyMap<string, number>[],
@@ -164,7 +164,7 @@ function jointBlessingPresence(
   }
 
   let total = 0;
-  forEachSlotAssignment(slots, NOTHING_PINNED, required, (_assignment, probability) => {
+  forEachSlotAssignment(slots, NOTHING_EXCLUDED, required, (_assignment, probability) => {
     total += probability;
   });
 

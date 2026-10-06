@@ -88,7 +88,6 @@ export function trackEnhancementQuery(
     targetCount: number,
     enhancementLevel: number,
     targetEnhancementLevel: number,
-    hasAlteredSlot: boolean,
     hasProbability: boolean,
   },
 ): void {

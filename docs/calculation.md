@@ -18,7 +18,7 @@ Additional blessings don't stack, so a piece's slots are drawn without replaceme
 - the Junk Oracle asks *"what are the odds this piece carries ATK **and** SUR?"*
 - the Enhancement Oracle asks *"which blessing will the next milestone put in this empty slot, given what's already on the piece?"*
 
-The chain is derived once, in [`calculation/junk.md`](./calculation/junk.md) under "Calculating for specific blessings", including the one modelling assumption it rests on. [`calculation/enhancement.md`](./calculation/enhancement.md) covers what it adds on top: pinning slots the player has reported, and drawing against the piece's *initial* blessings rather than what it currently displays.
+The chain is derived once, in [`calculation/junk.md`](./calculation/junk.md) under "Calculating for specific blessings", including the one modelling assumption it rests on. [`calculation/enhancement.md`](./calculation/enhancement.md) covers what it adds on top: starting the chain with everything the piece already displays taken, so a fill never duplicates what is on the piece.
 
 Everything else is separate. The junk math is about drop tables and confidence; the enhancement math is about value distributions and convolution.
 

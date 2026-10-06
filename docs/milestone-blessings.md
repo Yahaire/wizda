@@ -59,33 +59,28 @@ which is also why the filled slots are always a contiguous prefix — a gap betw
 
 ## Duplicate blessings, and what the draw chain actually avoids
 
-Additional blessings don't stack, but **a piece can still end up carrying the same blessing twice**, and it isn't rare. It takes an alteration:
+Additional blessings don't stack, but **a piece can still end up carrying the same blessing twice** — and exactly one thing produces it: an Alteration Stone used on a slot to give it a blessing the piece already shows. Players do it on purpose. A staff that rolled MAG and MAG% can have a third slot altered into a second MAG, accepting the low alteration-plus-refinement value that slot will carry.
 
-- **By surprise** — a slot altered to ATK, and a later milestone independently rolls ATK into an empty slot.
-- **Deliberately** — the milestones gave you 1 or more blessings that are not as desired, so you alter a weak slot into something good, accepting that it will only have the low alteration-plus-refinement value.
+A milestone fill never does it. The rule, in one line:
 
-What that tells us is more than a UI caveat: **an Alteration Stone changes what a slot displays without feeding back into the draw.** The game keeps drawing against what each slot *originally* rolled. So the exclusion set for a milestone fill is the originals, not what the piece currently shows — which is why the Enhancement Oracle asks *which* slot was altered, and ideally what it used to be. Under the other reading a second ATK would be flatly impossible rather than merely unlikely; the difference is `P = 0` versus a real number, not a rounding correction. See [`docs/calculation/enhancement.md`](./calculation/enhancement.md).
+> **A milestone fill avoids the blessings the piece *currently displays* — and remembers nothing else.**
 
-At most one slot is ever in the altered state, since every stone granting a fresh alteration first wipes the previous one (see [`docs/stones.md`](./stones.md)).
+"Displays" means exactly what the item screen shows at the moment the milestone fires, whatever put each blessing there: the drop roll, an earlier milestone, a Lesser or Full Alteration Stone, or a standard Alteration Stone. The game keeps no record of what a slot used to hold. Two consequences, and they are the whole of it:
 
-### What the milestone actually draws against
-
-The rule, in one line:
-
-> **A milestone fill avoids the piece's *initial* blessings — and a standard Alteration Stone's result is not one of them.**
-
-"Initial" means what the piece rolled naturally: the blessings it dropped with, or — after a Lesser or Full Alteration Stone — **the blessings that stone produced**, since those re-rolls replace the natural set wholesale. A standard Alteration Stone is the odd one out: it overwrites what a slot *shows* without joining the initial set, and without removing the blessing it replaced from it.
-
-So for the altered slot, both halves matter and they point opposite ways:
-
-| | in the exclusion set? |
+| | can a later milestone roll it? |
 |---|---|
-| what the slot originally rolled | **yes** — still there, even though nothing displays it any more |
-| what the Alteration Stone put there | **no** — a later milestone can roll it, giving the piece two |
+| a blessing an Alteration Stone put on the piece | **no** — it is displayed, so it is avoided like any other |
+| the blessing that stone replaced | **yes** — nothing displays it any more, so nothing excludes it |
 
-That is why the Enhancement Oracle asks *which* slot was altered, and ideally *what it used to be*: the answer changes a second copy from impossible (`P = 0`) to merely unlikely. Not a rounding correction.
+So altering a two-handed axe's DIV into ATK% does not just spend DIV: it takes ATK% off the table for every remaining milestone, which could otherwise have rolled it naturally. And a triple-MAG staff can only be built by rolling two MAG blessings and altering a third slot into the last one; the milestones will never supply it.
 
-The Lesser/Full stones need no such handling. They re-roll every blessing on the piece, so afterwards what the piece displays *is* its initial set, and any prior alteration has been wiped — which is exactly what the calculation assumes when nothing is declared as altered.
+This is why the Enhancement Oracle asks nothing about a slot's history — not whether it was altered, nor what it held before. The item screen is the whole input. A blessing the piece already shows is greyed out as a wish for an empty slot, because its probability there is exactly 0. See [`docs/calculation/enhancement.md`](./calculation/enhancement.md).
+
+### How this was settled
+
+The opposite reading — that a milestone avoids each slot's *original* roll, so a later milestone could duplicate an altered slot — was what Wizda first shipped, on evidence that turned out to be misread. It was overturned by one direct test, reported **2026-10-06**: a one-handed wand that dropped Green with SUR as its only blessing. SUR was altered to MAG, and the wand was enhanced to +10. The +10 milestone rolled **SUR** into slot 2. Under the originals reading that outcome has probability 0 — SUR was the slot's original roll and would still be excluded — while under the displayed reading it is an ordinary draw with only MAG excluded. One roll is enough to rule out a probability of zero.
+
+The [Fasterthoughts guide](https://wizardry.fasterthoughts.io/equipment/blacksmithing/) states the same rule outright, under "Enhance": *"The new blessing will never duplicate an existing blessing, but alteration can create multiples of the same blessing on an item. Note that a blessing removed by alteration can reappear again in a later blessing slot."* Its authors confirmed that reading when asked. As everywhere in this document, that is a cross-check, not the source: the wand is the proof.
 
 ## Where the numbers come from
 

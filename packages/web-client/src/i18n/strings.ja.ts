@@ -386,17 +386,11 @@ export const uiStringsJa = {
       '新しい精錬石は既存の精錬を上書きするため、表示されている数値から結果を',
       '逆算する機能はまだ対応していません。',
     ].join(''),
-    alterationToggleLabel: `この${JA_EQUIPMENT}は変性されています`,
-    alteredSlotLabel: 'どのスロットですか？',
-    originalBlessingLabel: `変性前の${JA_BLESSINGS}`,
+    wishAlreadyOnPieceHint: `この${JA_EQUIPMENT}にすでにあります`,
     calculateButton: '計算する',
     gradeUnknownTooltip: [
       '入手時のグレードが不明でも確率には影響しません。',
       'スロットをご自身で指定していただいただけです。',
-    ].join(''),
-    alteredOriginUnknownTooltip: [
-      '変性したスロットの元の追加護が不明なため、可能性のあるすべての追加護で',
-      '平均した値になります。数値の精度は下がります。',
     ].join(''),
     tagline: '強化する前に、確率を知っておきましょう。',
     emptyPrompt: '上で装備を選び、スロットの内容と目標を入力してください。',

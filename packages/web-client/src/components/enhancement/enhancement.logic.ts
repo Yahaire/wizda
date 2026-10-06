@@ -109,9 +109,6 @@ export interface EnhancementFormState {
   initialGrade: number | null,
   enhancementLevel: number,
   targetEnhancementLevel: number,
-  alteredSlot: number | null,
-  /** null = "not sure" when `alteredSlot` is set. */
-  alteredFrom: string | null,
   /** Only slots the player has touched need a key; a missing key reads as empty. */
   slots: Record<number, SlotFormState>,
 }
@@ -133,8 +130,6 @@ export const DEFAULT_ENHANCEMENT_FORM_STATE: EnhancementFormState = {
   initialGrade: null,
   enhancementLevel: MIN_ENHANCEMENT_LEVEL,
   targetEnhancementLevel: DEFAULT_TARGET_ENHANCEMENT_LEVEL,
-  alteredSlot: null,
-  alteredFrom: null,
   slots: {},
 };
 
@@ -346,10 +341,10 @@ export function slotWishState(
  *
  * One imprecision is inherent and worth naming: a wish is *written* per slot
  * but *scored* slot-agnostically, so `ATK ≥ 16` wished on slot 1 may be met by
- * a different ATK slot. That needs two ATK slots, which needs alteration in
- * play (a milestone avoids the piece's initial blessings — see
- * `docs/milestone-blessings.md`); on an unaltered piece the blessings are
- * distinct and the per-slot reading is exact.
+ * a different ATK slot. That needs two ATK slots, which only an Alteration
+ * Stone can produce (a milestone never rolls a blessing the piece already
+ * shows — see `docs/milestone-blessings.md`); on an unaltered piece the
+ * blessings are distinct and the per-slot reading is exact.
  */
 export function wishedTargets(state: EnhancementFormState): EnhancementTarget[] {
   const targets: EnhancementTarget[] = [];
@@ -414,18 +409,36 @@ export function slotStateProblem(
 /**
  * Puts the form back in a consistent state after any field moved.
  *
- * Only one thing can be stranded: an alteration declared on a slot that has
- * since stopped being occupied. Three different fields can do it — the slot's
- * own Empty/Filled toggle, the initial grade, and the enhancement level all
- * move which slots hold a blessing — so every patch runs through here rather
- * than each field having to remember. Leaving it stale would silently disable
- * Calculate (via {@link canCalculate}) with nothing on screen to explain why.
+ * Only one thing can be stranded: a wish, on a slot a milestone will fill, for
+ * a blessing the piece has since come to display — the player typed it into
+ * another slot, or a stated grade or level made that slot occupied. A milestone
+ * never rolls a blessing already on the piece, so the wish has become a
+ * guaranteed 0% and its option in the picker is greyed out
+ * ({@link wishBlessingOptions}). Cleared rather than ignored, unlike a wish a
+ * lowered target level merely hides: that one comes back when the level does,
+ * while this one can't be granted at all while the piece looks like this.
+ * Every patch runs through here rather than each field having to remember.
  */
 export function reconcileFormState(state: EnhancementFormState): EnhancementFormState {
-  if (state.alteredSlot === null || isSlotOccupied(state.alteredSlot, state.slots, state)) {
-    return state;
+  const displayed = displayedBlessings(state.slots, state);
+  let next = state;
+  for (const [key, slotState] of Object.entries(state.slots)) {
+    const slot = Number(key);
+    const impossible = slotState.wishBlessingCode !== null
+      && displayed.has(slotState.wishBlessingCode)
+      && !isSlotOccupied(slot, state.slots, state);
+    if (!impossible) {
+      continue;
+    }
+    next = {
+      ...next,
+      slots: {
+        ...next.slots,
+        [slot]: { ...slotState, wishBlessingCode: null, wishMinValue: null },
+      },
+    };
   }
-  return { ...state, alteredSlot: null, alteredFrom: null };
+  return next;
 }
 
 /** Whether a slot's refinement plan is complete enough to submit. */
@@ -461,9 +474,6 @@ export function canCalculate(state: EnhancementFormState): boolean {
       return false;
     }
   }
-  if (state.alteredSlot !== null && !isSlotOccupied(state.alteredSlot, state.slots, state)) {
-    return false;
-  }
   return true;
 }
 
@@ -477,23 +487,40 @@ export function isInitialGradeUnknown(state: EnhancementFormState): boolean {
 }
 
 /**
- * This piece is declared altered, but the player doesn't remember what the
- * slot originally rolled — a real precision caveat (the odds average over
- * every possibility), unlike {@link isInitialGradeUnknown}.
+ * The blessings the piece shows right now — what every remaining milestone will
+ * avoid, whatever put each one there (`docs/milestone-blessings.md`, "Duplicate
+ * blessings"). A set: a piece altered into showing the same blessing twice
+ * excludes it once, which is all the game does with it.
  */
-export function isAlteredOriginUnknown(state: EnhancementFormState): boolean {
-  return state.alteredSlot !== null && state.alteredFrom === null;
-}
-
-/** Slots eligible to be named as "the altered one" — must currently be occupied. */
-export function alterableSlots(slots: Record<number, SlotFormState>, shape: SlotShape): number[] {
-  const result: number[] = [];
+export function displayedBlessings(slots: Record<number, SlotFormState>, shape: SlotShape): Set<string> {
+  const displayed = new Set<string>();
   for (let slot = 1; slot <= MAX_BLESSING_SLOTS; slot++) {
-    if (isSlotOccupied(slot, slots, shape)) {
-      result.push(slot);
+    const blessingCode = slots[slot]?.blessingCode ?? null;
+    if (blessingCode !== null && isSlotOccupied(slot, slots, shape)) {
+      displayed.add(blessingCode);
     }
   }
-  return result;
+  return displayed;
+}
+
+/**
+ * What an empty slot's wish picker offers: {@link slotBlessingOptions}, with
+ * every blessing the piece already displays greyed out rather than hidden. A
+ * milestone can't roll one of those, so wishing for it would be a silent 0%;
+ * leaving it visible but disabled is what tells the player *why* it isn't on
+ * offer. {@link reconcileFormState} clears a wish that lands in this state.
+ */
+export function wishBlessingOptions(
+  slot: number,
+  slots: Record<number, SlotFormState>,
+  shape: SlotShape,
+  reference: EnhancementReference | null,
+): { value: string, label: string, disabled: boolean }[] {
+  const displayed = displayedBlessings(slots, shape);
+  return slotBlessingOptions(slot, reference).map((option) => ({
+    ...option,
+    disabled: displayed.has(option.value),
+  }));
 }
 
 /**
@@ -515,11 +542,6 @@ export function slotBlessingOptions(
 export function formatValueRange(dist: { minValue: number, probabilities: readonly number[] }): string {
   const max = dist.minValue + dist.probabilities.length - 1;
   return dist.minValue === max ? String(dist.minValue) : `${dist.minValue}-${max}`;
-}
-
-/** Every blessing in the catalog, for the target/alteration pickers (unfiltered in this pass). */
-export function allBlessingOptions(): { value: string, label: string }[] {
-  return BLESSINGS.map((blessing) => ({ value: blessing.code, label: blessingLabel(blessing.code) }));
 }
 
 /** The `{ equipment, quality }` pair to fetch `GET /enhancement-odds/reference` with, or null. */
@@ -575,8 +597,6 @@ export function buildEnhancementQuery(state: EnhancementFormState): EnhancementO
     enhancementLevel: state.enhancementLevel,
     targetEnhancementLevel: state.targetEnhancementLevel,
     ...(state.initialGrade !== null && { initialGrade: state.initialGrade }),
-    ...(state.alteredSlot !== null && { alteredSlot: state.alteredSlot }),
-    ...(state.alteredSlot !== null && state.alteredFrom !== null && { alteredFrom: state.alteredFrom }),
     slots,
     targets: wishedTargets(state),
   };

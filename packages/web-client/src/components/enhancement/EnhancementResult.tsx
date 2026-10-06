@@ -4,7 +4,7 @@ import { blessingLabel, formatPercent } from '@/components/oracle/oracle.logic';
 import { useStrings } from '@/i18n/LanguageProvider';
 import { Alert, Center, Divider, Group, Loader, Paper, Stack, Text } from '@mantine/core';
 import {
-    ENHANCEMENT_NOTES, ENHANCEMENT_WARNINGS, EnhancementNoteCode, EnhancementOddsResult,
+    ENHANCEMENT_NOTES, ENHANCEMENT_WARNINGS, EnhancementOddsResult,
     EnhancementWarningCode
 } from '@shared/api/endpoints/enhancementOdds.models';
 import { IconAlertTriangle, IconInfoCircle } from '@tabler/icons-react';
@@ -17,7 +17,6 @@ interface EnhancementResultProps {
   error: string | null,
   result: EnhancementOddsResult | null,
   gradeUnknown: boolean,
-  alteredOriginUnknown: boolean,
 }
 
 /**
@@ -31,7 +30,6 @@ export function EnhancementResult({
   error,
   result,
   gradeUnknown,
-  alteredOriginUnknown,
 }: EnhancementResultProps) {
   const strings = useStrings();
 
@@ -51,15 +49,13 @@ export function EnhancementResult({
     return <Text c="dimmed" ta="center" py="xl">{strings.enhancement.emptyPrompt}</Text>;
   }
 
-  // ALTERED_ORIGIN_UNKNOWN is already surfaced, prominently, by CaveatIcons —
-  // repeating it in the plain notes list would say the same thing twice.
-  const notes = result.notes.filter((note) => note !== EnhancementNoteCode.ALTERED_ORIGIN_UNKNOWN);
+  const notes = result.notes;
 
   return (
     <Stack gap="md">
       <Group justify="space-between" wrap="nowrap">
         <Text fw={600} size="lg">{strings.enhancement.probabilityLabel}</Text>
-        <CaveatIcons gradeUnknown={gradeUnknown} alteredOriginUnknown={alteredOriginUnknown} />
+        <CaveatIcons gradeUnknown={gradeUnknown} />
       </Group>
 
       {result.probability !== null ? (

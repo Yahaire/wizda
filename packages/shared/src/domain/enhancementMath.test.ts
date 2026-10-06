@@ -470,8 +470,6 @@ function oddsFor(overrides: Partial<EnhancementOddsInput>): EnhancementOddsResul
     targetEnhancementLevel: 20,
     slots: piece([]),
     targets: [],
-    alteredSlot: null,
-    alteredFrom: null,
     slotBlessingRates: EQUAL_SLOT_RATES,
     dropByBlessing: DROP_BY_BLESSING,
     bonusByBlessing: BONUS_BY_BLESSING,
@@ -571,65 +569,79 @@ describe('enhancementOdds', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Alteration. The identity chain runs on what each slot ORIGINALLY rolled, so
-  // an altered slot can be duplicated by a later milestone — see finding 2 in
-  // the milestone plan and docs/milestone-blessings.md.
+  // What a milestone draws against: what the piece DISPLAYS, with no memory of
+  // what a slot held before. An Alteration Stone's result is avoided like any
+  // other displayed blessing, and the blessing it replaced can come back — see
+  // docs/milestone-blessings.md, "Duplicate blessings".
   // -------------------------------------------------------------------------
 
-  describe('an altered slot', () => {
+  describe('what a milestone avoids', () => {
     /** Blue at drop (slots 1-2), at +10, wanting two ATK — one good, one anything. */
     const twoAtk = [
       { blessingCode: 'ATK', minValue: 12 },
       { blessingCode: 'ATK', minValue: 8 },
     ];
-    const blueAtPlusTen = {
-      slots: piece([['ATK', 12], ['SUR', 6]]),
-      enhancementLevel: 10,
-      targets: twoAtk,
-    };
 
-    it('lets a later milestone roll the blessing the stone put there', () => {
-      // Slot 1 was ACC at drop and was altered to ATK, so the chain still avoids
-      // ACC rather than ATK: slots 3 and 4 share {ATK, DEF, MAG}, and two slots
-      // out of three carry ATK with probability 2/3.
-      const result = oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: 'ACC' });
-
-      expect(result.probability).toBeCloseTo(2 / 3, 12);
-    });
-
-    it('is what separates a possible second ATK from an impossible one', () => {
-      // The very same piece, not declared as altered: the chain then treats slot
-      // 1's ATK as its original roll, no other slot can repeat it, and a second
-      // ATK becomes flatly impossible. This pair is the regression test — if the
-      // exclusion set is ever "simplified" back to the displayed blessings, the
-      // number above silently collapses to this one.
-      const result = oddsFor(blueAtPlusTen);
+    it('never rolls a blessing the piece already displays, whatever put it there', () => {
+      // Whether slot 1 rolled ATK at drop or was altered into it makes no
+      // difference: ATK is on the piece, so slots 3 and 4 cannot roll it, and
+      // a second ATK is flatly impossible.
+      const result = oddsFor({
+        slots: piece([['ATK', 12], ['SUR', 6]]),
+        enhancementLevel: 10,
+        targets: twoAtk,
+      });
 
       expect(result.probability).toBe(0);
+      for (const slot of result.slots.slice(2)) {
+        expect(slot.candidates?.map((candidate) => candidate.blessingCode)).not.toContain('ATK');
+      }
     });
 
-    it('averages over what the slot might have been when the player cannot say', () => {
-      const marginalised = oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: null });
+    it('can roll back a blessing an alteration removed — the wand experiment', () => {
+      // A green wand dropped with SUR alone; SUR was altered to MAG and the +10
+      // milestone rolled SUR right back in. Under a model that remembered the
+      // original roll that outcome has probability 0. Here slot 2 draws from
+      // {ATK, DEF, ACC, SUR} with MAG excluded, so SUR comes up one time in four.
+      const result = oddsFor({
+        slots: piece([['MAG', 10]]),
+        enhancementLevel: 5,
+        targetEnhancementLevel: 10,
+        targets: [{ blessingCode: 'SUR', minValue: null }],
+      });
 
-      // Slot 2 is pinned to SUR, so the original of slot 1 is uniform over the
-      // four remaining blessings — and the answer must be their plain mean.
-      const perOrigin = CATALOG
-        .filter((code) => code !== 'SUR')
-        .map((code) => oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: code }).probability);
-      const mean = perOrigin.reduce((sum, value) => sum + value, 0) / perOrigin.length;
+      expect(result.probability).toBeCloseTo(1 / 4, 12);
+    });
 
-      expect(marginalised.probability).toBeCloseTo(mean, 12);
-      // An original of ATK makes a second ATK impossible; the other three give
-      // 2/3 each, so the average lands exactly on a half.
-      expect(marginalised.probability).toBeCloseTo(0.5, 12);
+    it('takes a piece altered into carrying the same blessing twice as ordinary input', () => {
+      // A staff altered into MAG/MAG: the chain excludes MAG once and carries on.
+      // This is the regression for the walk itself — pinning both slots to MAG
+      // would have visited nothing and divided by zero.
+      const doubleMag = {
+        slots: piece([['MAG', 12], ['MAG', 12]]),
+        enhancementLevel: 10,
+      };
+
+      // Three MAG targets need three MAG slots, and no milestone will supply the
+      // third; ATK in one of the two remaining slots, drawn from
+      // {ATK, DEF, ACC, SUR}, is 1/4 + 3/4 · 1/3 = 1/2.
+      const anyMag = { blessingCode: 'MAG', minValue: null };
+      const thirdMag = oddsFor({ ...doubleMag, targets: [anyMag, anyMag, anyMag] });
+      const anyAtk = oddsFor({ ...doubleMag, targets: [{ blessingCode: 'ATK', minValue: null }] });
+
+      expect(thirdMag.probability).toBe(0);
+      expect(anyAtk.probability).toBeCloseTo(1 / 2, 12);
     });
 
     it('needs two distinct slots for two targets on one blessing, not one counted twice', () => {
-      // Slot 1's ATK is 12, which clears both thresholds on its own — but two
-      // targets still need two slots, so this is not a certainty.
-      const result = oddsFor({ ...blueAtPlusTen, alteredSlot: 1, alteredFrom: 'ACC' });
+      // Two ATK slots, both final at +10. With 12 and 9 the two thresholds are
+      // each met by their own slot; with 12 and 6 the 12 would have to count
+      // twice, which it may not.
+      const met = oddsFor({ slots: piece([['ATK', 12], ['ATK', 9]]), enhancementLevel: 10, targets: twoAtk });
+      const notMet = oddsFor({ slots: piece([['ATK', 12], ['ATK', 6]]), enhancementLevel: 10, targets: twoAtk });
 
-      expect(result.probability).toBeLessThan(1);
+      expect(met.probability).toBe(1);
+      expect(notMet.probability).toBe(0);
     });
   });
 

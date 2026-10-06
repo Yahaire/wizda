@@ -52,8 +52,6 @@ const enhancementOddsSchema = z.object({
   enhancementLevel: enhancementLevelSchema,
   targetEnhancementLevel: enhancementLevelSchema.optional(),
   initialGrade: levelSchema.optional(),
-  alteredSlot: slotSchema.optional(),
-  alteredFrom: z.string().min(1).optional(),
   slots: z.array(slotStateSchema).max(MAX_BLESSING_SLOTS),
   targets: z.array(targetSchema),
 });
@@ -221,7 +219,7 @@ function validateQuery(
   query: z.infer<typeof enhancementOddsSchema>,
   unrefinedCeilingFor: (slot: number) => number | null,
 ): boolean {
-  const { slots, targets, enhancementLevel, alteredSlot, alteredFrom, initialGrade } = query;
+  const { slots, targets, enhancementLevel, initialGrade } = query;
   const targetEnhancementLevel = query.targetEnhancementLevel ?? DEFAULT_TARGET_ENHANCEMENT_LEVEL;
 
   if (targets.length === 0) {
@@ -261,7 +259,6 @@ function validateQuery(
   const unknownCodes = [
     ...slots.flatMap((state) => (state.blessingCode ? [state.blessingCode] : [])),
     ...targets.map((target) => target.blessingCode),
-    ...(alteredFrom ? [alteredFrom] : []),
   ].filter((code) => !validBlessingCodes.has(code));
   if (unknownCodes.length > 0) {
     sendErrorResponse(
@@ -292,26 +289,6 @@ function validateQuery(
   const problem = checkBlessingSlotState(occupiedSlots, enhancementLevel, initialGrade ?? null);
   if (problem) {
     sendErrorResponse(res, HttpStatusCode.BAD_REQUEST, ErrorCode.INVALID_SLOT_STATE, problem.message);
-    return false;
-  }
-
-  if (alteredFrom !== undefined && alteredSlot === undefined) {
-    sendErrorResponse(
-      res,
-      HttpStatusCode.BAD_REQUEST,
-      ErrorCode.INVALID_QUERY,
-      'alteredFrom says what a slot used to hold, so it needs alteredSlot to say which slot.',
-    );
-    return false;
-  }
-  if (alteredSlot !== undefined && !occupiedSlots[alteredSlot - 1]) {
-    sendErrorResponse(
-      res,
-      HttpStatusCode.BAD_REQUEST,
-      ErrorCode.INVALID_QUERY,
-      `Slot ${alteredSlot} is empty, so it can't be the altered one — an Alteration Stone `
-      + 'replaces a blessing that is already there.',
-    );
     return false;
   }
 
@@ -452,8 +429,6 @@ async function handleEnhancementOdds(
     targetEnhancementLevel,
     slots,
     targets,
-    alteredSlot: query.alteredSlot ?? null,
-    alteredFrom: query.alteredFrom ?? null,
     slotBlessingRates,
     dropByBlessing,
     bonusByBlessing: bonuses,
@@ -484,11 +459,10 @@ async function handleEnhancementOdds(
     if (outcome.slots.some((slot) => slot.candidates !== null && slot.slot > 1)) {
       notes.push(EnhancementNoteCode.LATER_SLOTS_ASSUMED);
     }
-  }
-  if (query.alteredSlot !== undefined) {
-    notes.push(EnhancementNoteCode.NO_STACK_ON_ORIGINALS);
-    if (query.alteredFrom === undefined) {
-      notes.push(EnhancementNoteCode.ALTERED_ORIGIN_UNKNOWN);
+    // Only worth saying when the piece already shows something a fill will
+    // skip — on an empty piece there is nothing to avoid.
+    if (query.slots.some((state) => Boolean(state.blessingCode))) {
+      notes.push(EnhancementNoteCode.FILL_AVOIDS_DISPLAYED);
     }
   }
 
@@ -529,7 +503,6 @@ async function handleEnhancementOdds(
     targetCount: query.targets.length,
     enhancementLevel: query.enhancementLevel,
     targetEnhancementLevel,
-    hasAlteredSlot: query.alteredSlot !== undefined,
     hasProbability: body.probability !== null,
   });
 

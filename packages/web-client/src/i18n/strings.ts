@@ -254,7 +254,7 @@ export interface UiStrings {
     readonly qualitySelectPlaceholder: string,
     readonly initialGradeLabel: string,
     readonly initialGradeDescription: string,
-    /** The tri-state grade/altered-origin pickers' "I don't know" option. */
+    /** The tri-state initial-grade picker's "I don't know" option. */
     readonly notSure: string,
     /** Empty-search footer for the quality/initial-grade dropdowns. */
     readonly noMatchesLabel: string,
@@ -300,12 +300,10 @@ export interface UiStrings {
     readonly yesLabel: string,
     readonly noLabel: string,
     readonly alreadyRefinedBlockedNote: string,
-    readonly alterationToggleLabel: string,
-    readonly alteredSlotLabel: string,
-    readonly originalBlessingLabel: string,
+    /** Subtext on a greyed-out wish option: the piece already shows that blessing, so no milestone will roll it. */
+    readonly wishAlreadyOnPieceHint: string,
     readonly calculateButton: string,
     readonly gradeUnknownTooltip: string,
-    readonly alteredOriginUnknownTooltip: string,
     readonly tagline: string,
     readonly emptyPrompt: string,
     readonly probabilityLabel: string,

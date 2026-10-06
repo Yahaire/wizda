@@ -7,14 +7,13 @@ import { useDetail } from '@/components/detail/DetailProvider';
 import { PageTitle } from '@/components/PageTitle';
 import { useStrings } from '@/i18n/LanguageProvider';
 import { api, ApiError, MaintenanceError } from '@/services/api';
-import { Button, Divider, Grid, Paper, Stack, Text } from '@mantine/core';
+import { Button, Grid, Paper, Stack, Text } from '@mantine/core';
 import { IconWand } from '@tabler/icons-react';
 
-import { AlterationField } from './AlterationField';
 import {
     buildEnhancementQuery, buildReferenceParams, canCalculate, DEFAULT_ENHANCEMENT_FORM_STATE,
-    EMPTY_SLOT_FORM_STATE, EnhancementFormState, isAlteredOriginUnknown, isInitialGradeUnknown,
-    isPieceReady, reconcileFormState, SlotFormState
+    EMPTY_SLOT_FORM_STATE, EnhancementFormState, isInitialGradeUnknown, isPieceReady,
+    reconcileFormState, SlotFormState
 } from './enhancement.logic';
 import { EnhancementResult } from './EnhancementResult';
 import { PieceForm } from './PieceForm';
@@ -33,8 +32,8 @@ export function EnhancementOraclePage() {
   const [error, setError] = useState<string | null>(null);
 
   // Every write goes through `reconcileFormState`: grade, level and a slot's own
-  // toggle all move which slots hold a blessing, and any of them can strand a
-  // declared alteration on a slot that no longer does.
+  // fields all move which blessings the piece displays, and any of them can turn
+  // an empty slot's wish into one no milestone can grant.
   const patch = (change: Partial<EnhancementFormState>) => {
     setState((current) => reconcileFormState({ ...current, ...change }));
   };
@@ -100,7 +99,6 @@ export function EnhancementOraclePage() {
 
   const ready = isPieceReady(state);
   const gradeUnknown = isInitialGradeUnknown(state);
-  const alteredOriginUnknown = isAlteredOriginUnknown(state);
 
   return (
     <Stack gap="lg">
@@ -122,16 +120,6 @@ export function EnhancementOraclePage() {
                     shape={state}
                     reference={reference}
                     onSlotChange={setSlot}
-                  />
-
-                  <Divider />
-
-                  <AlterationField
-                    alteredSlot={state.alteredSlot}
-                    alteredFrom={state.alteredFrom}
-                    slots={state.slots}
-                    shape={state}
-                    onChange={(change) => patch(change)}
                   />
 
                   <Button
@@ -158,7 +146,6 @@ export function EnhancementOraclePage() {
               error={error}
               result={result}
               gradeUnknown={gradeUnknown}
-              alteredOriginUnknown={alteredOriginUnknown}
             />
           </Paper>
         </Grid.Col>

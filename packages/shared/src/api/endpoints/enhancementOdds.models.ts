@@ -33,8 +33,8 @@ export interface EnhancementSlotState {
   slot: number,
   /**
    * The blessing in this slot, by code. Omit for a slot that is still empty.
-   * Two slots **may** carry the same blessing — alteration can put a duplicate
-   * on a piece, and a later milestone can roll one in.
+   * Two slots **may** carry the same blessing — an Alteration Stone can put a
+   * duplicate on a piece. A milestone never does.
    */
   blessingCode?: string,
   /** The number displayed for that blessing. Required whenever `blessingCode` is set. */
@@ -102,28 +102,13 @@ export interface EnhancementOddsQuery {
    */
   initialGrade?: number,
   /**
-   * The one slot whose blessing was swapped by an Alteration Stone, 1-4.
+   * The piece's four slots. Omitted slots are treated as empty.
    *
-   * This is not bookkeeping. A milestone fill avoids the piece's **initial**
-   * blessings, and a standard Alteration Stone's result is not one of them — it
-   * overwrites what a slot displays without joining that set, and without
-   * removing the blessing it replaced from it. So a later milestone can roll the
-   * very blessing an altered slot shows, and whether we know a slot was altered
-   * is the difference between a second copy being possible and impossible.
-   *
-   * A Lesser or Full Alteration Stone needs no declaring: it re-rolls every
-   * blessing on the piece, so afterwards the displayed blessings *are* the
-   * initial ones and any prior alteration has been wiped. At most one slot is
-   * ever altered, for the same reason (docs/stones.md).
+   * Nothing about a slot's past is asked for — not whether it was altered, nor
+   * what it held before. A milestone draws against what the piece *displays*
+   * and remembers nothing else (docs/milestone-blessings.md, "Duplicate
+   * blessings"), so the item screen is the whole input.
    */
-  alteredSlot?: number,
-  /**
-   * What {@link alteredSlot} originally rolled, if the player remembers — the
-   * blessing later milestones will avoid, *not* the one the slot displays. Omit
-   * to average over the possibilities.
-   */
-  alteredFrom?: string,
-  /** The piece's four slots. Omitted slots are treated as empty. */
   slots: EnhancementSlotState[],
   /** At least one; an empty list is a 400 (there'd be nothing to compute). */
   targets: EnhancementTarget[],
@@ -144,10 +129,11 @@ export enum EnhancementNoteCode {
   EMPTY_SLOT_RULE_EMPIRICAL = 'EMPTY_SLOT_RULE_EMPIRICAL',
   /** That rule was proved for slot 1 and is assumed to hold for slots 2-4. */
   LATER_SLOTS_ASSUMED = 'LATER_SLOTS_ASSUMED',
-  /** A milestone avoids the piece's initial blessings, so it can duplicate an altered slot. */
-  NO_STACK_ON_ORIGINALS = 'NO_STACK_ON_ORIGINALS',
-  /** The altered slot's original blessing wasn't given, so the answer averages over it. */
-  ALTERED_ORIGIN_UNKNOWN = 'ALTERED_ORIGIN_UNKNOWN',
+  /**
+   * A milestone never rolls a blessing the piece currently displays, whatever
+   * put it there, and remembers nothing a slot held before.
+   */
+  FILL_AVOIDS_DISPLAYED = 'FILL_AVOIDS_DISPLAYED',
 }
 
 /**
@@ -179,14 +165,10 @@ export const ENHANCEMENT_NOTES: Readonly<Record<EnhancementNoteCode, string>> = 
     "to 4. The source publishes one value table per blessing with no slot axis, and",
     "the game describes all four milestones identically.",
   ]),
-  [EnhancementNoteCode.NO_STACK_ON_ORIGINALS]: TsUtilities.stringJoin([
-    "A milestone won't repeat a blessing the piece originally rolled, but an",
-    "Alteration Stone's result doesn't count as one of those — so a later milestone",
-    "can land on the blessing an altered slot displays, giving the piece two of it.",
-  ]),
-  [EnhancementNoteCode.ALTERED_ORIGIN_UNKNOWN]: TsUtilities.stringJoin([
-    "The altered slot's original blessing wasn't given, so this averages over every",
-    "blessing it could have been. Supplying it makes the answer exact.",
+  [EnhancementNoteCode.FILL_AVOIDS_DISPLAYED]: TsUtilities.stringJoin([
+    "A milestone never puts a blessing the piece already shows into an empty slot,",
+    "even one an Alteration Stone put there. It doesn't remember what a slot used",
+    "to hold, so a blessing an alteration removed can come back.",
   ]),
 };
 

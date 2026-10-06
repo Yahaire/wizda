@@ -152,13 +152,14 @@ export function checkBlessingSlotState(
  * rather than subtracting the taken ones from 1 — the published rows only sum to
  * 100% up to their own rounding.
  *
- * **`pinned[s]`** fixes slot `s` to an identity already known (the player told us
- * what's in it), leaving `null` slots to be enumerated. A pinned slot still
- * contributes its real chain factor rather than 1: a free slot earlier in the
- * chain can consume the very blessing a later pinned slot reports, and those
- * paths are impossible given what was observed. Callers conditioning on pinned
- * slots therefore need to divide by the total this produces — see
- * `enhancementOdds`. Pass an empty/all-null array to enumerate everything.
+ * **`excluded`** is what the piece already carries before these slots roll — the
+ * Enhancement Oracle's case, where the occupied slots are known and only the
+ * ones a milestone will fill are enumerated. Every slot here skips them, exactly
+ * as it skips what an earlier slot in this walk took; the chain simply continues
+ * from where the piece's own history left off. The Junk Oracle, which knows no
+ * identities up front, passes an empty set. Because it is a set, a piece that
+ * displays the same blessing twice (an Alteration Stone can do that) excludes it
+ * once, which is all the game does with it.
  *
  * **`mustCover`** prunes paths that can no longer cover every listed blessing, so
  * only covering assignments ever reach `visit`. Pass an empty set to visit them
@@ -169,18 +170,17 @@ export function checkBlessingSlotState(
  * only for the duration of the call — copy it if you need to keep it. That keeps
  * the Junk Oracle's path (which ignores it entirely) allocation-free.
  *
- * Edge cases: a pinned blessing that an earlier slot already took, or that the
- * slot cannot roll, contributes 0 and prunes that path; a slot with no rows, or
- * whose survivors sum to ≤ 0, likewise contributes 0; `mustCover` larger than
- * the slot count visits nothing.
+ * Edge cases: a slot with no rows, or whose survivors sum to ≤ 0, contributes 0
+ * and prunes that path; `mustCover` larger than the slot count, or naming an
+ * excluded blessing, visits nothing; no slots at all visits once, at 1.
  */
 export function forEachSlotAssignment(
   slots: readonly ReadonlyMap<string, number>[],
-  pinned: readonly (string | null)[],
+  excluded: ReadonlySet<string>,
   mustCover: ReadonlySet<string>,
   visit: (assignment: readonly string[], probability: number) => void,
 ): void {
-  const taken = new Set<string>();
+  const taken = new Set<string>(excluded);
   const assignment = new Array<string>(slots.length);
 
   const walk = (slotIndex: number, chained: number, stillNeeded: number): void => {
@@ -219,15 +219,6 @@ export function forEachSlotAssignment(
       );
       taken.delete(blessing);
     };
-
-    const pinnedBlessing = pinned[slotIndex] ?? null;
-    if (pinnedBlessing !== null) {
-      const rate = slotRates.get(pinnedBlessing) ?? 0;
-      if (rate > 0 && !taken.has(pinnedBlessing)) {
-        take(pinnedBlessing, rate);
-      }
-      return; // a pinned slot has exactly one candidate, reachable or not
-    }
 
     for (const [blessing, rate] of slotRates) {
       if (rate <= 0 || taken.has(blessing)) {

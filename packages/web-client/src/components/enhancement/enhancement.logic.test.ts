@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    allBlessingOptions, alterableSlots, buildEnhancementQuery, canCalculate, canSlotBeEmpty,
-    DEFAULT_ENHANCEMENT_FORM_STATE, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
-    guaranteedFilledCount, isAlteredOriginUnknown, isInitialGradeUnknown, isPieceReady,
-    isSlotFilledAtDrop, isSlotGuaranteedEmpty, isSlotMandatory, isSlotOccupied, isSlotShapeKnown,
-    MAX_ENHANCEMENT_LEVEL, normalizeTargetLevel, occupiedSlotsOf, reconcileFormState,
-    SlotDisplayState, slotDisplayState, slotBlessingOptions, slotStateProblem, SlotWishState,
-    slotWishState, targetLevelOptions, wishedTargets
+    buildEnhancementQuery, canCalculate, canSlotBeEmpty, DEFAULT_ENHANCEMENT_FORM_STATE,
+    displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState, guaranteedFilledCount,
+    isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop, isSlotGuaranteedEmpty, isSlotMandatory,
+    isSlotOccupied, isSlotShapeKnown, MAX_ENHANCEMENT_LEVEL, normalizeTargetLevel, occupiedSlotsOf,
+    reconcileFormState, SlotDisplayState, slotDisplayState, slotBlessingOptions, slotStateProblem,
+    SlotWishState, slotWishState, targetLevelOptions, wishBlessingOptions, wishedTargets
 } from './enhancement.logic';
+import { BLESSINGS } from '@shared/domain/stats';
 
 import type { EnhancementReference } from '@shared/api/endpoints/enhancementOdds.models';
 import type { SlotFormState, SlotShape } from './enhancement.logic';
@@ -226,26 +226,55 @@ describe('slotStateProblem', () => {
 });
 
 describe('reconcileFormState', () => {
-  it('leaves an alteration on a still-occupied slot alone', () => {
-    const before = state({ alteredSlot: 1, alteredFrom: 'ACC', slots: { 1: filledSlot() } });
+  it('leaves a wish for a blessing the piece does not show alone, by identity', () => {
+    const before = state({ slots: { 1: filledSlot(), 2: wishSlot({ wishBlessingCode: 'SUR' }) } });
     expect(reconcileFormState(before)).toBe(before);
   });
 
-  it('clears an alteration stranded by a stated grade', () => {
+  it('clears an empty slot\'s wish once the piece comes to display that blessing', () => {
+    // Slot 2 hoped for ATK; the player then transcribed ATK into slot 1. No
+    // milestone can roll ATK into slot 2 now, so the wish goes, value and all.
     const after = reconcileFormState(state({
-      initialGrade: 1,
-      alteredSlot: 1,
-      alteredFrom: 'ACC',
-      slots: { 1: filledSlot() },
+      slots: { 1: filledSlot({ blessingCode: 'ATK' }), 2: wishSlot({ wishMinValue: 16 }) },
     }));
-    expect(after.alteredSlot).toBeNull();
-    expect(after.alteredFrom).toBeNull();
+    expect(after.slots[2]?.wishBlessingCode).toBeNull();
+    expect(after.slots[2]?.wishMinValue).toBeNull();
   });
 
-  it('clears an alteration stranded by the level being corrected downwards', () => {
-    // Declared at +5, where slot 1 was mandatory; at +0 nothing holds it up.
-    const after = reconcileFormState(state({ enhancementLevel: 0, alteredSlot: 1 }));
-    expect(after.alteredSlot).toBeNull();
+  it('counts only occupied slots as displaying — a typed-but-unfilled slot shows nothing', () => {
+    // Slot 1 still reads Empty, so its typed ATK isn't on the piece and the
+    // wish on slot 2 stands.
+    const before = state({
+      slots: { 1: filledSlot({ filled: false }), 2: wishSlot() },
+    });
+    expect(reconcileFormState(before)).toBe(before);
+  });
+
+  it('leaves an occupied slot\'s own wish alone even though it names a displayed blessing', () => {
+    // An occupied slot's wish is value-only and refers to the blessing it
+    // already holds — that's not a duplicate, it's the slot itself.
+    const before = state({ slots: { 1: filledSlot({ wishBlessingCode: 'ATK', wishMinValue: 16 }) } });
+    expect(reconcileFormState(before)).toBe(before);
+  });
+});
+
+describe('displayedBlessings / wishBlessingOptions', () => {
+  it('collects the blessings of occupied slots, once each', () => {
+    const slots = {
+      1: filledSlot({ blessingCode: 'MAG' }),
+      2: filledSlot({ blessingCode: 'MAG' }),
+      3: filledSlot({ blessingCode: 'ATK', filled: false }),
+    };
+    expect([...displayedBlessings(slots, shape(null, 0))]).toEqual(['MAG']);
+  });
+
+  it('greys out a wish option the piece already shows, rather than hiding it', () => {
+    const slots = { 1: filledSlot({ blessingCode: 'MAG' }) };
+    const options = wishBlessingOptions(2, slots, shape(null, 0), null);
+
+    expect(options.map((option) => option.value)).toEqual(BLESSINGS.map((blessing) => blessing.code));
+    expect(options.find((option) => option.value === 'MAG')?.disabled).toBe(true);
+    expect(options.filter((option) => option.disabled)).toHaveLength(1);
   });
 });
 
@@ -285,46 +314,19 @@ describe('canCalculate', () => {
     expect(canCalculate(planning({ isRefined: false, planRefineStoneQuality: 3 }))).toBe(true);
   });
 
-  it('rejects an altered slot that is not currently Filled', () => {
-    expect(canCalculate(state({
-      ...base,
-      alteredSlot: 1,
-      slots: { 2: wishSlot({ wishMinValue: 16 }) },
-    }))).toBe(false);
-  });
 });
 
-describe('isInitialGradeUnknown / isAlteredOriginUnknown', () => {
+describe('isInitialGradeUnknown', () => {
   it('grade unknown is exactly "not sure"', () => {
     expect(isInitialGradeUnknown(state({ initialGrade: null }))).toBe(true);
     expect(isInitialGradeUnknown(state({ initialGrade: 1 }))).toBe(false);
   });
-
-  it('altered-origin-unknown only fires once an alteration is actually declared', () => {
-    expect(isAlteredOriginUnknown(state({ alteredSlot: null, alteredFrom: null }))).toBe(false);
-    expect(isAlteredOriginUnknown(state({ alteredSlot: 1, alteredFrom: null }))).toBe(true);
-    expect(isAlteredOriginUnknown(state({ alteredSlot: 1, alteredFrom: 'ACC' }))).toBe(false);
-  });
 });
 
-describe('alterableSlots', () => {
-  it('lists only the currently occupied slots', () => {
-    const slots = { 1: filledSlot(), 2: { ...EMPTY_SLOT_FORM_STATE, filled: false } };
-    expect(alterableSlots(slots, shape(null, 0))).toEqual([1]);
-  });
-
-  it('includes a milestone-mandatory slot even before it is explicitly filled', () => {
-    expect(alterableSlots({}, shape(null, 5))).toEqual([1]);
-  });
-
-  it('follows a stated grade\'s prefix', () => {
-    expect(alterableSlots({}, shape(3, 0))).toEqual([1, 2]);
-  });
-});
-
-describe('slotBlessingOptions / allBlessingOptions', () => {
+describe('slotBlessingOptions', () => {
   it('falls back to the full catalog when no reference data is loaded', () => {
-    expect(slotBlessingOptions(1, null)).toEqual(allBlessingOptions());
+    expect(slotBlessingOptions(1, null).map((option) => option.value))
+      .toEqual(BLESSINGS.map((blessing) => blessing.code));
   });
 
   it('restricts to the reference\'s nonzero rates when present', () => {
@@ -393,16 +395,20 @@ describe('buildEnhancementQuery', () => {
       .toEqual({ slot: 1, blessingCode: 'ATK', value: 8 });
   });
 
-  it('carries alteredSlot without alteredFrom when the origin is "not sure"', () => {
+  it('sends nothing about a slot\'s past — the item screen is the whole input', () => {
     const query = buildEnhancementQuery(state({
       equipment: 'Ebonsteel Dagger',
       quality: 4,
-      alteredSlot: 1,
-      alteredFrom: null,
       slots: { 1: filledSlot({ wishMinValue: 16 }) },
     }));
-    expect(query?.alteredSlot).toBe(1);
-    expect(query).not.toHaveProperty('alteredFrom');
+    expect(Object.keys(query ?? {}).sort()).toEqual([
+      'enhancementLevel',
+      'equipment',
+      'quality',
+      'slots',
+      'targetEnhancementLevel',
+      'targets',
+    ]);
   });
 });
 

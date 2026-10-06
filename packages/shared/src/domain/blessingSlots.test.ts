@@ -11,16 +11,15 @@ function slot(rates: Record<string, number>): ReadonlyMap<string, number> {
 }
 
 const NONE = new Set<string>();
-const UNPINNED: readonly null[] = [];
 
 /** Every visited assignment with its probability — the walk's full output. */
 function collect(
   slots: readonly ReadonlyMap<string, number>[],
-  pinned: readonly (string | null)[] = UNPINNED,
+  excluded: ReadonlySet<string> = NONE,
   mustCover: ReadonlySet<string> = NONE,
 ): { assignment: string[], probability: number }[] {
   const seen: { assignment: string[], probability: number }[] = [];
-  forEachSlotAssignment(slots, pinned, mustCover, (assignment, probability) => {
+  forEachSlotAssignment(slots, excluded, mustCover, (assignment, probability) => {
     // The buffer is reused across visits, so copy — this doubles as the test
     // that callers are told to copy it.
     seen.push({ assignment: [...assignment], probability });
@@ -85,7 +84,7 @@ describe('forEachSlotAssignment', () => {
     const required = new Set(['ATK', 'SUR']);
 
     const all = collect(slots);
-    const pruned = collect(slots, UNPINNED, required);
+    const pruned = collect(slots, NONE, required);
 
     // Every pruned visit is an unpruned visit with the identical probability,
     // so pruning is purely a filter — it never reweights a surviving path.
@@ -98,72 +97,62 @@ describe('forEachSlotAssignment', () => {
 
   it('visits nothing when more blessings are required than there are slots', () => {
     const slots = [slot({ ATK: 0.5, DEF: 0.5 })];
-    expect(collect(slots, UNPINNED, new Set(['ATK', 'DEF']))).toEqual([]);
+    expect(collect(slots, NONE, new Set(['ATK', 'DEF']))).toEqual([]);
   });
 
   // -------------------------------------------------------------------------
-  // pinned — what the Enhancement Oracle adds. A pinned slot carries an
-  // identity the player reported; the rest of the piece is still unknown.
+  // excluded — what the Enhancement Oracle adds. The piece already displays
+  // some blessings; the slots walked here are the ones milestones will fill.
   // -------------------------------------------------------------------------
 
-  it('holds a pinned slot fixed while enumerating the free ones', () => {
+  it('skips an excluded blessing in every slot, as if an earlier slot had taken it', () => {
     const slots = [
       slot({ ATK: 0.5, DEF: 0.3, SUR: 0.2 }),
       slot({ ATK: 0.5, DEF: 0.3, SUR: 0.2 }),
     ];
 
-    const visits = collect(slots, ['ATK', null]);
+    const visits = collect(slots, new Set(['ATK']));
 
     expect(visits.map(({ assignment }) => assignment)).toEqual([
-      ['ATK', 'DEF'],
-      ['ATK', 'SUR'],
+      ['DEF', 'SUR'],
+      ['SUR', 'DEF'],
     ]);
   });
 
-  it('gives a pinned slot its real chain factor, so the total is P(observed)', () => {
+  it('renormalises over what survives the exclusion, so the total is still 1', () => {
     const slots = [
       slot({ ATK: 0.5, DEF: 0.3, SUR: 0.2 }),
       slot({ ATK: 0.5, DEF: 0.3, SUR: 0.2 }),
     ];
 
-    // Pinning slot 1 to ATK should total P(slot 1 = ATK) = 0.5, not 1 — that
-    // is what lets `enhancementOdds` condition by dividing hit/total.
-    expect(totalOf(collect(slots, ['ATK', null]))).toBeCloseTo(0.5, 12);
+    // The chain continues from where the piece's history left off: slot 1 draws
+    // DEF or SUR in the ratio 0.3 : 0.2, not at their published 30% / 20%.
+    const visits = collect(slots, new Set(['ATK']));
+
+    expect(totalOf(visits)).toBeCloseTo(1, 12);
+    expect(visits[0]?.probability).toBeCloseTo(0.3 / 0.5, 12);
   });
 
-  it('prunes a free slot that would consume a later pinned slot\'s blessing', () => {
-    const slots = [
-      slot({ ATK: 0.5, DEF: 0.5 }),
-      slot({ ATK: 0.5, DEF: 0.5 }),
-    ];
-
-    // Slot 2 is pinned to DEF, so the only consistent history is slot 1 = ATK.
-    // The ATK/DEF path survives; the DEF/DEF path is impossible.
-    const visits = collect(slots, [null, 'DEF']);
-
-    expect(visits.map(({ assignment }) => assignment)).toEqual([['ATK', 'DEF']]);
-    expect(totalOf(visits)).toBeCloseTo(0.5, 12);
+  it('visits nothing when the exclusions leave a slot nothing to roll', () => {
+    expect(collect([slot({ ATK: 1 })], new Set(['ATK']))).toEqual([]);
   });
 
-  it('visits nothing when a pinned blessing is one the slot cannot roll', () => {
-    expect(collect([slot({ ATK: 1 })], ['DEF'])).toEqual([]);
-  });
-
-  it('visits nothing when two slots are pinned to the same blessing', () => {
+  it('ignores an exclusion the slots could never roll anyway', () => {
     const slots = [slot({ ATK: 0.5, DEF: 0.5 }), slot({ ATK: 0.5, DEF: 0.5 })];
-    expect(collect(slots, ['ATK', 'ATK'])).toEqual([]);
+    expect(collect(slots, new Set(['MAG']))).toEqual(collect(slots));
   });
 
-  it('treats an all-pinned walk as a single assignment at its joint probability', () => {
-    const slots = [
-      slot({ ATK: 0.5, DEF: 0.3, SUR: 0.2 }),
-      slot({ ATK: 0.5, DEF: 0.3, SUR: 0.2 }),
-    ];
+  it('cannot cover a blessing that is excluded', () => {
+    const slots = [slot({ ATK: 0.5, DEF: 0.5 }), slot({ ATK: 0.5, DEF: 0.5 })];
+    expect(collect(slots, new Set(['ATK']), new Set(['ATK']))).toEqual([]);
+  });
 
-    const visits = collect(slots, ['ATK', 'DEF']);
+  it('visits once, at probability 1, when there is nothing left to roll', () => {
+    const visits = collect([], new Set(['ATK', 'DEF']));
 
     expect(visits).toHaveLength(1);
-    expect(visits[0]?.probability).toBeCloseTo(0.5 * (0.3 / 0.5), 12);
+    expect(visits[0]?.probability).toBe(1);
+    expect(visits[0]?.assignment).toEqual([]);
   });
 });
 

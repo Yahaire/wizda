@@ -313,15 +313,14 @@ export function verifyBonus(
 //      refinement, and any bonus it has already collected.
 //   2. A slot a milestone *fills* takes a plain `drop` value and no bonus.
 //
-// The remaining subtlety is which blessing a milestone drops into an empty
+// The remaining question is which blessing a milestone drops into an empty
 // slot. Blessings are drawn without replacement (`blessingSlots.ts`), against
-// the piece's *initial* blessings — what it dropped with, or what a Lesser/Full
-// Alteration Stone last re-rolled it into, since those replace the natural set
-// wholesale. A **standard** Alteration Stone is the exception: it overwrites
-// what a slot displays without joining that set, and without removing the
-// blessing it replaced from it. So the altered slot's original still blocks a
-// later milestone while the stone's own blessing does not — which is why a
-// piece can end up carrying the same blessing twice.
+// what the piece *currently displays* — and nothing else. The game keeps no
+// memory of a slot's earlier blessings: an Alteration Stone's result is avoided
+// like any other displayed blessing, and the blessing it replaced is free to be
+// rolled again (`docs/milestone-blessings.md`, "Duplicate blessings"). So a
+// milestone never duplicates what the piece shows; the only way a piece carries
+// a blessing twice is the player altering a slot into one it already has.
 // ---------------------------------------------------------------------------
 
 /** One slot as the item screen currently shows it. */
@@ -351,18 +350,6 @@ export interface EnhancementOddsInput {
   /** All {@link MAX_BLESSING_SLOTS} slots, in order. */
   slots: readonly EnhancementSlotInput[],
   targets: readonly EnhancementTargetInput[],
-  /**
-   * The one slot whose blessing was swapped by an Alteration Stone, or null.
-   * At most one slot on a piece is ever in the altered state — every stone that
-   * grants a fresh alteration first wipes the previous one (docs/stones.md).
-   */
-  alteredSlot: number | null,
-  /**
-   * What that slot originally rolled, if the player remembers. The identity
-   * chain runs on originals, so this is the blessing later milestones avoid —
-   * *not* the one the slot displays. Null marginalises over it.
-   */
-  alteredFrom: string | null,
   /** P(blessing | slot) from `EquipmentBlessingDropRate`; index 0 is slot 1. */
   slotBlessingRates: readonly ReadonlyMap<string, number>[],
   /** The `DROP` value distribution per blessing, at this piece's value group and quality. */
@@ -409,6 +396,9 @@ export interface EnhancementOddsResult {
 /** Never prune the walk: the per-slot marginals need every assignment, not just the covering ones. */
 const VISIT_EVERY_ASSIGNMENT: ReadonlySet<string> = new Set<string>();
 
+/** A slot with no published row: the walk visits nothing through it, so the odds read 0. */
+const NO_RATES: ReadonlyMap<string, number> = new Map<string, number>();
+
 /** A Refinement Stone's uniform range for this blessing, or null if it isn't being refined. */
 function refinementDistribution(
   blessingCode: string,
@@ -430,9 +420,9 @@ function refinementDistribution(
  * matching, and by Hall's theorem one exists exactly when, for every `j`, at
  * least `k − j + 1` slots clear the `j`-th smallest threshold. So each slot is
  * reduced to its *level* (how many thresholds its value clears) and the level
- * combinations are enumerated — at most 5⁴, and reachable at all only when an
- * altered slot has put a duplicate blessing on the piece, since the draw chain
- * itself never repeats one.
+ * combinations are enumerated — at most 5⁴, and reachable at all only when the
+ * player has altered a slot into a blessing the piece already carried, since a
+ * milestone never repeats one.
  */
 function matchingProbability(
   distributions: readonly ValueDistribution[],
@@ -510,12 +500,12 @@ function matchingProbability(
  * The odds that enhancing this piece to `targetEnhancementLevel` meets every
  * target, plus what each slot will be worth.
  *
- * Slots the player reported are **pinned** in the identity chain and slots a
- * milestone will fill are free, so the walk enumerates the free ones while
- * holding the rest fixed. Pinned slots keep their real chain factor rather than
- * 1 — a free slot earlier in the chain can consume a blessing a later pinned
- * slot reports, and those histories are impossible given what was observed — so
- * the answer is `hit / total`, plain conditioning on the observation.
+ * Only the slots a milestone will fill are enumerated. Everything the piece
+ * displays is handed to the chain as already taken, so each fill avoids it and
+ * the walk continues from where the piece's own history left off. The chain
+ * renormalises over the survivors, so its total is 1 up to rounding; dividing
+ * `hit` by it anyway keeps the answer exact and makes a slot with no rows at all
+ * read as 0 rather than as a number computed on nothing.
  *
  * Edge cases: a piece with nothing left to roll returns a probability of 0 or 1
  * and four final slots; a missing `drop`/bonus distribution is reported in
@@ -528,8 +518,6 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
     targetEnhancementLevel,
     slots,
     targets,
-    alteredSlot,
-    alteredFrom,
     slotBlessingRates,
     dropByBlessing,
     bonusByBlessing,
@@ -551,7 +539,7 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
   /** One slot resolved: what it shows, what it will be worth, whether a milestone fills it. */
   interface SlotPlan {
     slot: number,
-    /** What the slot displays — an altered slot shows the stone's blessing, not its original. */
+    /** What the slot displays, whatever put it there. */
     displayBlessing: string | null,
     /** Set for an occupied slot; assignment-independent, since its value is already on screen. */
     occupiedValue: ValueDistribution | null,
@@ -602,14 +590,28 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
     });
   }
 
-  // Only slots that hold a blessing or are about to receive one take part in the
-  // draw. Both sets are prefixes (slots fill top-to-bottom), so this is one too.
-  let activeSlotCount = 0;
-  plans.forEach((plan, index) => {
-    if (plan.displayBlessing !== null || plan.willBeFilled) {
-      activeSlotCount = index + 1;
+  // Everything the piece displays is off the table for every milestone still
+  // ahead: a fill never duplicates a blessing already on the piece, whatever put
+  // it there. A set, so a piece the player altered into showing the same
+  // blessing twice excludes it once — which is all the game does with it.
+  const excluded = new Set<string>();
+  for (const plan of plans) {
+    if (plan.displayBlessing !== null) {
+      excluded.add(plan.displayBlessing);
     }
-  });
+  }
+
+  // Only the slots a milestone will fill are enumerated; `assignment[i]` in the
+  // walk below is what `freePlans[i]` lands on.
+  const freePlans = plans.filter((plan) => plan.willBeFilled);
+  const freePositionBySlot = new Map(freePlans.map((plan, index) => [plan.slot, index]));
+  const displayedIn = (plan: SlotPlan, assignment: readonly string[]): string | null => {
+    if (!plan.willBeFilled) {
+      return plan.displayBlessing;
+    }
+    const position = freePositionBySlot.get(plan.slot);
+    return position === undefined ? null : (assignment[position] ?? null);
+  };
 
   // A milestone-filled slot draws a plain `drop` value and no bonus, so each
   // candidate's worth depends only on which blessing lands — precompute it per
@@ -635,15 +637,6 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
     filledValuesBySlot.set(plan.slot, byBlessing);
   }
 
-  const pinned: (string | null)[] = plans.slice(0, activeSlotCount).map((plan) => {
-    if (plan.displayBlessing === null) {
-      return null; // a milestone will fill it — that's what we're enumerating
-    }
-    // The chain runs on originals, so an altered slot pins to what it *was*, and
-    // is left free to be marginalised when the player doesn't remember.
-    return plan.slot === alteredSlot ? alteredFrom : plan.displayBlessing;
-  });
-
   const targetsByBlessing = new Map<string, number[]>();
   for (const target of targets) {
     const thresholds = targetsByBlessing.get(target.blessingCode) ?? [];
@@ -666,13 +659,8 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
     let joint = 1;
     for (const [blessingCode, thresholds] of targetsByBlessing) {
       const holdingSlots: number[] = [];
-      for (let index = 0; index < activeSlotCount; index++) {
-        const plan = plans[index];
-        if (!plan) {
-          continue;
-        }
-        const displayed = plan.willBeFilled ? (assignment[index] ?? null) : plan.displayBlessing;
-        if (displayed === blessingCode) {
+      for (const plan of plans) {
+        if (displayedIn(plan, assignment) === blessingCode) {
           holdingSlots.push(plan.slot);
         }
       }
@@ -708,17 +696,18 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
   let total = 0;
   let hit = 0;
   forEachSlotAssignment(
-    slotBlessingRates.slice(0, activeSlotCount),
-    pinned,
+    freePlans.map((plan) => slotBlessingRates[plan.slot - 1] ?? NO_RATES),
+    excluded,
     VISIT_EVERY_ASSIGNMENT,
     (assignment, probability) => {
       total += probability;
-      for (const [slot, marginals] of marginalsBySlot) {
-        const blessingCode = assignment[slot - 1];
-        if (blessingCode !== undefined) {
+      freePlans.forEach((plan, position) => {
+        const blessingCode = assignment[position];
+        const marginals = marginalsBySlot.get(plan.slot);
+        if (blessingCode !== undefined && marginals) {
           marginals.set(blessingCode, (marginals.get(blessingCode) ?? 0) + probability);
         }
-      }
+      });
       hit += probability * targetsProbability(assignment);
     },
   );

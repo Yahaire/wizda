@@ -9,7 +9,7 @@ import { IconAlertTriangle } from '@tabler/icons-react';
 import {
     EMPTY_SLOT_FORM_STATE, isSlotFilledAtDrop, MAX_BLESSING_SLOTS, milestoneForSlot,
     slotBlessingOptions, SlotDisplayState, slotDisplayState, SlotFormState, SlotShape,
-    slotStateProblem, SlotWishState, slotWishState
+    slotStateProblem, SlotWishState, slotWishState, wishBlessingOptions
 } from './enhancement.logic';
 import { JoinedFields } from './JoinedFields';
 import { QualityPicker } from './QualityPicker';
@@ -97,11 +97,15 @@ function WishValueInput({
 function WishPair({
   slot,
   slotState,
+  slots,
+  shape,
   reference,
   onChange,
 }: {
   slot: number,
   slotState: SlotFormState,
+  slots: Record<number, SlotFormState>,
+  shape: SlotShape,
   reference: EnhancementReference | null,
   onChange: (patch: Partial<SlotFormState>) => void,
 }) {
@@ -114,7 +118,17 @@ function WishPair({
       left={(
         <Select
           size="sm"
-          data={slotBlessingOptions(slot, reference)}
+          // A blessing the piece already shows stays in the list but can't be
+          // picked — a milestone never rolls one of those — and says why.
+          data={wishBlessingOptions(slot, slots, shape, reference)}
+          renderOption={({ option }) => (
+            <Group gap="xs" justify="space-between" wrap="nowrap" style={{ flex: 1 }}>
+              <span>{option.label}</span>
+              {option.disabled && (
+                <Text span size="xs" c="dimmed">{strings.enhancement.wishAlreadyOnPieceHint}</Text>
+              )}
+            </Group>
+          )}
           value={slotState.wishBlessingCode}
           onChange={(wishBlessingCode) => onChange({
             wishBlessingCode,
@@ -157,6 +171,7 @@ function WishPair({
 function SlotRow({
   slot,
   slotState,
+  slots,
   displayState,
   wishState,
   shape,
@@ -165,6 +180,8 @@ function SlotRow({
 }: {
   slot: number,
   slotState: SlotFormState,
+  /** Every slot, for what the piece as a whole displays — see `wishBlessingOptions`. */
+  slots: Record<number, SlotFormState>,
   displayState: SlotDisplayState,
   wishState: SlotWishState,
   shape: SlotShape,
@@ -334,6 +351,8 @@ function SlotRow({
           <WishPair
             slot={slot}
             slotState={slotState}
+            slots={slots}
+            shape={shape}
             reference={reference}
             onChange={onChange}
           />
@@ -373,6 +392,7 @@ export function SlotEditor({ slots, shape, reference, onSlotChange }: SlotEditor
             slotState={slots[slot] ?? EMPTY_SLOT_FORM_STATE}
             displayState={slotDisplayState(slot, slots, shape)}
             wishState={slotWishState(slot, slots, shape)}
+            slots={slots}
             shape={shape}
             reference={reference}
             onChange={(patch) => onSlotChange(slot, patch)}
