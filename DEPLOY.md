@@ -79,6 +79,8 @@ ln -s /opt/cpanel/ea-nodejs22/bin/pm2 /usr/local/bin/pm2
 
 > The last symlink for `pm2` can only be created after installing PM2 in step E.
 
+These symlinks are for interactive SSH sessions only. Neither cPanel's deploy task nor cron loads the login profile, and cron's `PATH` is just `/usr/bin:/bin`, so `/usr/local/bin` is not on it either. The scripts in `deployment-tools/` put `/opt/cpanel/ea-nodejs22/bin` on their own `PATH` (`NODE_BIN_DIR` in `deployment-tools/.env` if that folder ever changes), which is why both automated paths go through them — see sections D and I.
+
 ### B. PostgreSQL Setup (via SSH + cPanel, one-time)
 
 Install and start PostgreSQL via SSH:
@@ -158,7 +160,9 @@ ARMOR_TAXONOMY_SOURCE_URL="https://raw.githubusercontent.com/itsnicksia/wizardry
 3. Set **Repository Path** to e.g. `/home/<username>/repositories/wizda`
 4. Create the repository
 
-The `.cpanel.yml` file in the repo root runs `npm install` automatically after each deploy. The build step cannot run in cPanel's deploy environment (see `.cpanel.yml` for details), so the build and restart must be done manually via SSH after deploying (see section H).
+The `.cpanel.yml` file in the repo root makes *Deploy HEAD Commit* run `deployment-tools/deploy.sh`, which installs, builds, migrates the database and restarts the pm2 processes — the whole update, no SSH needed (see section H). It needs the root `.env` from section C and, for the build to fit, a high enough "Max cPanel process memory" (see "Things to know").
+
+Optionally, create `deployment-tools/.env` from `deployment-tools/env.example` to override the script's defaults (pm2 process names, web port, Node location). The defaults match this guide, so it is not needed on a server set up as described here.
 
 ### E. PM2 Setup (via SSH, one-time)
 
@@ -166,33 +170,21 @@ PM2 keeps the Node.js processes alive and restarts them on server reboot.
 
 ```bash
 npm install -g pm2
+pm2 startup
+# Run the command it prints
 ```
 
-Install deps and build once, then start both apps. (The section D deploy already
-runs `npm install`, but run it explicitly here so this step stands on its own —
-the build fails silently if deps are missing.) Note `-H 127.0.0.1` on the
-frontend — it keeps the Next.js port loopback-only (see "Security: network
-exposure"); the API binds loopback on its own.
+The processes themselves are started by the first deploy (section G): `deploy.sh` starts any pm2 process that does not exist yet and restarts the ones that do, then runs `pm2 save` so the boot list stays current. For reference, these are the commands it uses, with the defaults from `deployment-tools/env.example`:
 
 ```bash
-cd ~/repositories/wizda
-npm install
-npm run build
-
-# Backend API (uses port 3001 by default or PORT from .env, binds 127.0.0.1 by default)
+# Backend API (port from PORT in .env, binds 127.0.0.1 by default)
 pm2 start packages/backend-api/dist/backend-api/src/index.js --name wizda-api
 
-# Frontend (Here, it's put on port 4000, forced onto 127.0.0.1)
+# Frontend (port 4000, forced onto 127.0.0.1)
 pm2 start node_modules/next/dist/bin/next --name wizda-web -- start packages/web-client -p 4000 -H 127.0.0.1
 ```
 
-Save and configure PM2 to start on boot:
-
-```bash
-pm2 save
-pm2 startup
-# Run the command it prints, then run pm2 save again
-```
+Note `-H 127.0.0.1` on the frontend — it keeps the Next.js port loopback-only (see "Security: network exposure"); the API binds loopback on its own. Different names or ports go in `deployment-tools/.env` (`API_PROCESS_NAME`, `WEB_PROCESS_NAME`, `WEB_PORT`, `WEB_HOST`), never into a hand-run `pm2 start`, or the next deploy would start a second copy under the default name.
 
 ### F. Apache Reverse Proxy (via SSH, one-time)
 
@@ -386,41 +378,50 @@ unaffected is `mail.wizda.app` **for SMTP/IMAP**, which never touches Apache —
 note that the same hostname *in a browser* is a webmail proxy subdomain and does
 go through the vhost.
 
-### G. First-Time Database Setup (via SSH, one-time)
+### G. First Deploy and Database Setup (one-time)
 
-```bash
-cd ~/repositories/wizda
-npx prisma migrate deploy
-npm run db:seed:maintenance
-```
+1. cPanel → Git Version Control → **Manage** → **Pull or Deploy** → **Deploy HEAD Commit**. This runs `deployment-tools/deploy.sh`: it installs, builds, creates the database tables (`prisma migrate deploy`) and starts both pm2 processes. The output is in the deployment log (cPanel → Git Version Control → the repository's log, kept under `~/.cpanel/logs/`).
 
-`db:seed:maintenance` loads all four sources from section C and wipe-and-rebuilds
-the tables (see `CLAUDE.md` / `docs/domain.md`) behind a `.maintenance` flag that
-clears on success. It is idempotent — safe to re-run. (There's no root `npm run
-seed`; the underlying script lives in the `backend-api` workspace and is invoked
-by Prisma via `prisma.config.ts`.)
+2. Seed the data, over SSH:
+
+   ```bash
+   cd ~/repositories/wizda
+   bash deployment-tools/seed.sh
+   ```
+
+   This is `npm run db:seed:maintenance` with the environment set up around it. It loads all four sources from section C and wipe-and-rebuilds the tables (see `docs/domain.md`) behind a `.maintenance` flag that clears on success. It is idempotent — safe to re-run. (There's no root `npm run seed`; the underlying script lives in the `backend-api` workspace and is invoked by Prisma via `prisma.config.ts`.)
+
+3. Schedule the weekly re-seed (section I).
 
 ### H. Subsequent Deployments
 
 #### Code updates
 
-For code changes (including schema migrations):
+For code changes (including schema migrations), after pushing to the remote, in cPanel → Git Version Control → **Manage** → **Pull or Deploy**:
 
-1. Push commits to your git remote
-2. cPanel → Git Version Control → **Deploy HEAD Commit**
-   - This pulls the latest code and runs `npm install` automatically
-3. SSH into the server and run:
+1. **Update from Remote** (fast-forwards the clone).
+2. **Deploy HEAD Commit** — runs `.cpanel.yml`, which runs `deployment-tools/deploy.sh`.
+
+Over SSH, the equivalent is the same script:
 
 ```bash
 cd ~/repositories/wizda
-npm install               # redundant if the cPanel deploy ran; safe to repeat
-npx prisma migrate deploy
-npm run build
-pm2 restart all
-
-# Single line version (if you're confident it'll run)
-cd ~/repositories/wizda && npm install && npx prisma migrate deploy && npm run build && pm2 restart all
+git pull
+bash deployment-tools/deploy.sh
 ```
+
+The script's output goes to the deployment log (`~/.cpanel/logs/`). A deploy takes a few minutes, nearly all of it the build. It stops at the first step that fails:
+
+1. Checks its setup: the root `.env` exists, `npm` and `pm2` are found, and logs the virtual memory limit (refusing to build below `MIN_VM_LIMIT_GB`, if that is set — see "Things to know").
+2. Runs `npm ci`, or skips it and reuses `node_modules/` when `package-lock.json` hasn't changed since the last successful install.
+3. Runs `npm run build` (shared, `prisma generate`, API, web) and checks the two build outputs exist.
+4. Runs `npx prisma migrate deploy`. After the build on purpose: a failed build then leaves the database at the version the running code expects.
+5. Restarts `wizda-api` and `wizda-web` (starting whichever doesn't exist yet) and runs `pm2 save`.
+6. Waits up to a minute for both to answer on their ports, then prints `pm2 ls`.
+
+The apps are built in place, so between the start of the build and the restart the live site may answer some requests with errors (the running `next start` serves from the `.next/` folder the build is rewriting). That window is the build's length; a failed build leaves the previous processes running on a possibly inconsistent `.next/`, so after fixing the cause, deploy again rather than leaving it.
+
+A code update does not re-seed. If the commit changed the scraper or the seed, follow it with a data update.
 
 #### Data updates
 
@@ -428,7 +429,7 @@ When the source pages change or the scraper/seed logic changes, re-seed without 
 
 ```bash
 cd ~/repositories/wizda
-npm run db:seed:maintenance
+bash deployment-tools/seed.sh
 ```
 
 This sets a maintenance flag before seeding and clears it on success. If the seed fails, the flag is left in place intentionally — the DB may be in a partial state, so it's safer to keep the maintenance page up until you fix the issue and re-run. To clear it manually (e.g. after a killed process):
@@ -437,9 +438,33 @@ This sets a maintenance flag before seeding and clears it on success. If the see
 rm .maintenance
 ```
 
+A deploy that finds the flag warns about it in its log and carries on; the flag is the seed's to clear, not the deploy's.
+
+### I. Scheduled Data Updates (cron, one-time)
+
+The upstream pages change with the game, so the seed runs weekly from cPanel → **Cron Jobs**. The job must call `deployment-tools/seed.sh`, not `npm` directly:
+
+```
+0 3 * * 4 mkdir -p $HOME/logs && /bin/bash $HOME/repositories/wizda/deployment-tools/seed.sh >> $HOME/logs/wizda-seed.log 2>&1 || echo "Seed failed; see $HOME/logs/wizda-seed.log"
+```
+
+Why the wrapper: cron runs jobs with `PATH=/usr/bin:/bin` and no login profile, so a plain `cd ~/repositories/wizda && npm run db:seed:maintenance` dies at `npm: command not found` every time — while the same command works from an SSH shell, whose profile has `/usr/local/bin` and the section A symlinks. The failure is silent unless someone reads the account's local mail (`mail`, or `/var/spool/mail/<username>`), which is where cron sends a job's output when the Cron Jobs page has no email set. `seed.sh` puts `/opt/cpanel/ea-nodejs22/bin` on its own `PATH` and logs with timestamps. With the line above, each run appends to `~/logs/wizda-seed.log`, and only a failure produces output — so if the Cron Jobs page has an email set, a failure sends one line and a success sends nothing.
+
+The visible check is the "Updated … ago" label on the site, which comes from the seed's timestamp: with the job working it never reads more than a week.
+
+Deploys and seeds take a lock (`~/.wizda-tasks.lock`) so one started while the other runs waits for it instead of rebuilding the database under a build.
+
 **Taxonomy drift is not a failure.** If the upstream equipment CSVs use a `Type`,
 `Armor Type` or `Rank` we don't map — most likely after a game update adds gear —
 the seed still completes, still clears the maintenance flag, and prints an
 `ACTION REQUIRED` block at the very end naming the unmapped values. The affected
 items are stored without that one field. Work through "Adding a new equipment
 category" in `docs/domain.md`, then re-seed so they pick the new codes up.
+
+### Things to know
+
+- **"Max cPanel process memory" must be high enough for the build.** cPanel runs the deploy task under that WHM → *Tweak Settings* limit, and it caps *virtual address space* (`ulimit -v`), not the memory actually used: Node reserves far more address space than it touches, and both the Prisma CLI and Next's compiler run WebAssembly, which reserves more still. Under a too-tight cap the build doesn't fail cleanly: it thrashes the garbage collector for many minutes, then aborts with errors like `JavaScript heap out of memory` or `WebAssembly.Instance(): Out of memory`. `deploy.sh` lifts the soft limit to the hard one, logs the result on every run, and passes `--disable-wasm-trap-handler` to Node so each WebAssembly instance reserves only what it uses. Once the number this build needs on this server is known, set `MIN_VM_LIMIT_GB` in `deployment-tools/.env` so a lowered limit fails fast instead of thrashing.
+- **Never edit tracked files in the clone on the server.** *Deploy HEAD Commit* needs a clean working tree. `.env` (root and `deployment-tools/`), `.maintenance`, `node_modules/`, `dist/`, `.next/` and `*.log` are gitignored, so they don't count.
+- **To force a clean reinstall of dependencies**, delete `node_modules/` in the clone, then deploy. Deploys otherwise reinstall only when a pulled commit changes `package-lock.json`.
+- **Node.js comes from `/opt/cpanel/ea-nodejs22/bin`** inside the scripts, because neither the deploy task nor cron loads the login profile's PATH. If cPanel's Node.js package changes (e.g. to `ea-nodejs24`), set `NODE_BIN_DIR` in `deployment-tools/.env`.
+- **`pm2 restart` keeps the environment from the first `pm2 start`.** That is fine for the API, which reads the root `.env` itself, and for `API_URL`, which the web build bakes in (section C). It also means the build-only `NODE_OPTIONS` never reaches the apps.

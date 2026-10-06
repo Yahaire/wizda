@@ -1,15 +1,15 @@
 ---
+# cPanel deployment tasks, run on "Deploy HEAD Commit" (Git Version Control).
+#
+# The clone installs, builds, migrates the database and restarts the pm2 processes itself. See the
+# script for the steps and DEPLOY.md for the one-time setup it expects.
+#
+# The steps live in a script rather than here so they can be read and run as one unit, over SSH
+# too. It is invoked through bash rather than directly so the executable bit, which is easy to lose
+# when committing from Windows, does not matter. Tasks run from the repository root.
+#
+# cPanel runs this under WHM > Tweak Settings > "Max cPanel process memory"; the build needs that
+# limit high enough (see DEPLOY.md, "Things to know").
 deployment:
   tasks:
-    - npm install
-    # Building via cPanel's git deploy is not supported because the deploy
-    # environment cannot allocate WebAssembly memory, which both Prisma CLI
-    # (prisma generate) and Next.js (SWC compiler) require.
-    #
-    # Possible future solutions:
-    #   1. Build locally, commit artifacts (.next/, dist/), and only restart here
-    #   2. Set up a CI/CD pipeline (e.g. GitHub Actions) to build and rsync to the server
-    #
-    # For now, deploy manually via SSH after pulling:
-    #   npm run build
-    #   pm2 restart all
+    - /bin/bash deployment-tools/deploy.sh
