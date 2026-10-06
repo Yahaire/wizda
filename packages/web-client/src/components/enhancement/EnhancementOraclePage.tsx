@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ENHANCEMENT_ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { PageTitle } from '@/components/PageTitle';
 import { useStrings } from '@/i18n/LanguageProvider';
 import { api, ApiError, MaintenanceError } from '@/services/api';
-import { Button, Grid, Paper, Stack, Text } from '@mantine/core';
+import { Box, Button, Grid, Paper, Stack, Text } from '@mantine/core';
 import { IconWand } from '@tabler/icons-react';
 
 import {
@@ -17,9 +17,24 @@ import {
 } from './enhancement.logic';
 import { EnhancementResult } from './EnhancementResult';
 import { PieceForm } from './PieceForm';
+import { PiecePreview, PREVIEW_BREAKPOINT, WantCard } from './PiecePreview';
 import { SlotEditor } from './SlotEditor';
 
 import type { EnhancementOddsResult, EnhancementReference } from '@shared/api/endpoints/enhancementOdds.models';
+
+/**
+ * A result and the exact question it answered. The question is kept as the
+ * serialized request so a later form state can be checked against it by
+ * value: a result is *current* only while the form would send that same
+ * request again. The form moving on doesn't discard the result — a wish
+ * nudged and nudged back is current again with no round trip — it only
+ * stops the result being drawn as the answer to the form in front of the
+ * player.
+ */
+interface ComputedResult {
+  query: string,
+  result: EnhancementOddsResult,
+}
 
 export function EnhancementOraclePage() {
   const strings = useStrings();
@@ -27,7 +42,7 @@ export function EnhancementOraclePage() {
 
   const [state, setState] = useState<EnhancementFormState>(DEFAULT_ENHANCEMENT_FORM_STATE);
   const [reference, setReference] = useState<EnhancementReference | null>(null);
-  const [result, setResult] = useState<EnhancementOddsResult | null>(null);
+  const [computed, setComputed] = useState<ComputedResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,10 +98,10 @@ export function EnhancementOraclePage() {
     }
     setLoading(true);
     setError(null);
-    setResult(null);
+    setComputed(null);
     try {
       const fresh = await api.enhancementOdds(query);
-      setResult(fresh);
+      setComputed({ query: JSON.stringify(query), result: fresh });
     } catch (thrown) {
       if (thrown instanceof MaintenanceError) {
         return; // the global MaintenanceGate already covers this
@@ -97,8 +112,18 @@ export function EnhancementOraclePage() {
     }
   };
 
+  // The piece behind the form's English key, for the previews' name, icon and
+  // tint. A linear scan of the catalogue per change is cheap next to the
+  // dropdown's own row model over the same list.
+  const item = useMemo(
+    () => equipmentList?.find((candidate) => candidate.name === state.equipment) ?? null,
+    [equipmentList, state.equipment],
+  );
+
   const ready = isPieceReady(state);
   const gradeUnknown = isInitialGradeUnknown(state);
+  const stale = computed !== null && computed.query !== JSON.stringify(buildEnhancementQuery(state));
+  const outcome = computed !== null && !stale ? computed.result.slots : undefined;
 
   return (
     <Stack gap="lg">
@@ -108,7 +133,7 @@ export function EnhancementOraclePage() {
       </div>
 
       <Grid gutter="lg">
-        <Grid.Col span={{ base: 12, md: 5 }}>
+        <Grid.Col span={{ base: 12, [PREVIEW_BREAKPOINT]: 5 }}>
           <Stack gap="lg">
             <PieceForm state={state} onChange={patch} equipmentList={equipmentList} />
 
@@ -139,15 +164,29 @@ export function EnhancementOraclePage() {
           </Stack>
         </Grid.Col>
 
-        <Grid.Col span={{ base: 12, md: 7 }}>
-          <Paper withBorder p="lg" radius="md" h="100%">
-            <EnhancementResult
-              loading={loading}
-              error={error}
-              result={result}
-              gradeUnknown={gradeUnknown}
-            />
-          </Paper>
+        <Grid.Col span={{ base: 12, [PREVIEW_BREAKPOINT]: 7 }}>
+          <Stack gap="lg">
+            {/* Beside the form only — see PREVIEW_BREAKPOINT for why a narrow
+                screen gets the WANT face inside the result instead. */}
+            <Box visibleFrom={PREVIEW_BREAKPOINT}>
+              <PiecePreview state={state} item={item} outcome={outcome} />
+            </Box>
+
+            <Paper withBorder p="lg" radius="md">
+              <EnhancementResult
+                loading={loading}
+                error={error}
+                result={computed?.result ?? null}
+                gradeUnknown={gradeUnknown}
+                stale={stale}
+                narrowPreview={ready && item !== null && (
+                  <Box hiddenFrom={PREVIEW_BREAKPOINT}>
+                    <WantCard state={state} item={item} outcome={outcome} />
+                  </Box>
+                )}
+              />
+            </Paper>
+          </Stack>
         </Grid.Col>
       </Grid>
     </Stack>

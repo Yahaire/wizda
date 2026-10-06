@@ -1,35 +1,50 @@
 'use client';
 
-import { blessingLabel, formatPercent } from '@/components/oracle/oracle.logic';
+import { formatPercent } from '@/components/oracle/oracle.logic';
 import { useStrings } from '@/i18n/LanguageProvider';
-import { Alert, Center, Divider, Group, Loader, Paper, Stack, Text } from '@mantine/core';
+import { Alert, Center, Group, Loader, Stack, Text } from '@mantine/core';
 import {
     ENHANCEMENT_NOTES, ENHANCEMENT_WARNINGS, EnhancementOddsResult,
     EnhancementWarningCode
 } from '@shared/api/endpoints/enhancementOdds.models';
-import { IconAlertTriangle, IconInfoCircle } from '@tabler/icons-react';
+import { IconAlertTriangle, IconHistory, IconInfoCircle } from '@tabler/icons-react';
 
 import { CaveatIcons } from './CaveatIcons';
-import { formatValueRange } from './enhancement.logic';
 
 interface EnhancementResultProps {
   loading: boolean,
   error: string | null,
   result: EnhancementOddsResult | null,
   gradeUnknown: boolean,
+  /**
+   * The form has moved since `result` was computed. The number stays on
+   * screen — it was true of *some* question — but dimmed and captioned, so
+   * it can't be read as the answer to the form as it now stands.
+   */
+  stale: boolean,
+  /**
+   * The WANT-face card, for the one layout where the previews above the
+   * result are hidden (see `PREVIEW_BREAKPOINT`): on a narrow screen the
+   * per-slot picture lives inside the result instead, where it is read
+   * after the form rather than beside it.
+   */
+  narrowPreview?: React.ReactNode,
 }
 
 /**
- * `EnhancementResult`'s per-slot breakdown mirrors what the backend already
- * did the hard work of computing (`enhancementOdds()` in
- * `@shared/domain/enhancementMath`) — this only formats it. See
- * `docs/calculation/enhancement.md`, "What comes back".
+ * The headline of a computed result: the probability, the milestones still
+ * ahead, and the data gaps and explanations that travel with the number. The
+ * per-slot picture — what each slot ends as, or what a milestone could roll
+ * there — is the WANT face of `PieceCard`, drawn beside this rather than
+ * repeated under it; see `EnhancementOraclePage`.
  */
 export function EnhancementResult({
   loading,
   error,
   result,
   gradeUnknown,
+  stale,
+  narrowPreview,
 }: EnhancementResultProps) {
   const strings = useStrings();
 
@@ -58,19 +73,27 @@ export function EnhancementResult({
         <CaveatIcons gradeUnknown={gradeUnknown} />
       </Group>
 
-      {result.probability !== null ? (
-        <Text fz="2rem" fw={700} c="crimson.4">{formatPercent(result.probability)}</Text>
-      ) : (
-        <Text fz="1.2rem" fw={600} c="dimmed">{strings.enhancement.noDataLabel}</Text>
+      {stale && (
+        <Alert color="gray" variant="light" icon={<IconHistory size={18} />}>
+          {strings.enhancement.resultOutdated}
+        </Alert>
       )}
 
-      <Text size="sm" c="dimmed">
-        {result.remainingMilestones.length > 0
-          ? strings.enhancement.remainingMilestonesLabel(
-            result.remainingMilestones.map((level) => `+${level}`).join(', '),
-          )
-          : strings.enhancement.noRemainingMilestones}
-      </Text>
+      <div style={stale ? { opacity: 0.5 } : undefined}>
+        {result.probability !== null ? (
+          <Text fz="2rem" fw={700} c="crimson.4">{formatPercent(result.probability)}</Text>
+        ) : (
+          <Text fz="1.2rem" fw={600} c="dimmed">{strings.enhancement.noDataLabel}</Text>
+        )}
+
+        <Text size="sm" c="dimmed">
+          {result.remainingMilestones.length > 0
+            ? strings.enhancement.remainingMilestonesLabel(
+              result.remainingMilestones.map((level) => `+${level}`).join(', '),
+            )
+            : strings.enhancement.noRemainingMilestones}
+        </Text>
+      </div>
 
       {result.warnings.length > 0 && (
         <Alert color="yellow" variant="light" icon={<IconAlertTriangle size={18} />} title={strings.enhancement.warningsHeading}>
@@ -92,41 +115,7 @@ export function EnhancementResult({
         </Alert>
       )}
 
-      <Divider />
-
-      <Stack gap="xs">
-        {result.slots.map((slot) => (
-          <Paper key={slot.slot} withBorder p="sm" radius="sm">
-            <Stack gap={4}>
-              <Text fw={600} size="sm">{strings.enhancement.slotLabel(slot.slot)}</Text>
-
-              {slot.candidates ? (
-                <Stack gap={2}>
-                  <Text size="xs" c="dimmed">{strings.enhancement.slotResultCandidatesLabel}</Text>
-                  {slot.candidates.map((candidate) => (
-                    <Group key={candidate.blessingCode} justify="space-between" wrap="nowrap">
-                      <Text size="sm">{blessingLabel(candidate.blessingCode)}</Text>
-                      <Group gap="sm" wrap="nowrap">
-                        <Text size="sm" c="dimmed">{formatValueRange(candidate.valueDistribution)}</Text>
-                        <Text size="sm" fw={600} c="crimson.4">{formatPercent(candidate.probability)}</Text>
-                      </Group>
-                    </Group>
-                  ))}
-                </Stack>
-              ) : slot.blessingCode ? (
-                <Group justify="space-between" wrap="nowrap">
-                  <Text size="sm">{blessingLabel(slot.blessingCode)}</Text>
-                  <Text size="sm" c="dimmed">
-                    {slot.valueDistribution ? formatValueRange(slot.valueDistribution) : ''}
-                  </Text>
-                </Group>
-              ) : (
-                <Text size="sm" c="dimmed">{strings.enhancement.emptyOption}</Text>
-              )}
-            </Stack>
-          </Paper>
-        ))}
-      </Stack>
+      {narrowPreview}
     </Stack>
   );
 }

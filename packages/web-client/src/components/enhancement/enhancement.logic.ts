@@ -447,6 +447,20 @@ function isRefinePlanReady(slot: SlotFormState): boolean {
 }
 
 /**
+ * The Refinement Stone a slot's plan will actually send: its quality, or null
+ * while the plan is closed, incomplete, or blocked (`isRefined: true` is
+ * explained in the UI and never reaches a request — see `ALREADY_REFINED`).
+ * One rule for both the query and the preview, so the picture can't promise a
+ * stone the request won't carry.
+ */
+export function plannedRefineStoneQuality(slot: SlotFormState): number | null {
+  if (!slot.planRefine || slot.isRefined !== false) {
+    return null;
+  }
+  return slot.planRefineStoneQuality;
+}
+
+/**
  * Everything Calculate needs before it's worth a round trip. Mirrors the
  * backend's own `validateQuery` shape checks (see `enhancementOdds.ts`) so a
  * doomed request never leaves the client, but doesn't re-derive anything the
@@ -577,16 +591,14 @@ export function buildEnhancementQuery(state: EnhancementFormState): EnhancementO
     if (!slotState?.blessingCode || slotState.value === null) {
       continue; // occupied by rule but not yet described — canCalculate should have caught this
     }
-    const refineActive = slotState.planRefine
-      && slotState.isRefined === false
-      && slotState.planRefineStoneQuality !== null;
+    const refineStoneQuality = plannedRefineStoneQuality(slotState);
     slots.push({
       slot,
       blessingCode: slotState.blessingCode,
       value: slotState.value,
-      ...(refineActive && {
+      ...(refineStoneQuality !== null && {
         isRefined: false,
-        planRefineStoneQuality: slotState.planRefineStoneQuality!,
+        planRefineStoneQuality: refineStoneQuality,
       }),
     });
   }
@@ -600,4 +612,137 @@ export function buildEnhancementQuery(state: EnhancementFormState): EnhancementO
     slots,
     targets: wishedTargets(state),
   };
+}
+
+/** Which of the piece's two moments a preview draws. */
+export enum PreviewFace {
+  /** The piece as the item screen shows it now, at the current level. */
+  HAVE = 'HAVE',
+  /** The piece once it reaches the target level, as far as the wishes describe it. */
+  WANT = 'WANT',
+}
+
+/** A slot holding a blessing, on either face. */
+export interface PreviewBlessingSlot {
+  kind: 'BLESSING',
+  slot: number,
+  /** null while the player hasn't transcribed it yet — drawn as a blank, not an error. */
+  blessingCode: string | null,
+  /** The value shown now; null while not yet typed. */
+  value: number | null,
+  /**
+   * The milestone that will boost this value on the way to the target level,
+   * or null when nothing will touch it again. Only ever set on the WANT face.
+   */
+  boostedAt: number | null,
+  /** The floor the player hopes the value reaches, when they named one. WANT face only. */
+  minValue: number | null,
+  /** The Refinement Stone the plan will apply here, by quality. WANT face only. */
+  refineStoneQuality: number | null,
+}
+
+/** A slot nothing will have filled by the face's level. */
+export interface PreviewEmptySlot {
+  kind: 'EMPTY',
+  slot: number,
+  /** The milestone that would fill it — past the drawn level, by definition. */
+  fillsAt: number,
+}
+
+/** An empty slot a milestone on the way to the target will fill. WANT face only. */
+export interface PreviewWishSlot {
+  kind: 'WISH',
+  slot: number,
+  /** The blessing hoped for, or null for "any". */
+  blessingCode: string | null,
+  /** The floor hoped for, or null for "any". */
+  minValue: number | null,
+  rollsAt: number,
+}
+
+export type PreviewSlot = PreviewBlessingSlot | PreviewEmptySlot | PreviewWishSlot;
+
+function previewBlessingSlot(
+  slot: number,
+  slotState: SlotFormState,
+  face: PreviewFace,
+  boostedAt: number | null,
+): PreviewBlessingSlot {
+  return {
+    kind: 'BLESSING',
+    slot,
+    blessingCode: slotState.blessingCode,
+    value: slotState.value,
+    boostedAt,
+    // A floor only means something where a milestone can still move the number.
+    minValue: boostedAt !== null ? slotState.wishMinValue : null,
+    // A stone is applied on the way to the target, so it belongs to that face —
+    // and unlike a wish it doesn't wait for a milestone.
+    refineStoneQuality: face === PreviewFace.WANT ? plannedRefineStoneQuality(slotState) : null,
+  };
+}
+
+/**
+ * What each of the four slots looks like on one face of the piece — the model
+ * behind the live preview cards, kept here so it is derived from the same
+ * occupancy and wish rules the form itself runs on ({@link isSlotOccupied},
+ * {@link slotWishState}) rather than from a second reading of them.
+ *
+ * The HAVE face is a straight transcription: occupied slots as typed, the rest
+ * empty. The WANT face carries each slot forward to the target level: an
+ * occupied slot keeps its blessing (a milestone only boosts the value), an
+ * empty one a milestone will reach becomes a wish, and a slot the target never
+ * reaches stays as it is.
+ */
+export function previewSlots(
+  face: PreviewFace,
+  slots: Record<number, SlotFormState>,
+  shape: SlotShape,
+): PreviewSlot[] {
+  return Array.from({ length: MAX_BLESSING_SLOTS }, (_unused, index) => {
+    const slot = index + 1;
+    const slotState = slots[slot] ?? EMPTY_SLOT_FORM_STATE;
+    const occupied = isSlotOccupied(slot, slots, shape);
+    const milestone = milestoneForSlot(slot);
+
+    if (face === PreviewFace.HAVE) {
+      return occupied
+        ? previewBlessingSlot(slot, slotState, face, null)
+        : { kind: 'EMPTY', slot, fillsAt: milestone };
+    }
+
+    const wishState = slotWishState(slot, slots, shape);
+    if (occupied) {
+      const boostedAt = wishState === SlotWishState.VALUE_ONLY ? milestone : null;
+      return previewBlessingSlot(slot, slotState, face, boostedAt);
+    }
+    if (wishState === SlotWishState.BLESSING_AND_VALUE) {
+      return {
+        kind: 'WISH',
+        slot,
+        blessingCode: slotState.wishBlessingCode,
+        minValue: slotState.wishMinValue,
+        rollsAt: milestone,
+      };
+    }
+    return { kind: 'EMPTY', slot, fillsAt: milestone };
+  });
+}
+
+/**
+ * The grade a face's piece would be painted. The game colours an item by how
+ * many blessings it shows — White for none, Green for one, up to Red for four
+ * — so a milestone filling a slot turns the name a colour too. The WANT face
+ * counts the slots its milestones will fill, whatever lands in them.
+ */
+export function previewGrade(previewed: PreviewSlot[]): number {
+  const shown = previewed.filter((slot) => slot.kind !== 'EMPTY').length;
+  return Math.min(shown + 1, 5);
+}
+
+/** Whether any milestone lies between the current and target levels. */
+export function hasMilestoneAhead(shape: SlotShape): boolean {
+  return MILESTONE_LEVELS.some(
+    (milestone) => milestone > shape.enhancementLevel && milestone <= shape.targetEnhancementLevel,
+  );
 }

@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
     buildEnhancementQuery, canCalculate, canSlotBeEmpty, DEFAULT_ENHANCEMENT_FORM_STATE,
     displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState, guaranteedFilledCount,
-    isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop, isSlotGuaranteedEmpty, isSlotMandatory,
-    isSlotOccupied, isSlotShapeKnown, MAX_ENHANCEMENT_LEVEL, normalizeTargetLevel, occupiedSlotsOf,
+    hasMilestoneAhead, isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop, isSlotGuaranteedEmpty,
+    isSlotMandatory, isSlotOccupied, isSlotShapeKnown, MAX_ENHANCEMENT_LEVEL, normalizeTargetLevel,
+    occupiedSlotsOf, plannedRefineStoneQuality, PreviewFace, previewGrade, previewSlots,
     reconcileFormState, SlotDisplayState, slotDisplayState, slotBlessingOptions, slotStateProblem,
     SlotWishState, slotWishState, targetLevelOptions, wishBlessingOptions, wishedTargets
 } from './enhancement.logic';
@@ -518,5 +519,82 @@ describe('normalizeTargetLevel', () => {
 
   it('snaps down to the milestone below rather than inventing the one above', () => {
     expect(normalizeTargetLevel(18, 0)).toBe(15);
+  });
+});
+
+describe('plannedRefineStoneQuality', () => {
+  it('is null while the plan is closed, unanswered, or blocked', () => {
+    expect(plannedRefineStoneQuality(filledSlot())).toBeNull();
+    expect(plannedRefineStoneQuality(filledSlot({ planRefine: true }))).toBeNull();
+    expect(plannedRefineStoneQuality(filledSlot({ planRefine: true, isRefined: true, planRefineStoneQuality: 3 }))).toBeNull();
+    expect(plannedRefineStoneQuality(filledSlot({ planRefine: true, isRefined: false }))).toBeNull();
+  });
+
+  it('is the stone quality once the plan is complete', () => {
+    expect(plannedRefineStoneQuality(filledSlot({ planRefine: true, isRefined: false, planRefineStoneQuality: 3 }))).toBe(3);
+  });
+});
+
+describe('previewSlots', () => {
+  it('transcribes the HAVE face as typed, with the rest empty', () => {
+    const slots = { 1: filledSlot({ wishMinValue: 16 }), 2: filledSlot({ blessingCode: null, value: null }) };
+    expect(previewSlots(PreviewFace.HAVE, slots, shape(null, 0))).toEqual([
+      { kind: 'BLESSING', slot: 1, blessingCode: 'ATK', value: 8, boostedAt: null, minValue: null, refineStoneQuality: null },
+      { kind: 'BLESSING', slot: 2, blessingCode: null, value: null, boostedAt: null, minValue: null, refineStoneQuality: null },
+      { kind: 'EMPTY', slot: 3, fillsAt: 15 },
+      { kind: 'EMPTY', slot: 4, fillsAt: 20 },
+    ]);
+  });
+
+  it('shows a slot the game guarantees filled even before it is typed in', () => {
+    const [first] = previewSlots(PreviewFace.HAVE, {}, shape(2, 0));
+    expect(first).toMatchObject({ kind: 'BLESSING', slot: 1, blessingCode: null, value: null });
+  });
+
+  it('carries an occupied slot forward with the milestone that boosts it and the floor wished', () => {
+    const slots = { 1: filledSlot({ wishMinValue: 16 }) };
+    const [first] = previewSlots(PreviewFace.WANT, slots, shape(null, 0, 20));
+    expect(first).toEqual({
+      kind: 'BLESSING', slot: 1, blessingCode: 'ATK', value: 8, boostedAt: 5, minValue: 16, refineStoneQuality: null,
+    });
+  });
+
+  it('leaves an occupied slot no milestone will touch as it is, floor and all dropped', () => {
+    const slots = { 1: filledSlot({ wishMinValue: 16 }) };
+    const [first] = previewSlots(PreviewFace.WANT, slots, shape(null, 5, 20));
+    expect(first).toMatchObject({ kind: 'BLESSING', boostedAt: null, minValue: null });
+  });
+
+  it("turns an empty slot a milestone will reach into a wish, and leaves one it won't reach empty", () => {
+    const slots = { 1: filledSlot(), 2: wishSlot({ wishBlessingCode: 'MAG', wishMinValue: 10 }) };
+    const previewed = previewSlots(PreviewFace.WANT, slots, shape(null, 0, 10));
+    expect(previewed[1]).toEqual({ kind: 'WISH', slot: 2, blessingCode: 'MAG', minValue: 10, rollsAt: 10 });
+    expect(previewed[2]).toEqual({ kind: 'EMPTY', slot: 3, fillsAt: 15 });
+  });
+
+  it('draws a planned stone on the WANT face only, milestone or not', () => {
+    const slots = { 1: filledSlot({ planRefine: true, isRefined: false, planRefineStoneQuality: 4 }) };
+    expect(previewSlots(PreviewFace.HAVE, slots, shape(null, 20, 20))[0]).toMatchObject({ refineStoneQuality: null });
+    expect(previewSlots(PreviewFace.WANT, slots, shape(null, 20, 20))[0]).toMatchObject({ refineStoneQuality: 4, boostedAt: null });
+  });
+});
+
+describe('previewGrade', () => {
+  it('paints the piece by how many blessings the face shows, wishes included', () => {
+    expect(previewGrade(previewSlots(PreviewFace.HAVE, {}, shape(null, 0)))).toBe(1);
+    expect(previewGrade(previewSlots(PreviewFace.HAVE, { 1: filledSlot() }, shape(null, 0)))).toBe(2);
+    // Four wishes by +20: a Red piece, whatever lands in them.
+    expect(previewGrade(previewSlots(PreviewFace.WANT, {}, shape(null, 0, 20)))).toBe(5);
+    expect(previewGrade(previewSlots(PreviewFace.WANT, {}, shape(null, 0, 10)))).toBe(3);
+  });
+});
+
+describe('hasMilestoneAhead', () => {
+  it('is true only when a milestone lies strictly past the current level and within the target', () => {
+    expect(hasMilestoneAhead(shape(null, 0, 20))).toBe(true);
+    expect(hasMilestoneAhead(shape(null, 14, 15))).toBe(true);
+    expect(hasMilestoneAhead(shape(null, 5, 5))).toBe(false);
+    expect(hasMilestoneAhead(shape(null, 14, 14))).toBe(false);
+    expect(hasMilestoneAhead(shape(null, 20, 20))).toBe(false);
   });
 });

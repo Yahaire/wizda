@@ -310,7 +310,23 @@ export interface UiStrings {
     readonly noDataLabel: string,
     readonly remainingMilestonesLabel: (milestones: string) => string,
     readonly noRemainingMilestones: string,
-    readonly slotResultFinalLabel: string,
+    /** Caption over the live preview of the piece as the item screen shows it now. */
+    readonly previewHaveTitle: string,
+    /** Caption over the live preview of the piece at the target level, as far as the wishes describe it. */
+    readonly previewWantTitle: string,
+    /** The HAVE preview's ghost, before a piece is picked. */
+    readonly previewPickPiece: string,
+    /** The WANT preview's ghost while no milestone lies between the current level and the target. */
+    readonly previewPickTarget: (level: number) => string,
+    /** The WANT preview's ghost for a piece already at +20. */
+    readonly previewFullyEnhanced: string,
+    /** Tooltip on the milestone chip beside an occupied slot a milestone will still boost. */
+    readonly previewBoostedAtTooltip: (milestone: number) => string,
+    /** The small tag on a slot the plan refines with a stone of that quality. */
+    readonly previewRefineTag: (quality: number) => string,
+    readonly previewRefineTooltip: (quality: number) => string,
+    /** Shown over a result the form has moved away from since it was computed. */
+    readonly resultOutdated: string,
     readonly slotResultCandidatesLabel: string,
     readonly notesHeading: string,
     readonly warningsHeading: string,
