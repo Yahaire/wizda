@@ -31,6 +31,7 @@ const LAST_GREETED_KEY = 'wizda.lastGreeted';
 const GREETING_PATHS: ReadonlySet<string> = new Set([
   '/',
   ROUTE_PATHS.oracle,
+  ROUTE_PATHS.enhancement,
 ]);
 
 function today(): string {

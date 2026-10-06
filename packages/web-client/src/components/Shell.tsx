@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { APP_NAME, ORACLE_NAME, SUPPORT_URL } from '@/app/app.constants';
+import { APP_NAME, ENHANCEMENT_ORACLE_NAME, ORACLE_NAME, SUPPORT_URL } from '@/app/app.constants';
 import { AdSlot } from '@/components/AdSlot';
 import { DataFreshness } from '@/components/DataFreshness';
 import { LanguageToggle } from '@/components/LanguageToggle';
@@ -15,7 +15,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
-    IconBox, IconHeartFilled, IconInfoCircle, IconSparkles, IconSword
+    IconBox, IconHammer, IconHeartFilled, IconInfoCircle, IconSparkles, IconSword
 } from '@tabler/icons-react';
 
 interface NavItem {
@@ -51,6 +51,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
     label: ORACLE_NAME,
     icon: <IconSparkles size={20} />,
     tooltip: wizda.oracle.tagline,
+  };
+
+  // A second tool, not a reference table — sits beside `primary` rather than
+  // under the "lists" divider below. No tooltip yet: that would need a Wizda
+  // voice line, deferred to the richness pass (see new-tool-plan.md M4).
+  const enhancementOracle: NavItem = {
+    href: '/enhancement-oracle',
+    label: ENHANCEMENT_ORACLE_NAME,
+    icon: <IconHammer size={20} />,
   };
 
   const lists: NavItem[] = [
@@ -158,6 +167,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <AppShell.Section grow component={ScrollArea}>
           <Stack gap={4}>
             {renderLink(primary)}
+            {renderLink(enhancementOracle)}
             <Divider my="xs" label={strings.nav.listsSectionLabel} labelPosition="left" />
             {lists.map(renderLink)}
           </Stack>

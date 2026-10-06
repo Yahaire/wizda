@@ -43,6 +43,10 @@ export interface UiStrings {
       readonly title: (appName: string) => string,
       readonly description: string,
     },
+    readonly enhancement: {
+      readonly title: (appName: string) => string,
+      readonly description: string,
+    },
   },
   readonly nav: {
     readonly toggleNavigationAriaLabel: string,
@@ -232,6 +236,87 @@ export interface UiStrings {
     readonly creditsHeading: string,
     readonly creditsBody: string,
     readonly disclaimer: string,
+  },
+  /**
+   * The Enhancement Oracle's UI chrome. Plain, functional copy for the
+   * core-mechanics pass — a `wizda.enhancement.*` voice namespace (help
+   * modals, the "how we got this" panel, localized notes/warnings) is a
+   * follow-up pass, see `new-tool-plan.md` Milestone 4.
+   */
+  readonly enhancement: {
+    readonly equipmentLabel: string,
+    readonly equipmentDescription: string,
+    /** Shown in the equipment field before a piece is picked. */
+    readonly equipmentSelectPlaceholder: string,
+    readonly qualityLabel: string,
+    readonly qualityDescription: string,
+    /** Shown in the quality field before a star rating is picked. */
+    readonly qualitySelectPlaceholder: string,
+    readonly initialGradeLabel: string,
+    readonly initialGradeDescription: string,
+    /** The tri-state grade/altered-origin pickers' "I don't know" option. */
+    readonly notSure: string,
+    /** Empty-search footer for the quality/initial-grade dropdowns. */
+    readonly noMatchesLabel: string,
+    readonly currentLevelLabel: string,
+    readonly currentLevelDescription: string,
+    readonly targetLevelLabel: string,
+    readonly targetLevelDescription: string,
+    readonly slotsHeading: string,
+    readonly slotsCaption: string,
+    readonly slotLabel: (slot: number) => string,
+    /** Why a mandatory slot holds a blessing: the piece came with it. */
+    readonly slotFilledAtDropHint: (gradeName: string) => string,
+    /** Why a mandatory slot holds a blessing: a milestone put one there. */
+    readonly slotFilledByMilestoneHint: (milestone: number) => string,
+    /** Why a slot is settled as empty, and nothing will change that by the target level. */
+    readonly slotEmptyUntilHint: (milestone: number) => string,
+    /** An empty slot a milestone still ahead will fill — the one worth wishing on. */
+    readonly slotFillsAtHint: (milestone: number) => string,
+    /** An occupied slot no milestone will touch again: what it shows is what it ends as. */
+    readonly slotFinalHint: string,
+    readonly emptyOption: string,
+    readonly filledOption: string,
+    /** The shared label over the merged blessing/value pair the player transcribes. */
+    readonly nowFieldLabel: string,
+    /** The shared label over what the player hopes a slot ends up as. */
+    readonly wishLabel: string,
+    /** Empty-value placeholder for a wish: no floor asked for. */
+    readonly wishAnyPlaceholder: string,
+    /** Empty-blessing placeholder for a wish on a slot a milestone will fill. */
+    readonly wishBlessingPlaceholder: string,
+    /**
+     * The four slot controls lose their visible labels to the merged pairs (see
+     * `JoinedFields`), so each needs an accessible name of its own — qualified
+     * by slot, since all four rows are otherwise identical.
+     */
+    readonly slotBlessingAriaLabel: (slot: number) => string,
+    readonly slotValueAriaLabel: (slot: number) => string,
+    readonly wishBlessingAriaLabel: (slot: number) => string,
+    readonly wishValueAriaLabel: (slot: number) => string,
+    readonly planRefineButton: string,
+    readonly refineStoneQualityLabel: string,
+    readonly alreadyRefinedQuestion: string,
+    readonly yesLabel: string,
+    readonly noLabel: string,
+    readonly alreadyRefinedBlockedNote: string,
+    readonly alterationToggleLabel: string,
+    readonly alteredSlotLabel: string,
+    readonly originalBlessingLabel: string,
+    readonly calculateButton: string,
+    readonly gradeUnknownTooltip: string,
+    readonly alteredOriginUnknownTooltip: string,
+    readonly tagline: string,
+    readonly emptyPrompt: string,
+    readonly probabilityLabel: string,
+    readonly noDataLabel: string,
+    readonly remainingMilestonesLabel: (milestones: string) => string,
+    readonly noRemainingMilestones: string,
+    readonly slotResultFinalLabel: string,
+    readonly slotResultCandidatesLabel: string,
+    readonly notesHeading: string,
+    readonly warningsHeading: string,
+    readonly loadError: string,
   },
   readonly notices: {
     /** Shown on the equipment list/detail when non-junk-dropping gear stays in English. */

@@ -1,4 +1,9 @@
 import type {
+  EnhancementOddsQuery,
+  EnhancementOddsResult,
+  EnhancementReference,
+} from '@shared/api/endpoints/enhancementOdds.models';
+import type {
   DataStatusResponse,
   MaintenanceResponse,
   RequestErrorInfo,
@@ -169,6 +174,21 @@ class ApiService {
       '/junk-to-guarantee/curve',
       query,
     );
+  }
+
+  enhancementOdds(query: EnhancementOddsQuery): Promise<EnhancementOddsResult> {
+    return this.post<EnhancementOddsQuery, EnhancementOddsResult>(
+      '/enhancement-odds',
+      query,
+    );
+  }
+
+  enhancementReference(query: { equipment: string, quality: number }): Promise<EnhancementReference> {
+    const params = new URLSearchParams({
+      equipment: query.equipment,
+      quality: String(query.quality),
+    });
+    return this.get<EnhancementReference>(`/enhancement-odds/reference?${params.toString()}`);
   }
 }
 

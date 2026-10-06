@@ -5,6 +5,9 @@ export const APP_NAME = 'Wizda';
 /** The junk-guarantee tool's display name (the app itself stays "Wizda"). */
 export const ORACLE_NAME = 'Junk Oracle';
 
+/** The enhancement-odds tool's display name. */
+export const ENHANCEMENT_ORACLE_NAME = 'Enhancement Oracle';
+
 export const APP_DESCRIPTION = TsUtilities.stringJoin([
   "Work out how much junk to farm to get the item you want in",
   "Wizardry Variants Daphne.",

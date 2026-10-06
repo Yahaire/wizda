@@ -144,6 +144,41 @@ html[data-focus-modality='pointer'] :focus-visible > * {
 }
 
 /*
+ * Two controls welded into one, for the Enhancement Oracle's blessing/value
+ * pairs (see JoinedFields). The game's own item screen writes a blessing and
+ * its number as a single line — "ATK+12" — with the name reading as a label on
+ * the value, so the form says it the same way rather than as two fields that
+ * happen to sit near each other.
+ *
+ * Only the seam is styled: the inner corners square off and the doubled border
+ * collapses to one hairline, leaving each control's own height, focus ring and
+ * error state alone. Logical properties throughout, so this survives RTL.
+ * Lifting the focused half out of the stack keeps its ring from being clipped
+ * by the neighbour it overlaps — the reason this can't live in Mantine's
+ * `styles` prop, which takes plain CSS properties and no `:focus-within`.
+ */
+.wizda-joined-fields {
+  display: flex;
+  align-items: stretch;
+}
+.wizda-joined-fields > * {
+  min-width: 0;
+}
+.wizda-joined-fields > *:not(:last-child) input {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+.wizda-joined-fields > *:not(:first-child) input {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  margin-inline-start: -1px;
+}
+.wizda-joined-fields > *:focus-within {
+  position: relative;
+  z-index: 1;
+}
+
+/*
  * Touch devices have no Esc key, so the Combobox close button's "Esc" shortcut
  * hint is noise there — hide it (the "Close" label stands on its own). Keyed on
  * pointer, not screen width, on purpose: a narrow desktop window still has Esc;

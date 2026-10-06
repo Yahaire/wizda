@@ -31,6 +31,7 @@ export const ROUTE_PATHS: Record<MetaRouteKey, string> = {
   junks: '/junks',
   equipment: '/equipment',
   about: '/about',
+  enhancement: '/enhancement-oracle',
 };
 
 /**
