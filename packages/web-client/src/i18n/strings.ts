@@ -305,6 +305,18 @@ export interface UiStrings {
     readonly calculateButton: string,
     readonly gradeUnknownTooltip: string,
     readonly tagline: string,
+    /**
+     * The "Preview" badge beside the title and the popover it opens (see
+     * `PreviewBadge`). Temporary: remove with the badge once the tool leaves
+     * preview.
+     */
+    readonly previewBadgeLabel: string,
+    readonly previewBadgeAriaLabel: string,
+    readonly previewNoticeTitle: string,
+    /** One paragraph each. */
+    readonly previewNoticeParagraphs: readonly string[],
+    /** Link text to the issue tracker, closing the popover. */
+    readonly previewNoticeFeedbackLink: string,
     readonly emptyPrompt: string,
     readonly probabilityLabel: string,
     readonly noDataLabel: string,

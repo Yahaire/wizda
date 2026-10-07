@@ -393,6 +393,18 @@ export const uiStringsJa = {
       'スロットをご自身で指定していただいただけです。',
     ].join(''),
     tagline: '強化する前に、確率を知っておきましょう。',
+    previewBadgeLabel: 'プレビュー版',
+    previewBadgeAriaLabel: 'プレビュー版について',
+    previewNoticeTitle: 'このツールはプレビュー版です',
+    previewNoticeParagraphs: [
+      [
+        'Enhancement Oracleは公開されたばかりで、現在も開発中です。',
+        '一部の機能は未実装で、画面の調整もまだ終わっていません。',
+        'また、ゲーム内での検証にあわせて計算結果が改善される場合があります。',
+      ].join(''),
+      '日本語の文章は現在機械翻訳のため、不自然な表現が含まれている場合があります。',
+    ],
+    previewNoticeFeedbackLink: 'お気づきの点があればお知らせください',
     emptyPrompt: '上で装備を選び、スロットの内容と目標を入力してください。',
     probabilityLabel: 'すべての目標を達成する確率',
     noDataLabel: `この${JA_EQUIPMENT}のデータはまだありません`,

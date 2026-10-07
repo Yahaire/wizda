@@ -17,6 +17,7 @@ import {
 } from './enhancement.logic';
 import { EnhancementResult } from './EnhancementResult';
 import { PieceForm } from './PieceForm';
+import { PreviewBadge } from './PreviewBadge';
 import { PiecePreview, PREVIEW_BREAKPOINT, WantCard } from './PiecePreview';
 import { SlotEditor } from './SlotEditor';
 
@@ -128,7 +129,7 @@ export function EnhancementOraclePage() {
   return (
     <Stack gap="lg">
       <div>
-        <PageTitle>{ENHANCEMENT_ORACLE_NAME}</PageTitle>
+        <PageTitle adornment={<PreviewBadge />}>{ENHANCEMENT_ORACLE_NAME}</PageTitle>
         <Text c="dimmed">{strings.enhancement.tagline}</Text>
       </div>
 

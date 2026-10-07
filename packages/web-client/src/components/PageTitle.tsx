@@ -15,6 +15,8 @@ interface PageTitleProps {
    * is too large to fit in a link. See `ShareButton`.
    */
   shareDisabledReason?: string,
+  /** Extra content beside the title, e.g. the Enhancement Oracle's preview badge. */
+  adornment?: React.ReactNode,
 }
 
 /**
@@ -26,10 +28,16 @@ interface PageTitleProps {
  * be missed entirely. Hugging the title says "share *this*", and keeps one
  * layout across every screen size instead of a breakpoint rule to maintain.
  */
-export function PageTitle({ children, shareable, shareDisabledReason }: PageTitleProps) {
+export function PageTitle({
+  children,
+  shareable,
+  shareDisabledReason,
+  adornment,
+}: PageTitleProps) {
   return (
     <Group gap="xs" wrap="nowrap" align="center">
       <Title order={2}>{children}</Title>
+      {adornment}
       {shareable && <ShareButton disabledReason={shareDisabledReason} />}
     </Group>
   );
