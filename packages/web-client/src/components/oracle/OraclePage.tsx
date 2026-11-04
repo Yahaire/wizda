@@ -755,11 +755,8 @@ function OracleContent() {
           loading={loading}
           leftSection={<IconSparkles size={18} />}
           onClick={() => (canCalculate ? calculate() : wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark }))}
-          style={canCalculate ? undefined : {
-            opacity: 0.55,
-            filter: 'grayscale(0.6)',
-            cursor: 'not-allowed',
-          }}
+          className={canCalculate ? undefined : 'wizda-blocked-button'}
+          aria-disabled={!canCalculate}
         >
           {strings.oracle.calculateButton}
         </Button>

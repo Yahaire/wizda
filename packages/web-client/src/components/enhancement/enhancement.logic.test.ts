@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    buildEnhancementQuery, canCalculate, canSlotBeEmpty, DEFAULT_ENHANCEMENT_FORM_STATE,
-    displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState, guaranteedFilledCount,
-    hasMilestoneAhead, isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop, isSlotGuaranteedEmpty,
-    isSlotMandatory, isSlotOccupied, isSlotShapeKnown, MAX_ENHANCEMENT_LEVEL, normalizeTargetLevel,
-    occupiedSlotsOf, plannedRefineStoneQuality, PreviewFace, previewGrade, previewSlots,
-    reconcileFormState, SlotDisplayState, slotDisplayState, slotBlessingOptions, slotStateProblem,
-    SlotWishState, slotWishState, targetLevelOptions, wishBlessingOptions, wishedTargets
+    buildEnhancementQuery, CalculateBlockerKind, calculateBlockers, canCalculate, canSlotBeEmpty,
+    DEFAULT_ENHANCEMENT_FORM_STATE, displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
+    guaranteedFilledCount, hasMilestoneAhead, isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop,
+    isSlotGuaranteedEmpty, isSlotMandatory, isSlotOccupied, isSlotShapeKnown, MAX_ENHANCEMENT_LEVEL,
+    missingSlotFields, normalizeTargetLevel, occupiedSlotsOf, plannedRefineStoneQuality, PreviewFace,
+    previewGrade, previewSlots, reconcileFormState, SlotDisplayState, slotDisplayState, SlotField,
+    slotBlessingOptions, slotStateProblem, SlotWishState, slotWishState, targetLevelOptions,
+    wishBlessingOptions, wishedTargets
 } from './enhancement.logic';
 import { BLESSINGS } from '@shared/domain/stats';
 
@@ -315,6 +316,72 @@ describe('canCalculate', () => {
     expect(canCalculate(planning({ isRefined: false, planRefineStoneQuality: 3 }))).toBe(true);
   });
 
+});
+
+describe('calculateBlockers', () => {
+  const base = { equipment: 'Ebonsteel Dagger', quality: 4 };
+  const kindsOf = (form: EnhancementFormState) => calculateBlockers(form)
+    .map((blocker) => [blocker.kind, blocker.slot]);
+
+  it('stands in for the whole form until the piece is chosen', () => {
+    expect(kindsOf(state())).toEqual([[CalculateBlockerKind.PIECE_INCOMPLETE, null]]);
+  });
+
+  it('lists gaps in screen order: slot by slot, each row top to bottom', () => {
+    // Grade 3 at +0: slots 1-2 came with the piece and are still due a milestone.
+    expect(kindsOf(state({ ...base, initialGrade: 3 }))).toEqual([
+      [CalculateBlockerKind.SLOT_BLESSING, 1],
+      [CalculateBlockerKind.SLOT_VALUE, 1],
+      [CalculateBlockerKind.NO_WISH, 1],
+      [CalculateBlockerKind.SLOT_BLESSING, 2],
+      [CalculateBlockerKind.SLOT_VALUE, 2],
+    ]);
+  });
+
+  it('pins a missing wish to the first row that can take one', () => {
+    // At +10 with the grade unknown, slots 1-2 are past their milestones and
+    // final — slot 3 is the first one anything can still be hoped for on.
+    const form = state({
+      ...base,
+      enhancementLevel: 10,
+      slots: { 1: filledSlot(), 2: filledSlot({ blessingCode: 'DEF' }) },
+    });
+    expect(kindsOf(form)).toEqual([[CalculateBlockerKind.NO_WISH, 3]]);
+  });
+
+  it('makes a missing wish form-wide when no milestone lies ahead', () => {
+    expect(kindsOf(state({ ...base, initialGrade: 1, targetEnhancementLevel: 0 })))
+      .toEqual([[CalculateBlockerKind.NO_MILESTONE_AHEAD, null]]);
+  });
+
+  it('names which part of a refinement plan is missing', () => {
+    const planning = (overrides: Partial<SlotFormState>) => state({
+      ...base,
+      slots: { 1: filledSlot({ wishMinValue: 16, planRefine: true, ...overrides }) },
+    });
+    expect(kindsOf(planning({ isRefined: null }))).toEqual([[CalculateBlockerKind.REFINE_ANSWER, 1]]);
+    expect(kindsOf(planning({ isRefined: true }))).toEqual([[CalculateBlockerKind.REFINE_UNSUPPORTED, 1]]);
+    expect(kindsOf(planning({ isRefined: false }))).toEqual([[CalculateBlockerKind.REFINE_STONE, 1]]);
+  });
+
+  it('reports an impossible slot shape as form-wide', () => {
+    // Slot 3 marked Filled with slot 1 left empty: a gap the game can't produce.
+    expect(kindsOf(state({ ...base, slots: { 3: filledSlot({ wishMinValue: 16 }) } })))
+      .toEqual([[CalculateBlockerKind.SLOT_SHAPE, null]]);
+  });
+});
+
+describe('missingSlotFields', () => {
+  it("keeps only one row's fields, and nothing form-wide", () => {
+    const blockers = [
+      { kind: CalculateBlockerKind.SLOT_VALUE, slot: 1 },
+      { kind: CalculateBlockerKind.NO_WISH, slot: 1 },
+      { kind: CalculateBlockerKind.SLOT_BLESSING, slot: 2 },
+      { kind: CalculateBlockerKind.SLOT_SHAPE, slot: null },
+    ];
+    expect(missingSlotFields(blockers, 1)).toEqual(new Set([SlotField.VALUE, SlotField.WISH]));
+    expect(missingSlotFields(blockers, 3)).toEqual(new Set());
+  });
 });
 
 describe('isInitialGradeUnknown', () => {

@@ -1,21 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ENHANCEMENT_ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { PageTitle } from '@/components/PageTitle';
 import { useStrings } from '@/i18n/LanguageProvider';
 import { api, ApiError, MaintenanceError } from '@/services/api';
-import { Box, Button, Grid, Paper, Stack, Text } from '@mantine/core';
-import { IconWand } from '@tabler/icons-react';
+import { Box, Grid, Paper, Stack, Text } from '@mantine/core';
 
+import { CalculateButton } from './CalculateButton';
 import {
-    buildEnhancementQuery, buildReferenceParams, canCalculate, DEFAULT_ENHANCEMENT_FORM_STATE,
-    EMPTY_SLOT_FORM_STATE, EnhancementFormState, isInitialGradeUnknown, isPieceReady,
-    reconcileFormState, SlotFormState
+    blockerField, buildEnhancementQuery, buildReferenceParams, calculateBlockers, canCalculate,
+    DEFAULT_ENHANCEMENT_FORM_STATE, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
+    isInitialGradeUnknown, isPieceReady, reconcileFormState, SlotFormState
 } from './enhancement.logic';
 import { EnhancementResult } from './EnhancementResult';
+import { revealSlotField } from './missingFields';
 import { PieceForm } from './PieceForm';
 import { PreviewBadge } from './PreviewBadge';
 import { PiecePreview, PREVIEW_BREAKPOINT, WantCard } from './PiecePreview';
@@ -46,6 +47,11 @@ export function EnhancementOraclePage() {
   const [computed, setComputed] = useState<ComputedResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set by a press of Calculate while something is still missing, and only
+  // then: nothing is flagged before the player has tried. Once set, the marks
+  // follow the form live — each clears as its field is filled.
+  const [revealMissing, setRevealMissing] = useState(false);
+  const slotsRef = useRef<HTMLDivElement>(null);
 
   // Every write goes through `reconcileFormState`: grade, level and a slot's own
   // fields all move which blessings the piece displays, and any of them can turn
@@ -97,6 +103,9 @@ export function EnhancementOraclePage() {
     if (!query || !canCalculate(state)) {
       return;
     }
+    // A clean run starts the "tried it" clock over, so a field the next edit
+    // makes required isn't flagged before the player has pressed again.
+    setRevealMissing(false);
     setLoading(true);
     setError(null);
     setComputed(null);
@@ -121,6 +130,20 @@ export function EnhancementOraclePage() {
     [equipmentList, state.equipment],
   );
 
+  const blockers = calculateBlockers(state);
+
+  // Send the player to the first thing missing. A form-wide blocker has no
+  // field to go to; its message under the button is the whole answer.
+  const showBlocked = () => {
+    setRevealMissing(true);
+    const [first] = blockers;
+    const field = first ? blockerField(first) : null;
+    if (!first || first.slot === null || field === null) {
+      return;
+    }
+    revealSlotField(slotsRef.current, first.slot, field);
+  };
+
   const ready = isPieceReady(state);
   const gradeUnknown = isInitialGradeUnknown(state);
   const stale = computed !== null && computed.query !== JSON.stringify(buildEnhancementQuery(state));
@@ -139,26 +162,23 @@ export function EnhancementOraclePage() {
             <PieceForm state={state} onChange={patch} equipmentList={equipmentList} />
 
             {ready && (
-              <Paper withBorder p="lg" radius="md">
+              <Paper ref={slotsRef} withBorder p="lg" radius="md">
                 <Stack gap="lg">
                   <SlotEditor
                     slots={state.slots}
                     shape={state}
                     reference={reference}
+                    missingBlockers={revealMissing ? blockers : []}
                     onSlotChange={setSlot}
                   />
 
-                  <Button
-                    size="md"
-                    fullWidth
-                    color="crimson"
+                  <CalculateButton
+                    blockers={blockers}
+                    explain={revealMissing}
                     loading={loading}
-                    disabled={!canCalculate(state)}
-                    leftSection={<IconWand size={18} />}
-                    onClick={calculate}
-                  >
-                    {strings.enhancement.calculateButton}
-                  </Button>
+                    onCalculate={calculate}
+                    onBlocked={showBlocked}
+                  />
                 </Stack>
               </Paper>
             )}

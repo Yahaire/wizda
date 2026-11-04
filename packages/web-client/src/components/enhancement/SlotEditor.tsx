@@ -8,18 +8,26 @@ import { IconAlertTriangle } from '@tabler/icons-react';
 
 import {
     EMPTY_SLOT_FORM_STATE, isSlotFilledAtDrop, MAX_BLESSING_SLOTS, milestoneForSlot,
-    slotBlessingOptions, SlotDisplayState, slotDisplayState, SlotFormState, SlotShape,
-    slotStateProblem, SlotWishState, slotWishState, wishBlessingOptions
+    missingSlotFields, slotBlessingOptions, SlotDisplayState, slotDisplayState, SlotField,
+    SlotFormState, SlotShape, slotStateProblem, SlotWishState, slotWishState, wishBlessingOptions
 } from './enhancement.logic';
 import { JoinedFields } from './JoinedFields';
+import { fieldMarks, slotRowMarks } from './missingFields';
 import { QualityPicker } from './QualityPicker';
 
 import type { EnhancementReference } from '@shared/api/endpoints/enhancementOdds.models';
+import type { CalculateBlocker } from './enhancement.logic';
+import type { FieldMarks } from './missingFields';
 
 interface SlotEditorProps {
   slots: Record<number, SlotFormState>,
   shape: SlotShape,
   reference: EnhancementReference | null,
+  /**
+   * The blockers to mark on their fields — empty until the player has pressed
+   * a blocked Calculate, so nothing is flagged before they've tried.
+   */
+  missingBlockers: readonly CalculateBlocker[],
   onSlotChange: (slot: number, patch: Partial<SlotFormState>) => void,
 }
 
@@ -63,17 +71,20 @@ function WishValueInput({
   onChange,
   ariaLabel,
   disabled,
+  marks,
 }: {
   label?: string,
   value: number | null,
   onChange: (value: number | null) => void,
   ariaLabel: string,
   disabled?: boolean,
+  marks?: FieldMarks,
 }) {
   const strings = useStrings();
 
   return (
     <NumberInput
+      {...marks}
       label={label}
       size="sm"
       min={1}
@@ -100,6 +111,7 @@ function WishPair({
   slots,
   shape,
   reference,
+  missing,
   onChange,
 }: {
   slot: number,
@@ -107,6 +119,7 @@ function WishPair({
   slots: Record<number, SlotFormState>,
   shape: SlotShape,
   reference: EnhancementReference | null,
+  missing: ReadonlySet<SlotField>,
   onChange: (patch: Partial<SlotFormState>) => void,
 }) {
   const strings = useStrings();
@@ -117,6 +130,7 @@ function WishPair({
       ratio={PAIR_RATIO}
       left={(
         <Select
+          {...fieldMarks(SlotField.WISH, missing)}
           size="sm"
           // A blessing the piece already shows stays in the list but can't be
           // picked — a milestone never rolls one of those — and says why.
@@ -176,6 +190,7 @@ function SlotRow({
   wishState,
   shape,
   reference,
+  missing,
   onChange,
 }: {
   slot: number,
@@ -186,6 +201,8 @@ function SlotRow({
   wishState: SlotWishState,
   shape: SlotShape,
   reference: EnhancementReference | null,
+  /** This row's fields a blocked Calculate is still waiting on. */
+  missing: ReadonlySet<SlotField>,
   onChange: (patch: Partial<SlotFormState>) => void,
 }) {
   const strings = useStrings();
@@ -242,7 +259,13 @@ function SlotRow({
   })();
 
   return (
-    <Paper withBorder p="sm" radius="sm">
+    <Paper
+      {...slotRowMarks(slot, missing)}
+      className="wizda-missing-row wizda-scroll-clear-header"
+      withBorder
+      p="sm"
+      radius="sm"
+    >
       <Stack gap="xs">
         <Group justify="space-between" wrap="nowrap" gap="sm">
           <Text fw={600} size="sm">{strings.enhancement.slotLabel(slot)}</Text>
@@ -256,8 +279,11 @@ function SlotRow({
                 <JoinedFields
                   label={strings.enhancement.nowFieldLabel}
                   ratio={PAIR_RATIO}
+                  required
                   left={(
                     <Select
+                      {...fieldMarks(SlotField.BLESSING, missing)}
+                      required
                       size="sm"
                       data={slotBlessingOptions(slot, reference)}
                       value={slotState.blessingCode}
@@ -269,6 +295,8 @@ function SlotRow({
                   )}
                   right={(
                     <NumberInput
+                      {...fieldMarks(SlotField.VALUE, missing)}
+                      required
                       size="sm"
                       min={1}
                       value={slotState.value ?? ''}
@@ -286,6 +314,7 @@ function SlotRow({
                     value={slotState.wishMinValue}
                     onChange={(wishMinValue) => onChange({ wishMinValue })}
                     ariaLabel={strings.enhancement.wishValueAriaLabel(slot)}
+                    marks={fieldMarks(SlotField.WISH, missing)}
                   />
                 ) : (
                   <Text size="xs" c="dimmed">{strings.enhancement.slotFinalHint}</Text>
@@ -311,6 +340,8 @@ function SlotRow({
                 <Group gap="xs" wrap="nowrap">
                   <Text size="sm">{strings.enhancement.alreadyRefinedQuestion}</Text>
                   <SegmentedControl
+                    {...fieldMarks(SlotField.REFINED, missing)}
+                    className="wizda-missing-ring"
                     size="xs"
                     value={
                       slotState.isRefined === null
@@ -337,6 +368,7 @@ function SlotRow({
                       value={slotState.planRefineStoneQuality}
                       onChange={(planRefineStoneQuality) => onChange({ planRefineStoneQuality })}
                       ariaLabel={strings.enhancement.refineStoneQualityLabel}
+                      marks={fieldMarks(SlotField.REFINE_STONE, missing)}
                     />
                   </Group>
                 )}
@@ -354,6 +386,7 @@ function SlotRow({
             slots={slots}
             shape={shape}
             reference={reference}
+            missing={missing}
             onChange={onChange}
           />
         )}
@@ -374,7 +407,13 @@ function SlotRow({
  * isn't blocked field-by-field; it's caught by `slotStateProblem` and surfaced
  * below instead.
  */
-export function SlotEditor({ slots, shape, reference, onSlotChange }: SlotEditorProps) {
+export function SlotEditor({
+  slots,
+  shape,
+  reference,
+  missingBlockers,
+  onSlotChange,
+}: SlotEditorProps) {
   const strings = useStrings();
   const problem = slotStateProblem(slots, shape);
 
@@ -395,6 +434,7 @@ export function SlotEditor({ slots, shape, reference, onSlotChange }: SlotEditor
             slots={slots}
             shape={shape}
             reference={reference}
+            missing={missingSlotFields(missingBlockers, slot)}
             onChange={(patch) => onSlotChange(slot, patch)}
           />
         ))}

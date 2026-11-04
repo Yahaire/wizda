@@ -441,11 +441,6 @@ export function reconcileFormState(state: EnhancementFormState): EnhancementForm
   return next;
 }
 
-/** Whether a slot's refinement plan is complete enough to submit. */
-function isRefinePlanReady(slot: SlotFormState): boolean {
-  return !slot.planRefine || (slot.isRefined === false && slot.planRefineStoneQuality !== null);
-}
-
 /**
  * The Refinement Stone a slot's plan will actually send: its quality, or null
  * while the plan is closed, incomplete, or blocked (`isRefined: true` is
@@ -460,35 +455,155 @@ export function plannedRefineStoneQuality(slot: SlotFormState): number | null {
   return slot.planRefineStoneQuality;
 }
 
+/** One thing still standing between the form and Calculate. The kinds are exhaustive. */
+export enum CalculateBlockerKind {
+  /** The piece section isn't filled in — the slots aren't even on screen yet. */
+  PIECE_INCOMPLETE = 'PIECE_INCOMPLETE',
+  /** An occupied slot (maybe only by the game's own rules) with no blessing picked. */
+  SLOT_BLESSING = 'SLOT_BLESSING',
+  /** An occupied slot with no value typed. */
+  SLOT_VALUE = 'SLOT_VALUE',
+  /** Nothing hoped for anywhere, though some slot could be asked — there'd be nothing to compute. */
+  NO_WISH = 'NO_WISH',
+  /** A refinement plan that hasn't said whether the slot is already refined. */
+  REFINE_ANSWER = 'REFINE_ANSWER',
+  /** A refinement plan on an already-refined slot — explained in place, never sent (`ALREADY_REFINED`). */
+  REFINE_UNSUPPORTED = 'REFINE_UNSUPPORTED',
+  /** A refinement plan with no stone quality picked. */
+  REFINE_STONE = 'REFINE_STONE',
+  /** The slots as marked describe a shape the game can't produce — see {@link slotStateProblem}. */
+  SLOT_SHAPE = 'SLOT_SHAPE',
+  /** No milestone lies between the current and target levels, so no slot can be wished on. */
+  NO_MILESTONE_AHEAD = 'NO_MILESTONE_AHEAD',
+}
+
+/** The control inside a slot's row a blocker points at. */
+export enum SlotField {
+  BLESSING = 'BLESSING',
+  VALUE = 'VALUE',
+  /** The row's first wish control — the blessing picker on an empty slot, the value on an occupied one. */
+  WISH = 'WISH',
+  REFINED = 'REFINED',
+  REFINE_STONE = 'REFINE_STONE',
+}
+
 /**
- * Everything Calculate needs before it's worth a round trip. Mirrors the
- * backend's own `validateQuery` shape checks (see `enhancementOdds.ts`) so a
- * doomed request never leaves the client, but doesn't re-derive anything the
- * form already prevents by construction.
+ * Which control each blocker is fixed in, or null for one that belongs to the
+ * form as a whole rather than to a field (the red slot-shape Alert, or the
+ * target level the player would have to raise).
  */
-export function canCalculate(state: EnhancementFormState): boolean {
+const BLOCKER_FIELD: Record<CalculateBlockerKind, SlotField | null> = {
+  [CalculateBlockerKind.PIECE_INCOMPLETE]: null,
+  [CalculateBlockerKind.SLOT_BLESSING]: SlotField.BLESSING,
+  [CalculateBlockerKind.SLOT_VALUE]: SlotField.VALUE,
+  [CalculateBlockerKind.NO_WISH]: SlotField.WISH,
+  [CalculateBlockerKind.REFINE_ANSWER]: SlotField.REFINED,
+  [CalculateBlockerKind.REFINE_UNSUPPORTED]: SlotField.REFINED,
+  [CalculateBlockerKind.REFINE_STONE]: SlotField.REFINE_STONE,
+  [CalculateBlockerKind.SLOT_SHAPE]: null,
+  [CalculateBlockerKind.NO_MILESTONE_AHEAD]: null,
+};
+
+export interface CalculateBlocker {
+  kind: CalculateBlockerKind,
+  /** The slot whose row holds the fix, or null for a form-wide blocker. */
+  slot: number | null,
+}
+
+/** The control a blocker is fixed in, or null when it's form-wide. */
+export function blockerField(blocker: CalculateBlocker): SlotField | null {
+  return BLOCKER_FIELD[blocker.kind];
+}
+
+/**
+ * The blockers that live in one slot's row, in the order its controls are
+ * drawn: what the item shows now, then the wish, then the refinement plan.
+ */
+function slotRowBlockers(
+  slotState: SlotFormState,
+  occupied: boolean,
+  owesWish: boolean,
+): CalculateBlockerKind[] {
+  const kinds: CalculateBlockerKind[] = [];
+  if (occupied && !slotState.blessingCode) {
+    kinds.push(CalculateBlockerKind.SLOT_BLESSING);
+  }
+  if (occupied && slotState.value === null) {
+    kinds.push(CalculateBlockerKind.SLOT_VALUE);
+  }
+  if (owesWish) {
+    kinds.push(CalculateBlockerKind.NO_WISH);
+  }
+  // The plan's panel is only drawn on an occupied row.
+  if (!occupied || !slotState.planRefine) {
+    return kinds;
+  }
+  if (slotState.isRefined === null) {
+    kinds.push(CalculateBlockerKind.REFINE_ANSWER);
+  } else if (slotState.isRefined) {
+    kinds.push(CalculateBlockerKind.REFINE_UNSUPPORTED);
+  } else if (slotState.planRefineStoneQuality === null) {
+    kinds.push(CalculateBlockerKind.REFINE_STONE);
+  }
+  return kinds;
+}
+
+/**
+ * Everything Calculate still needs before it's worth a round trip, in the
+ * order the player meets it on screen: slot by slot, each row's fields top to
+ * bottom, then whatever belongs to the form as a whole. The first entry is the
+ * one a blocked Calculate sends the player to.
+ *
+ * Mirrors the backend's own `validateQuery` shape checks (see
+ * `enhancementOdds.ts`) so a doomed request never leaves the client, but
+ * doesn't re-derive anything the form already prevents by construction.
+ *
+ * A missing wish is pinned to the first row that can take one, so it has a
+ * field to point at like every other gap. With no such row there's no field to
+ * fill — only the target level to raise — which is its own, form-wide kind.
+ */
+export function calculateBlockers(state: EnhancementFormState): CalculateBlocker[] {
   if (!isPieceReady(state)) {
-    return false;
+    return [{ kind: CalculateBlockerKind.PIECE_INCOMPLETE, slot: null }];
   }
-  if (wishedTargets(state).length === 0) {
-    return false; // nothing hoped for anywhere — there'd be nothing to compute
-  }
+
+  const slotNumbers = Array.from({ length: MAX_BLESSING_SLOTS }, (_unused, index) => index + 1);
+  const missingWish = wishedTargets(state).length === 0;
+  // A row can take a wish exactly while its milestone is still due — see `slotWishState`.
+  const wishSlot = missingWish
+    ? (slotNumbers.find((slot) => isSlotStillDue(slot, state)) ?? null)
+    : null;
+
+  const blockers: CalculateBlocker[] = slotNumbers.flatMap((slot) => slotRowBlockers(
+    state.slots[slot] ?? EMPTY_SLOT_FORM_STATE,
+    isSlotOccupied(slot, state.slots, state),
+    slot === wishSlot,
+  ).map((kind) => ({ kind, slot })));
+
   if (slotStateProblem(state.slots, state) !== null) {
-    return false;
+    blockers.push({ kind: CalculateBlockerKind.SLOT_SHAPE, slot: null });
   }
-  for (let slot = 1; slot <= MAX_BLESSING_SLOTS; slot++) {
-    if (!isSlotOccupied(slot, state.slots, state)) {
-      continue;
-    }
-    const slotState = state.slots[slot];
-    if (!slotState?.blessingCode || slotState.value === null) {
-      return false; // occupied (maybe only by the game's own rules) but not yet described
-    }
-    if (!isRefinePlanReady(slotState)) {
-      return false;
+  if (missingWish && wishSlot === null) {
+    blockers.push({ kind: CalculateBlockerKind.NO_MILESTONE_AHEAD, slot: null });
+  }
+  return blockers;
+}
+
+/** Whether Calculate may run: {@link calculateBlockers} has nothing left to say. */
+export function canCalculate(state: EnhancementFormState): boolean {
+  return calculateBlockers(state).length === 0;
+}
+
+/** The fields to mark as still needed in one slot's row. */
+export function missingSlotFields(blockers: readonly CalculateBlocker[], slot: number): Set<SlotField> {
+  const fields = new Set<SlotField>();
+  for (const blocker of blockers) {
+    const field = blockerField(blocker);
+    if (blocker.slot === slot && field !== null) {
+      fields.add(field);
     }
   }
-  return true;
+  return fields;
 }
 
 /**
@@ -574,7 +689,7 @@ export function buildReferenceParams(
  * gating on {@link canCalculate} before this ever matters.
  *
  * A slot's refinement plan is only carried across when it's actually ready
- * (see {@link isRefinePlanReady}) — `isRefined: true` is blocked and explained
+ * (see {@link plannedRefineStoneQuality}) — `isRefined: true` is blocked and explained
  * in the UI rather than ever reaching a request, per `ALREADY_REFINED`.
  */
 export function buildEnhancementQuery(state: EnhancementFormState): EnhancementOddsQuery | null {

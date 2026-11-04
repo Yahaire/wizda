@@ -303,6 +303,23 @@ export interface UiStrings {
     /** Subtext on a greyed-out wish option: the piece already shows that blessing, so no milestone will roll it. */
     readonly wishAlreadyOnPieceHint: string,
     readonly calculateButton: string,
+    /**
+     * The line under a blocked Calculate, naming the first thing still missing —
+     * one leaf per `CalculateBlockerKind`. `withMore` wraps it when that isn't
+     * the only one.
+     */
+    readonly calculateBlocked: {
+      readonly pieceIncomplete: string,
+      readonly slotBlessing: (slot: number) => string,
+      readonly slotValue: (slot: number) => string,
+      readonly noWish: string,
+      readonly refineAnswer: (slot: number) => string,
+      readonly refineUnsupported: (slot: number) => string,
+      readonly refineStone: (slot: number) => string,
+      readonly slotShape: string,
+      readonly noMilestoneAhead: string,
+      readonly withMore: (message: string, count: number) => string,
+    },
     readonly gradeUnknownTooltip: string,
     readonly tagline: string,
     /**

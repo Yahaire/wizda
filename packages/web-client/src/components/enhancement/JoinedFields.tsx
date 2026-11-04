@@ -11,6 +11,8 @@ interface JoinedFieldsProps {
   right: React.ReactNode,
   /** How the pair divides its width, left first. Defaults to an even split. */
   ratio?: [number, number],
+  /** Marks the shared label with Mantine's asterisk — the halves carry `required` themselves. */
+  required?: boolean,
 }
 
 /**
@@ -24,9 +26,15 @@ interface JoinedFieldsProps {
  * controls to a screen reader — which is what it is. Hence a plain `label`
  * string here rather than an `htmlFor` pointing at half of it.
  */
-export function JoinedFields({ label, left, right, ratio = [1, 1] }: JoinedFieldsProps) {
+export function JoinedFields({
+  label,
+  left,
+  right,
+  ratio = [1, 1],
+  required = false,
+}: JoinedFieldsProps) {
   return (
-    <Input.Wrapper label={label} size="sm">
+    <Input.Wrapper label={label} size="sm" withAsterisk={required}>
       <div className="wizda-joined-fields">
         <div style={{ flex: ratio[0] }}>{left}</div>
         <div style={{ flex: ratio[1] }}>{right}</div>

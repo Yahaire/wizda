@@ -179,6 +179,43 @@ html[data-focus-modality='pointer'] :focus-visible > * {
 }
 
 /*
+ * A field a form still needs, marked once the player has tried to submit
+ * without it (see the Enhancement Oracle's Calculate). Amber, not Mantine's
+ * error red: missing isn't wrong, and red is already both the focus border
+ * (the crimson primary) and the colour of a genuinely impossible answer.
+ *
+ * On an input the attribute lands on the `<input>` itself, which loses to
+ * Mantine's own `:focus` rule on purpose — the field being typed into shows
+ * the focus border, and amber comes back if it's left still empty. Colour is
+ * never the only cue: the row carrying it gets a bar on its leading edge (it
+ * survives the focus border), the control gets `aria-invalid`, and the
+ * message under the button names it.
+ */
+:root {
+  --wizda-missing-color: var(--mantine-color-orange-6);
+}
+input[data-missing] {
+  --input-bd: var(--wizda-missing-color);
+}
+.wizda-missing-ring[data-missing] {
+  box-shadow: 0 0 0 1px var(--wizda-missing-color);
+}
+.wizda-missing-row[data-missing] {
+  box-shadow: inset 3px 0 0 var(--wizda-missing-color);
+}
+
+/*
+ * A button that looks disabled but still takes the click, so pressing it can
+ * explain what's missing instead of doing nothing. Pair it with
+ * `aria-disabled`, never `disabled` — that one swallows the click.
+ */
+.wizda-blocked-button {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+  cursor: not-allowed;
+}
+
+/*
  * Touch devices have no Esc key, so the Combobox close button's "Esc" shortcut
  * hint is noise there — hide it (the "Close" label stands on its own). Keyed on
  * pointer, not screen width, on purpose: a narrow desktop window still has Esc;

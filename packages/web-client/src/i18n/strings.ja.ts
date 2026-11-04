@@ -388,6 +388,18 @@ export const uiStringsJa = {
     ].join(''),
     wishAlreadyOnPieceHint: `この${JA_EQUIPMENT}にすでにあります`,
     calculateButton: '計算する',
+    calculateBlocked: {
+      pieceIncomplete: `先に${JA_EQUIPMENT}と${JA_QUALITY}を選択してください。`,
+      slotBlessing: (slot: number) => `スロット${slot}：現在の${JA_BLESSINGS}を選択してください。`,
+      slotValue: (slot: number) => `スロット${slot}：現在表示されている数値を入力してください。`,
+      noWish: '少なくとも1つのスロットで目標を指定してください。',
+      refineAnswer: (slot: number) => `スロット${slot}：すでに精錬済みかどうかを選択してください。`,
+      refineUnsupported: (slot: number) => `スロット${slot}：精錬済みのスロットへの精錬石の計画はまだ対応していません。計算するには計画をオフにしてください。`,
+      refineStone: (slot: number) => `スロット${slot}：精錬石の品質を選択してください。`,
+      slotShape: '指定されたスロットの状態はありえません。上の注意をご確認ください。',
+      noMilestoneAhead: '現在と目標の強化レベルの間にマイルストーンがないため、何も変化しません。目標の強化レベルを上げてください。',
+      withMore: (message: string, count: number) => `${message}（ほか${count}件）`,
+    },
     gradeUnknownTooltip: [
       '入手時のグレードが不明でも確率には影響しません。',
       'スロットをご自身で指定していただいただけです。',

@@ -4,12 +4,16 @@ import { QualityStarRow } from '@/components/gear/gearDisplays';
 import { SegmentedControl } from '@mantine/core';
 import { QUALITIES } from '@shared/domain/quality';
 
+import type { FieldMarks } from './missingFields';
+
 interface QualityPickerProps {
   /** The piece's exact quality, 1-5 — unlike `QualityFilter`'s "this and up" floor semantics. */
   value: number | null,
   onChange: (value: number) => void,
   size?: 'xs' | 'sm' | 'md',
   ariaLabel: string,
+  /** Lets a blocked Calculate find and mark this picker — see `missingFields.ts`. */
+  marks?: FieldMarks,
 }
 
 /**
@@ -20,9 +24,11 @@ interface QualityPickerProps {
  * instead: that field sits in `PieceForm`'s two-column grid, too narrow for
  * five segments.
  */
-export function QualityPicker({ value, onChange, size = 'sm', ariaLabel }: QualityPickerProps) {
+export function QualityPicker({ value, onChange, size = 'sm', ariaLabel, marks }: QualityPickerProps) {
   return (
     <SegmentedControl
+      {...marks}
+      className="wizda-missing-ring"
       aria-label={ariaLabel}
       size={size}
       value={value !== null ? String(value) : ''}
