@@ -69,6 +69,14 @@ export interface WizdaLines {
       readonly certainty: string,
     },
   },
+  readonly enhancement: {
+    /**
+     * Her short take atop the Enhancement Oracle's "How this works" modal: what
+     * the headline number means. The rules behind it follow in the app's own
+     * voice (`strings.enhancement.notes`), and only when they apply.
+     */
+    readonly howItWorks: string,
+  },
   readonly errors: {
     readonly unknownEquipment: string,
     readonly unknownBlessing: string,

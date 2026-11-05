@@ -8,27 +8,30 @@ import { blessingLabel, formatPercent } from '@/components/oracle/oracle.logic';
 import { gradeTextStyle } from '@/components/oracle/querySubject';
 import { useStrings } from '@/i18n/LanguageProvider';
 import {
-    Badge, Divider, Group, Paper, Pill, Stack, Text, Tooltip, UnstyledButton
+    ActionIcon, Badge, Divider, Group, Paper, Pill, Stack, Text, Tooltip, UnstyledButton
 } from '@mantine/core';
-import { IconDiamond } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronUp, IconDiamond } from '@tabler/icons-react';
 
 import {
-    formatValueRange, PreviewBlessingSlot, PreviewEmptySlot, PreviewFace, previewGrade, PreviewSlot,
-    PreviewWishSlot
+    formatValueRange, pinBlessingFirst, PreviewBlessingSlot, PreviewEmptySlot, PreviewFace,
+    previewGrade, PreviewSlot, PreviewWishSlot, rolledSlotOdds, SlotOdds
 } from './enhancement.logic';
 
-import type { EnhancementSlotOutcome } from '@shared/api/endpoints/enhancementOdds.models';
+import type {
+  EnhancementReference,
+  EnhancementSlotOutcome,
+} from '@shared/api/endpoints/enhancementOdds.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 
 /** The piece's category glyph at the card's subject size. */
 const SUBJECT_ICON_SIZE = 22;
 
 /**
- * How many of a slot's candidate blessings the card lists before folding the
- * rest behind "+N more". A slot can roll up to 19; a card that lists them all
- * stops being a picture of the piece.
+ * How many of a slot's blessings the card lists before folding the rest behind
+ * "+N more". A slot can roll up to 19; a card that lists them all stops being a
+ * picture of the piece, and pushes the probability below it out of view.
  */
-const CANDIDATES_SHOWN = 5;
+const CANDIDATES_SHOWN = 3;
 
 /** A blank where a number or a name should be — not yet typed, not an error. */
 const NOT_YET = '?';
@@ -52,6 +55,11 @@ interface PieceCardProps {
    * wishes alone.
    */
   outcome?: EnhancementSlotOutcome[],
+  /**
+   * The piece's published per-slot rates. Given, a rolled slot can be opened
+   * to show how likely each blessing was to land there.
+   */
+  slotRates?: EnhancementReference['slots'],
 }
 
 /** A milestone marker: "+10", tinted to say a roll is still ahead. */
@@ -141,8 +149,72 @@ function EmptyRow({ slot }: { slot: PreviewEmptySlot }) {
   );
 }
 
-function BlessingRow({ slot, resolved }: { slot: PreviewBlessingSlot, resolved?: EnhancementSlotOutcome }) {
+/**
+ * A slot's blessings with their odds, the row's own blessing first and then the
+ * likeliest of the rest — {@link CANDIDATES_SHOWN} lines, the remainder folded
+ * behind a toggle that folds back again.
+ */
+function OddsList({
+  lines,
+  pinnedCode,
+  label,
+}: {
+  lines: SlotOdds[],
+  /** The blessing the row is about — wished for, or held — listed first and in bold. */
+  pinnedCode: string | null,
+  /** What the list is, said on hover. */
+  label: string,
+}) {
   const strings = useStrings();
+  const [expanded, setExpanded] = useState(false);
+
+  const ordered = pinBlessingFirst(lines, pinnedCode);
+  const shown = expanded ? ordered : ordered.slice(0, CANDIDATES_SHOWN);
+  const hidden = ordered.length - shown.length;
+  const foldable = ordered.length > CANDIDATES_SHOWN;
+
+  return (
+    <Tooltip label={label} withArrow openDelay={300}>
+      <Stack gap={2} pl={20}>
+        {shown.map((line) => (
+          <Group key={line.blessingCode} justify="space-between" wrap="nowrap" gap="xs">
+            <Text span fz="xs" fw={line.blessingCode === pinnedCode ? 700 : undefined}>
+              {blessingLabel(line.blessingCode)}
+            </Text>
+            <Group gap="sm" wrap="nowrap">
+              {line.valueDistribution && (
+                <Text span fz="xs" c="dimmed">{formatValueRange(line.valueDistribution)}</Text>
+              )}
+              <Text span fz="xs" fw={600} c="crimson.4" w={44} ta="right">
+                {formatPercent(line.probability)}
+              </Text>
+            </Group>
+          </Group>
+        ))}
+        {foldable && (
+          <UnstyledButton onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+            <Text span c="dimmed" fz="xs" td="underline">
+              {expanded ? strings.common.showLess : strings.common.moreCount(hidden)}
+            </Text>
+          </UnstyledButton>
+        )}
+      </Stack>
+    </Tooltip>
+  );
+}
+
+function BlessingRow({
+  slot,
+  resolved,
+  rolledOdds,
+}: {
+  slot: PreviewBlessingSlot,
+  resolved?: EnhancementSlotOutcome,
+  /** How likely each blessing was to roll here; folded away until asked for. */
+  rolledOdds: SlotOdds[],
+}) {
+  const strings = useStrings();
+  const [oddsOpen, setOddsOpen] = useState(false);
 
   // A computed range beats a wished floor, which beats the number typed in.
   const value = (() => {
@@ -156,36 +228,54 @@ function BlessingRow({ slot, resolved }: { slot: PreviewBlessingSlot, resolved?:
   })();
 
   return (
-    <Group justify="space-between" wrap="nowrap" gap="xs">
-      <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-        <SlotNumber slot={slot.slot} />
-        <BlessingValue blessingCode={slot.blessingCode} value={value} />
+    <Stack gap={4}>
+      <Group justify="space-between" wrap="nowrap" gap="xs">
+        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+          <SlotNumber slot={slot.slot} />
+          <BlessingValue blessingCode={slot.blessingCode} value={value} />
+        </Group>
+        <Group gap={4} wrap="nowrap">
+          {slot.refineStoneQuality !== null && <RefineTag quality={slot.refineStoneQuality} />}
+          {slot.boostedAt !== null && (
+            <MilestoneChip
+              milestone={slot.boostedAt}
+              tooltip={strings.enhancement.previewBoostedAtTooltip(slot.boostedAt)}
+            />
+          )}
+          {rolledOdds.length > 0 && (
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="xs"
+              aria-label={strings.enhancement.slotOddsToggleAriaLabel(slot.slot)}
+              aria-expanded={oddsOpen}
+              onClick={() => setOddsOpen(!oddsOpen)}
+            >
+              {oddsOpen ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+            </ActionIcon>
+          )}
+        </Group>
       </Group>
-      <Group gap={4} wrap="nowrap">
-        {slot.refineStoneQuality !== null && <RefineTag quality={slot.refineStoneQuality} />}
-        {slot.boostedAt !== null && (
-          <MilestoneChip
-            milestone={slot.boostedAt}
-            tooltip={strings.enhancement.previewBoostedAtTooltip(slot.boostedAt)}
-          />
-        )}
-      </Group>
-    </Group>
+
+      {oddsOpen && (
+        <OddsList
+          lines={rolledOdds}
+          pinnedCode={slot.blessingCode}
+          label={strings.enhancement.slotRolledOddsLabel}
+        />
+      )}
+    </Stack>
   );
 }
 
 /**
  * A wish row: the blessing and floor hoped for, dashed. Once a result for this
- * form exists it opens into what the milestone could actually roll here, best
- * odds first — the one place on the card that is a list rather than a line.
+ * form exists it opens into what the milestone could actually roll here — the
+ * wished blessing first, then the likeliest of the rest.
  */
 function WishRow({ slot, resolved }: { slot: PreviewWishSlot, resolved?: EnhancementSlotOutcome }) {
   const strings = useStrings();
-  const [expanded, setExpanded] = useState(false);
-
   const candidates = resolved?.candidates ?? [];
-  const shown = expanded ? candidates : candidates.slice(0, CANDIDATES_SHOWN);
-  const hidden = candidates.length - shown.length;
 
   return (
     <Stack gap={4}>
@@ -205,42 +295,30 @@ function WishRow({ slot, resolved }: { slot: PreviewWishSlot, resolved?: Enhance
       </Group>
 
       {candidates.length > 0 && (
-        <Tooltip label={strings.enhancement.slotResultCandidatesLabel} withArrow openDelay={300}>
-          <Stack gap={2} pl={20}>
-            {shown.map((candidate) => (
-              <Group key={candidate.blessingCode} justify="space-between" wrap="nowrap" gap="xs">
-                {/* The one the player asked for, if they named one, reads first. */}
-                <Text span fz="xs" fw={candidate.blessingCode === slot.blessingCode ? 700 : undefined}>
-                  {blessingLabel(candidate.blessingCode)}
-                </Text>
-                <Group gap="sm" wrap="nowrap">
-                  <Text span fz="xs" c="dimmed">{formatValueRange(candidate.valueDistribution)}</Text>
-                  <Text span fz="xs" fw={600} c="crimson.4" w={44} ta="right">
-                    {formatPercent(candidate.probability)}
-                  </Text>
-                </Group>
-              </Group>
-            ))}
-            {hidden > 0 && (
-              <UnstyledButton onClick={() => setExpanded(true)}>
-                <Text span c="dimmed" fz="xs" td="underline">
-                  {strings.common.moreCount(hidden)}
-                </Text>
-              </UnstyledButton>
-            )}
-          </Stack>
-        </Tooltip>
+        <OddsList
+          lines={candidates}
+          pinnedCode={slot.blessingCode}
+          label={strings.enhancement.slotResultCandidatesLabel}
+        />
       )}
     </Stack>
   );
 }
 
-function SlotRow({ slot, resolved }: { slot: PreviewSlot, resolved?: EnhancementSlotOutcome }) {
+function SlotRow({
+  slot,
+  resolved,
+  rolledOdds,
+}: {
+  slot: PreviewSlot,
+  resolved?: EnhancementSlotOutcome,
+  rolledOdds: SlotOdds[],
+}) {
   switch (slot.kind) {
     case 'EMPTY':
       return <EmptyRow slot={slot} />;
     case 'BLESSING':
-      return <BlessingRow slot={slot} resolved={resolved} />;
+      return <BlessingRow slot={slot} resolved={resolved} rolledOdds={rolledOdds} />;
     case 'WISH':
       return <WishRow slot={slot} resolved={resolved} />;
   }
@@ -268,6 +346,7 @@ export function PieceCard({
   level,
   slots,
   outcome,
+  slotRates,
 }: PieceCardProps) {
   const strings = useStrings();
   const want = face === PreviewFace.WANT;
@@ -313,6 +392,7 @@ export function PieceCard({
               key={slot.slot}
               slot={slot}
               resolved={outcome?.find((candidate) => candidate.slot === slot.slot)}
+              rolledOdds={slotRates ? rolledSlotOdds(slot.slot, slots, slotRates) : []}
             />
           ))}
         </Stack>

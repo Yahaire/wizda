@@ -5,8 +5,9 @@ import {
     DEFAULT_ENHANCEMENT_FORM_STATE, displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
     guaranteedFilledCount, hasMilestoneAhead, isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop,
     isSlotGuaranteedEmpty, isSlotMandatory, isSlotOccupied, isSlotShapeKnown, MAX_ENHANCEMENT_LEVEL,
-    missingSlotFields, normalizeTargetLevel, occupiedSlotsOf, plannedRefineStoneQuality, PreviewFace,
-    previewGrade, previewSlots, reconcileFormState, SlotDisplayState, slotDisplayState, SlotField,
+    missingSlotFields, normalizeTargetLevel, occupiedSlotsOf, pinBlessingFirst, plannedRefineStoneQuality,
+    PreviewFace, previewGrade, previewSlots, reconcileFormState, rolledSlotOdds, SlotDisplayState,
+    slotDisplayState, SlotField,
     slotBlessingOptions, slotStateProblem, SlotWishState, slotWishState, targetLevelOptions,
     wishBlessingOptions, wishedTargets
 } from './enhancement.logic';
@@ -653,6 +654,62 @@ describe('previewGrade', () => {
     // Four wishes by +20: a Red piece, whatever lands in them.
     expect(previewGrade(previewSlots(PreviewFace.WANT, {}, shape(null, 0, 20)))).toBe(5);
     expect(previewGrade(previewSlots(PreviewFace.WANT, {}, shape(null, 0, 10)))).toBe(3);
+  });
+});
+
+describe('pinBlessingFirst', () => {
+  const lines = [
+    { blessingCode: 'DIV%', probability: 0.5 },
+    { blessingCode: 'EVA%', probability: 0.3 },
+    { blessingCode: 'MAG%', probability: 0.2 },
+  ];
+
+  it('moves the named blessing to the top and keeps the rest in odds order', () => {
+    expect(pinBlessingFirst(lines, 'MAG%').map((line) => line.blessingCode)).toEqual(['MAG%', 'DIV%', 'EVA%']);
+  });
+
+  it('leaves the list as it came when nothing is named, or the name isn\'t in it', () => {
+    expect(pinBlessingFirst(lines, null)).toEqual(lines);
+    expect(pinBlessingFirst(lines, 'ATK')).toEqual(lines);
+  });
+});
+
+describe('rolledSlotOdds', () => {
+  const slotRates = [
+    { slot: 1, isFixed: false, rates: [{ blessingCode: 'ATK', rate: 0.5 }, { blessingCode: 'MAG', rate: 0.5 }] },
+    {
+      slot: 2,
+      isFixed: false,
+      rates: [
+        { blessingCode: 'ATK', rate: 0.5 },
+        { blessingCode: 'MAG', rate: 0.2 },
+        { blessingCode: 'EVA', rate: 0.3 },
+      ],
+    },
+  ];
+
+  it('drops what a lower slot shows and renormalizes over the rest, best odds first', () => {
+    const previewed = previewSlots(
+      PreviewFace.WANT,
+      {
+        1: filledSlot({ blessingCode: 'ATK' }),
+        2: filledSlot({ blessingCode: 'MAG' }),
+      },
+      shape(null, 20, 20),
+    );
+    const odds = rolledSlotOdds(2, previewed, slotRates);
+    expect(odds.map((line) => line.blessingCode)).toEqual(['EVA', 'MAG']);
+    expect(odds[0].probability).toBeCloseTo(0.6);
+    expect(odds[1].probability).toBeCloseTo(0.4);
+  });
+
+  it('takes slot 1\'s published rates as they are', () => {
+    const previewed = previewSlots(PreviewFace.WANT, { 1: filledSlot({ blessingCode: 'MAG' }) }, shape(null, 20, 20));
+    expect(rolledSlotOdds(1, previewed, slotRates).map((line) => line.probability)).toEqual([0.5, 0.5]);
+  });
+
+  it('is empty when the slot\'s rates are unknown', () => {
+    expect(rolledSlotOdds(3, [], slotRates)).toEqual([]);
   });
 });
 

@@ -35,6 +35,8 @@ export const ISSUES_URL = `${REPO_URL}/issues`;
 const DOCS_URL = `${REPO_URL}/blob/HEAD/docs`;
 /** The full derivation of every number the Junk Oracle prints. */
 export const CALCULATION_DOC_URL = `${DOCS_URL}/calculation.md`;
+/** The Enhancement Oracle's own derivation, linked from its "How this works" modal. */
+export const ENHANCEMENT_CALCULATION_DOC_URL = `${DOCS_URL}/calculation/enhancement.md`;
 /** The game model + how the source's drop tables are shaped. */
 export const DOMAIN_DOC_URL = `${DOCS_URL}/domain.md`;
 /** What we track, why, and what we deliberately don't (no cookies/accounts). */

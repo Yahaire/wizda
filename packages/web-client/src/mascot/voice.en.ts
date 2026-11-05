@@ -89,6 +89,12 @@ export const wizdaLinesEn = {
       ]),
     },
   },
+  enhancement: {
+    howItWorks: TsUtilities.stringJoin([
+      "That's the chance every slot turns out the way you asked by the time you reach your target level.",
+      "I play out every milestone roll on the way there and count all the ways it goes right for you.",
+    ]),
+  },
   errors: {
     unknownEquipment: "Some of that gear isn't in my notes anymore — try reselecting it.",
     unknownBlessing: "Uh... one of those blessings isn't in my notes anymore — try reselecting it.",

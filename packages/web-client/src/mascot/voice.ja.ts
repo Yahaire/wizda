@@ -103,6 +103,12 @@ export const wizdaLinesJa = {
       ]),
     },
   },
+  enhancement: {
+    howItWorks: stringJoin([
+      "これは、目標の強化レベルに着いたときに、すべてのスロットがあなた様の希望どおりになっている確率よ。",
+      "途中のマイルストーンを全部試して、うまくいく場合を数えてるの。",
+    ]),
+  },
   errors: {
     unknownEquipment: `あれ…？その${JA_EQUIPMENT}、私の手帳から消えちゃってるみたい。もう1回選び直してみて！`,
     unknownBlessing: `あれ…？その${JA_BLESSINGS}、私の手帳から消えちゃってるみたい。もう1回選び直してみて！`,

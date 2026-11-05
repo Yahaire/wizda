@@ -1,3 +1,4 @@
+import type { EnhancementNoteCode } from '@shared/api/endpoints/enhancementOdds.models';
 import type { EquipmentCategoryCode, EquipmentTypeKind } from '@shared/domain/equipment';
 import type { EquipmentRankKind } from '@shared/domain/rank';
 import type { StatKind } from '@shared/domain/stats';
@@ -65,6 +66,8 @@ export interface UiStrings {
     readonly whatIsAriaLabel: (label: string) => string,
     readonly clearAriaLabel: (label: string) => string,
     readonly moreCount: (n: number) => string,
+    /** Folds back a list "+N more" opened. */
+    readonly showLess: string,
     readonly sortByAriaLabel: (label: string) => string,
     readonly rowsShown: (n: number) => string,
     readonly defaultSearchPlaceholder: string,
@@ -357,7 +360,16 @@ export interface UiStrings {
     /** Shown over a result the form has moved away from since it was computed. */
     readonly resultOutdated: string,
     readonly slotResultCandidatesLabel: string,
+    /** Hover label on a rolled slot's odds list: how likely each blessing was when it rolled. */
+    readonly slotRolledOddsLabel: string,
+    /** The chevron that opens a rolled slot's odds list (paired with `aria-expanded`). */
+    readonly slotOddsToggleAriaLabel: (slot: number) => string,
+    /** The ⓘ beside the probability, and the title of the modal it opens. */
+    readonly howItWorksTitle: string,
+    /** Heads the notes in that modal — every one is about a milestone filling an empty slot. */
     readonly notesHeading: string,
+    /** A short title and a plain explanation per note the API can return. */
+    readonly notes: Readonly<Record<EnhancementNoteCode, { readonly title: string, readonly body: string }>>,
     readonly warningsHeading: string,
     readonly loadError: string,
   },

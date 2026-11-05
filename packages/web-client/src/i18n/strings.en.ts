@@ -1,3 +1,4 @@
+import { EnhancementNoteCode } from '@shared/api/endpoints/enhancementOdds.models';
 import { EQUIPMENT_CATEGORIES, EQUIPMENT_TYPES } from '@shared/domain/equipment';
 import { EquipmentRankKind } from '@shared/domain/rank';
 
@@ -69,6 +70,7 @@ export const uiStringsEn = {
     whatIsAriaLabel: (label) => `What is ${label}?`,
     clearAriaLabel: (label) => `Clear ${label}`,
     moreCount: (n) => `+${n} more`,
+    showLess: 'Show less',
     sortByAriaLabel: (label) => `Sort by ${label.toLowerCase()}`,
     rowsShown: (n) => `${n} shown`,
     defaultSearchPlaceholder: 'Filter by name',
@@ -362,7 +364,24 @@ export const uiStringsEn = {
     previewRefineTooltip: (quality: number) => `Refined with a ★${quality} Refinement Stone, as planned`,
     resultOutdated: 'The form has changed since this was calculated. Calculate again to refresh the odds.',
     slotResultCandidatesLabel: 'What a milestone could roll here',
-    notesHeading: 'How this works',
+    slotRolledOddsLabel: 'How likely each blessing was to roll here',
+    slotOddsToggleAriaLabel: (slot: number) => `Odds for slot ${slot}`,
+    howItWorksTitle: 'How this works',
+    notesHeading: 'When a milestone fills an empty slot',
+    notes: {
+      [EnhancementNoteCode.EMPTY_SLOT_RULE_EMPIRICAL]: {
+        title: 'No enhancement bonus',
+        body: "The new blessing rolls its value just like on a freshly dropped piece, with no bonus on top. The official tables don't cover this case, so this rule comes from our own in-game testing.",
+      },
+      [EnhancementNoteCode.LATER_SLOTS_ASSUMED]: {
+        title: 'Same rule for every slot',
+        body: "We tested it on slot 1 and assume slots 2 to 4 work the same way: the game describes all four milestones identically, and the published values don't change from slot to slot.",
+      },
+      [EnhancementNoteCode.FILL_AVOIDS_DISPLAYED]: {
+        title: 'No duplicates',
+        body: "It never picks a blessing the piece already shows, even one an Alteration Stone put there. It doesn't remember past blessings, though, so one an Alteration Stone removed can come back.",
+      },
+    },
     warningsHeading: 'Data gaps',
     loadError: 'Couldn\'t load this piece\'s blessing data — try again in a moment.',
   },

@@ -13,6 +13,7 @@ import type {
   EnhancementTarget,
 } from '@shared/api/endpoints/enhancementOdds.models';
 import type { SlotStateProblem } from '@shared/domain/blessingSlots';
+import type { ValueDistribution } from '@shared/domain/enhancementMath';
 
 export { MAX_BLESSING_SLOTS, MAX_ENHANCEMENT_LEVEL, milestoneForSlot };
 
@@ -671,6 +672,58 @@ export function slotBlessingOptions(
 export function formatValueRange(dist: { minValue: number, probabilities: readonly number[] }): string {
   const max = dist.minValue + dist.probabilities.length - 1;
   return dist.minValue === max ? String(dist.minValue) : `${dist.minValue}-${max}`;
+}
+
+/** One line of a slot's odds list: a blessing, and its chance of landing in that slot. */
+export interface SlotOdds {
+  blessingCode: string,
+  probability: number,
+  /** The range it would roll in, where that is worth showing beside the odds. */
+  valueDistribution?: ValueDistribution,
+}
+
+/**
+ * A slot's odds list in reading order: the blessing the row is about first —
+ * the one wished for, or the one the slot holds — then the rest, best odds
+ * first. With nothing to pin, the list is left as it came.
+ */
+export function pinBlessingFirst<T extends SlotOdds>(lines: readonly T[], blessingCode: string | null): T[] {
+  const pinned = lines.find((line) => line.blessingCode === blessingCode);
+  if (!pinned) {
+    return [...lines];
+  }
+  return [pinned, ...lines.filter((line) => line !== pinned)];
+}
+
+/**
+ * How likely each blessing was to land in an already-rolled slot, best odds
+ * first: the slot's published rates, less any blessing a lower slot shows —
+ * slots fill in order and never repeat one, so those were off the table when
+ * this one rolled. Read as a reroll, which renormalizes over what's left; the
+ * same assumption the Junk Oracle flags (`oracle.estimateNote`).
+ *
+ * An estimate of the slot's history, not of anything ahead — an Alteration
+ * Stone can have reshuffled the order since. Empty when the rates are unknown.
+ */
+export function rolledSlotOdds(
+  slot: number,
+  previewed: readonly PreviewSlot[],
+  slotRates: EnhancementReference['slots'],
+): SlotOdds[] {
+  const earlier = new Set(
+    previewed
+      .filter((other): other is PreviewBlessingSlot => other.kind === 'BLESSING' && other.slot < slot)
+      .map((other) => other.blessingCode)
+      .filter((code): code is string => code !== null),
+  );
+  const rates = (slotRates[slot - 1]?.rates ?? []).filter((rate) => !earlier.has(rate.blessingCode));
+  const total = rates.reduce((sum, rate) => sum + rate.rate, 0);
+  if (total <= 0) {
+    return [];
+  }
+  return rates
+    .map((rate) => ({ blessingCode: rate.blessingCode, probability: rate.rate / total }))
+    .sort((a, b) => b.probability - a.probability);
 }
 
 /** The `{ equipment, quality }` pair to fetch `GET /enhancement-odds/reference` with, or null. */

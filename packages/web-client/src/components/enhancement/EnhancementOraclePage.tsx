@@ -190,7 +190,7 @@ export function EnhancementOraclePage() {
             {/* Beside the form only — see PREVIEW_BREAKPOINT for why a narrow
                 screen gets the WANT face inside the result instead. */}
             <Box visibleFrom={PREVIEW_BREAKPOINT}>
-              <PiecePreview state={state} item={item} outcome={outcome} />
+              <PiecePreview state={state} item={item} outcome={outcome} slotRates={reference?.slots} />
             </Box>
 
             <Paper withBorder p="lg" radius="md">
@@ -202,7 +202,7 @@ export function EnhancementOraclePage() {
                 stale={stale}
                 narrowPreview={ready && item !== null && (
                   <Box hiddenFrom={PREVIEW_BREAKPOINT}>
-                    <WantCard state={state} item={item} outcome={outcome} />
+                    <WantCard state={state} item={item} outcome={outcome} slotRates={reference?.slots} />
                   </Box>
                 )}
               />

@@ -1,11 +1,15 @@
 'use client';
 
+import { ENHANCEMENT_CALCULATION_DOC_URL } from '@/app/app.constants';
 import { formatPercent } from '@/components/oracle/oracle.logic';
-import { useStrings } from '@/i18n/LanguageProvider';
-import { Alert, Center, Group, Loader, Stack, Text } from '@mantine/core';
+import { useStrings, useWizda } from '@/i18n/LanguageProvider';
+import { WizdaGlyph, WizdaMark } from '@/mascot/wizda';
 import {
-    ENHANCEMENT_NOTES, ENHANCEMENT_WARNINGS, EnhancementOddsResult,
-    EnhancementWarningCode
+    ActionIcon, Alert, Anchor, Center, Group, List, Loader, Modal, Stack, Text, Tooltip
+} from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import {
+    ENHANCEMENT_WARNINGS, EnhancementNoteCode, EnhancementOddsResult, EnhancementWarningCode
 } from '@shared/api/endpoints/enhancementOdds.models';
 import { IconAlertTriangle, IconHistory, IconInfoCircle } from '@tabler/icons-react';
 
@@ -32,11 +36,72 @@ interface EnhancementResultProps {
 }
 
 /**
+ * "How this works", behind the ⓘ beside the probability: Wizda says what the
+ * number means, then the rules behind it that this result leans on. Kept out of
+ * the panel itself — players come for the percentage, and the rules are a
+ * read-once explanation rather than part of every answer.
+ */
+function HowItWorksModal({
+  opened,
+  onClose,
+  notes,
+}: {
+  opened: boolean,
+  onClose: () => void,
+  notes: readonly EnhancementNoteCode[],
+}) {
+  const strings = useStrings();
+  const wizda = useWizda();
+
+  return (
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={strings.enhancement.howItWorksTitle}
+      centered
+      size="md"
+    >
+      <Stack gap="md">
+        <Text className="wizda-speech"><WizdaMark glyph={WizdaGlyph.info} />{wizda.enhancement.howItWorks}</Text>
+
+        {notes.length > 0 && (
+          <Stack gap="xs">
+            <Text fw={600} size="sm">{strings.enhancement.notesHeading}</Text>
+            <List size="sm" spacing="xs">
+              {notes.map((note) => (
+                <List.Item key={note}>
+                  <Text span fw={600} size="sm">{strings.enhancement.notes[note].title}</Text>
+                  {' — '}
+                  {strings.enhancement.notes[note].body}
+                </List.Item>
+              ))}
+            </List>
+          </Stack>
+        )}
+
+        <Text size="sm" c="dimmed">
+          {wizda.oracle.estimateNoteLink}{' '}
+          <Anchor
+            href={ENHANCEMENT_CALCULATION_DOC_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            inherit
+          >
+            {strings.oracle.calculationDocLinkLabel}
+          </Anchor>{' '}
+          {strings.oracle.estimateFooterSuffix}
+        </Text>
+      </Stack>
+    </Modal>
+  );
+}
+
+/**
  * The headline of a computed result: the probability, the milestones still
- * ahead, and the data gaps and explanations that travel with the number. The
- * per-slot picture — what each slot ends as, or what a milestone could roll
- * there — is the WANT face of `PieceCard`, drawn beside this rather than
- * repeated under it; see `EnhancementOraclePage`.
+ * ahead, and the data gaps that travel with the number; how it was worked out
+ * sits one tap away, behind an ⓘ. The per-slot picture — what each slot ends
+ * as, or what a milestone could roll there — is the WANT face of `PieceCard`,
+ * drawn beside this rather than repeated under it; see `EnhancementOraclePage`.
  */
 export function EnhancementResult({
   loading,
@@ -47,6 +112,7 @@ export function EnhancementResult({
   narrowPreview,
 }: EnhancementResultProps) {
   const strings = useStrings();
+  const [howItWorksOpened, howItWorks] = useDisclosure(false);
 
   if (loading) {
     return <Center mih={200}><Loader color="crimson" /></Center>;
@@ -64,12 +130,24 @@ export function EnhancementResult({
     return <Text c="dimmed" ta="center" py="xl">{strings.enhancement.emptyPrompt}</Text>;
   }
 
-  const notes = result.notes;
-
   return (
     <Stack gap="md">
       <Group justify="space-between" wrap="nowrap">
-        <Text fw={600} size="lg">{strings.enhancement.probabilityLabel}</Text>
+        <Group gap={4} wrap="nowrap">
+          <Text fw={600} size="lg">{strings.enhancement.probabilityLabel}</Text>
+          <Tooltip label={strings.enhancement.howItWorksTitle} withArrow openDelay={300}>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
+              radius="xl"
+              aria-label={strings.enhancement.howItWorksTitle}
+              onClick={howItWorks.open}
+            >
+              <IconInfoCircle size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
         <CaveatIcons gradeUnknown={gradeUnknown} />
       </Group>
 
@@ -105,17 +183,9 @@ export function EnhancementResult({
         </Alert>
       )}
 
-      {notes.length > 0 && (
-        <Alert color="blue" variant="light" icon={<IconInfoCircle size={18} />} title={strings.enhancement.notesHeading}>
-          <Stack gap={4}>
-            {notes.map((note) => (
-              <Text key={note} size="sm">{ENHANCEMENT_NOTES[note]}</Text>
-            ))}
-          </Stack>
-        </Alert>
-      )}
-
       {narrowPreview}
+
+      <HowItWorksModal opened={howItWorksOpened} onClose={howItWorks.close} notes={result.notes} />
     </Stack>
   );
 }

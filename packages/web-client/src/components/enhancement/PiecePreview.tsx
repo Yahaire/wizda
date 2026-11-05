@@ -9,7 +9,10 @@ import {
 } from './enhancement.logic';
 import { PieceCard } from './PieceCard';
 
-import type { EnhancementSlotOutcome } from '@shared/api/endpoints/enhancementOdds.models';
+import type {
+  EnhancementReference,
+  EnhancementSlotOutcome,
+} from '@shared/api/endpoints/enhancementOdds.models';
 import type { EquipmentListItem } from '@shared/api/endpoints/lists.models';
 
 /**
@@ -44,6 +47,8 @@ interface PieceFaceProps {
   item: EquipmentListItem,
   /** Per-slot outcome for the WANT face, when a result for this exact form exists. */
   outcome?: EnhancementSlotOutcome[],
+  /** The piece's published per-slot rates, once loaded — lets the WANT face open a rolled slot's odds. */
+  slotRates?: EnhancementReference['slots'],
 }
 
 /** The piece as the item screen shows it now. */
@@ -64,7 +69,7 @@ export function HaveCard({ state, item }: PieceFaceProps) {
  * — the reason there is nothing to draw: a picture identical to the one beside
  * it would only invite a hunt for the difference.
  */
-export function WantCard({ state, item, outcome }: PieceFaceProps) {
+export function WantCard({ state, item, outcome, slotRates }: PieceFaceProps) {
   const strings = useStrings();
 
   if (!hasMilestoneAhead(state)) {
@@ -85,6 +90,7 @@ export function WantCard({ state, item, outcome }: PieceFaceProps) {
       level={state.targetEnhancementLevel}
       slots={previewSlots(PreviewFace.WANT, state.slots, state)}
       outcome={outcome}
+      slotRates={slotRates}
     />
   );
 }
@@ -94,6 +100,7 @@ interface PiecePreviewProps {
   /** The piece behind `state.equipment`, resolved from the catalogue; null until both exist. */
   item: EquipmentListItem | null,
   outcome?: EnhancementSlotOutcome[],
+  slotRates?: EnhancementReference['slots'],
 }
 
 /**
@@ -102,7 +109,12 @@ interface PiecePreviewProps {
  * every change, with no request behind it. Before a piece is picked, two
  * ghosts hold the space so the column reads as *for* something.
  */
-export function PiecePreview({ state, item, outcome }: PiecePreviewProps) {
+export function PiecePreview({
+  state,
+  item,
+  outcome,
+  slotRates,
+}: PiecePreviewProps) {
   const strings = useStrings();
   const ready = isPieceReady(state) && item !== null;
 
@@ -112,7 +124,7 @@ export function PiecePreview({ state, item, outcome }: PiecePreviewProps) {
         ? <HaveCard state={state} item={item} />
         : <GhostCard>{strings.enhancement.previewPickPiece}</GhostCard>}
       {ready
-        ? <WantCard state={state} item={item} outcome={outcome} />
+        ? <WantCard state={state} item={item} outcome={outcome} slotRates={slotRates} />
         : <GhostCard>{strings.enhancement.previewWantTitle}</GhostCard>}
     </SimpleGrid>
   );

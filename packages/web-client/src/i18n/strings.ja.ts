@@ -1,3 +1,4 @@
+import { EnhancementNoteCode } from '@shared/api/endpoints/enhancementOdds.models';
 import { EquipmentTypeKind } from '@shared/domain/equipment';
 import { EquipmentRankKind } from '@shared/domain/rank';
 import { StatKind } from '@shared/domain/stats';
@@ -145,6 +146,7 @@ export const uiStringsJa = {
     whatIsAriaLabel: (label) => `「${label}」とは？`,
     clearAriaLabel: (label) => `${label}をクリア`,
     moreCount: (n) => `他${n}件`,
+    showLess: '閉じる',
     sortByAriaLabel: (label) => `${label}で並べ替え`,
     rowsShown: (n) => `${n}件表示`,
     defaultSearchPlaceholder: '名前で絞り込み',
@@ -432,7 +434,33 @@ export const uiStringsJa = {
     previewRefineTooltip: (quality: number) => `計画どおり、★${quality}の精錬石で精錬します`,
     resultOutdated: '計算後に入力が変わりました。もう一度計算してください。',
     slotResultCandidatesLabel: `マイルストーンで付与される可能性がある${JA_BLESSINGS}`,
-    notesHeading: '計算の仕組み',
+    slotRolledOddsLabel: `このスロットに各${JA_BLESSINGS}が付く確率`,
+    slotOddsToggleAriaLabel: (slot: number) => `スロット${slot}の確率`,
+    howItWorksTitle: '計算の仕組み',
+    notesHeading: '空きスロットがマイルストーンで埋まるとき',
+    notes: {
+      [EnhancementNoteCode.EMPTY_SLOT_RULE_EMPIRICAL]: {
+        title: '強化ボーナスなし',
+        body: [
+          `新しく付く${JA_BLESSINGS}の数値は、ドロップしたばかりの${JA_EQUIPMENT}と同じように決まり、ボーナスは上乗せされません。`,
+          '公式の表にはこのケースが載っていないため、このルールは私たちのゲーム内検証にもとづいています。',
+        ].join(''),
+      },
+      [EnhancementNoteCode.LATER_SLOTS_ASSUMED]: {
+        title: 'どのスロットでも同じ',
+        body: [
+          '検証はスロット1で行い、スロット2〜4も同じだと想定しています。',
+          'ゲーム内では4つのマイルストーンがすべて同じように説明されており、公開されている数値もスロットによって変わりません。',
+        ].join(''),
+      },
+      [EnhancementNoteCode.FILL_AVOIDS_DISPLAYED]: {
+        title: '重複なし',
+        body: [
+          `${JA_EQUIPMENT}にすでに表示されている${JA_BLESSINGS}は、石で付け替えたものも含めて付きません。`,
+          `ただし過去の${JA_BLESSINGS}は記憶されないため、石で外れた${JA_BLESSINGS}が再び付くことはあります。`,
+        ].join(''),
+      },
+    },
     warningsHeading: 'データ不足',
     loadError: [
       `この${JA_EQUIPMENT}の${JA_BLESSINGS}データを読み込めませんでした。`,
