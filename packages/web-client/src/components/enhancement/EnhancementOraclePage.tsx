@@ -14,7 +14,7 @@ import { Box, Grid, Paper, Stack, Text } from '@mantine/core';
 import { CalculateButton } from './CalculateButton';
 import {
     blockerField, buildEnhancementQuery, buildReferenceParams, calculateBlockers, canCalculate,
-    DEFAULT_ENHANCEMENT_FORM_STATE, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
+    DEFAULT_ENHANCEMENT_FORM_STATE, EMPTY_SLOT_FORM_STATE, EnhancementFormState, forgetLastCalculated,
     isInitialGradeUnknown, isPieceReady, readLastCalculated, reconcileFormState, setAsideWishSlots,
     SlotFormState, storeLastCalculated
 } from './enhancement.logic';
@@ -111,6 +111,33 @@ export function EnhancementOraclePage() {
         [slot]: { ...(current.slots[slot] ?? EMPTY_SLOT_FORM_STATE), ...change },
       },
     }));
+  };
+
+  // Undone afterwards rather than confirmed first: one click in the common case,
+  // and a slip costs nothing. Undo hands back the form, its answer and the
+  // remembered piece together — forgotten here, or the next visit would restore
+  // what the player just cleared.
+  const reset = () => {
+    const before = { state, computed, error };
+    const remembered = readLastCalculated();
+    setState(DEFAULT_ENHANCEMENT_FORM_STATE);
+    setComputed(null);
+    setError(null);
+    setRevealMissing(false);
+    forgetLastCalculated();
+    const undo = () => {
+      setState(before.state);
+      setComputed(before.computed);
+      setError(before.error);
+      if (remembered) {
+        storeLastCalculated(remembered);
+      }
+    };
+    wizdaConfirm(
+      wizda.enhancement.formReset,
+      undo,
+      { confirmLabel: wizda.enhancement.undoLabel },
+    );
   };
 
   // Fetch the piece's reference data once (equipment, quality) is known —
@@ -248,7 +275,12 @@ export function EnhancementOraclePage() {
         <Grid gutter="lg">
           <Grid.Col span={{ base: 12, [PREVIEW_BREAKPOINT]: 5 }}>
             <Stack gap="lg">
-              <PieceForm state={state} onChange={patch} equipmentList={equipmentList} />
+              <PieceForm
+                state={state}
+                onChange={patch}
+                equipmentList={equipmentList}
+                onReset={reset}
+              />
 
               {ready && (
                 <Paper ref={slotsRef} withBorder p="lg" radius="md">

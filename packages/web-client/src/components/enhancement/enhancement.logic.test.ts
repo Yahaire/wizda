@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     buildEnhancementQuery, CalculateBlockerKind, calculateBlockers, canCalculate, canSlotBeEmpty,
     DEFAULT_ENHANCEMENT_FORM_STATE, displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
+    forgetLastCalculated, isFormUntouched,
     guaranteedFilledCount, hasMilestoneAhead, isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop,
     isSlotBlessingRequired, isSlotGuaranteedEmpty, isSlotMandatory, isSlotOccupied, isSlotShapeKnown,
     isSlotValueRequired, LAST_CALCULATED_STORAGE_KEY, MAX_ENHANCEMENT_LEVEL,
@@ -947,5 +948,42 @@ describe('readLastCalculated', () => {
     expect(readLastCalculated()).toBeNull();
     withStorage(() => '{not json');
     expect(readLastCalculated()).toBeNull();
+  });
+});
+
+describe('forgetLastCalculated', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('removes the remembered form from under its key', () => {
+    const removeItem = vi.fn();
+    vi.stubGlobal('window', { localStorage: { removeItem } });
+    forgetLastCalculated();
+    expect(removeItem).toHaveBeenCalledWith(LAST_CALCULATED_STORAGE_KEY);
+  });
+
+  it('swallows a storage that throws', () => {
+    vi.stubGlobal('window', {
+      localStorage: {
+        removeItem: () => {
+          throw new Error('SecurityError');
+        },
+      },
+    });
+    expect(() => forgetLastCalculated()).not.toThrow();
+  });
+});
+
+describe('isFormUntouched', () => {
+  it('is true only for the form a first visit finds', () => {
+    expect(isFormUntouched(DEFAULT_ENHANCEMENT_FORM_STATE)).toBe(true);
+    expect(isFormUntouched({ ...DEFAULT_ENHANCEMENT_FORM_STATE, quality: 3 })).toBe(false);
+    expect(isFormUntouched({ ...DEFAULT_ENHANCEMENT_FORM_STATE, gradeAnswered: true })).toBe(false);
+  });
+
+  it('counts a slot touched and emptied again as something to reset', () => {
+    const touched = { ...DEFAULT_ENHANCEMENT_FORM_STATE, slots: { 1: EMPTY_SLOT_FORM_STATE } };
+    expect(isFormUntouched(touched)).toBe(false);
   });
 });

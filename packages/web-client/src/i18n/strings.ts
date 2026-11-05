@@ -255,6 +255,9 @@ export interface UiStrings {
     readonly qualityDescription: string,
     /** Shown in the quality field before a star rating is picked. */
     readonly qualitySelectPlaceholder: string,
+    /** Heads the piece card, beside its Reset — what makes that Reset read as the whole form's. */
+    readonly pieceHeading: string,
+    readonly resetFormAriaLabel: string,
     readonly initialGradeLabel: string,
     readonly initialGradeDescription: string,
     /** Shown until the grade is answered — "Not sure" included — which is what reveals the slots. */

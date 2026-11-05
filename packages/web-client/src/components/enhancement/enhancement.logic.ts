@@ -153,6 +153,15 @@ export const DEFAULT_ENHANCEMENT_FORM_STATE: EnhancementFormState = {
   slots: {},
 };
 
+/**
+ * Whether the form is exactly as a first visit finds it — nothing for Reset to
+ * do, so it isn't offered. Compared by value: a slot the player touched and
+ * emptied again leaves a key behind, and is something to reset all the same.
+ */
+export function isFormUntouched(state: EnhancementFormState): boolean {
+  return JSON.stringify(state) === JSON.stringify(DEFAULT_ENHANCEMENT_FORM_STATE);
+}
+
 /** Whether the piece section is filled in enough to reveal the rest of the form. */
 export function isPieceReady(
   state: Pick<EnhancementFormState, 'equipment' | 'quality' | 'gradeAnswered'>,
@@ -645,6 +654,18 @@ export function storeLastCalculated(state: EnhancementFormState): void {
     window.localStorage.setItem(LAST_CALCULATED_STORAGE_KEY, JSON.stringify(state));
   } catch {
     // Quota or a privacy lock — remembering is a convenience, never worth an error.
+  }
+}
+
+/**
+ * Drops what {@link storeLastCalculated} remembered, so a form the player reset
+ * isn't handed back on their next visit.
+ */
+export function forgetLastCalculated(): void {
+  try {
+    window.localStorage.removeItem(LAST_CALCULATED_STORAGE_KEY);
+  } catch {
+    // Same as storing: nothing worth an error.
   }
 }
 

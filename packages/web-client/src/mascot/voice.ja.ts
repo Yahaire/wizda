@@ -112,6 +112,7 @@ export const wizdaLinesJa = {
       `あら、今の変更で${slots}の目標が隠れちゃったわ。`,
       "ちゃんと預かってるから、戻したかったら言ってね。",
     ]),
+    formReset: "全部まっさらにしたわ！やっぱり戻す？",
     undoLabel: "元に戻す",
     keepChangeLabel: "このままにする",
   },

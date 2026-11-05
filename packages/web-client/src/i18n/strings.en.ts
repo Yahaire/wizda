@@ -286,6 +286,8 @@ export const uiStringsEn = {
     qualityLabel: 'Quality',
     qualityDescription: 'This piece\'s star rating, as shown on the item.',
     qualitySelectPlaceholder: 'Select quality…',
+    pieceHeading: 'Your piece',
+    resetFormAriaLabel: 'Reset the whole form',
     initialGradeLabel: 'Initial grade',
     initialGradeDescription: [
       'The piece\'s colour when you first got it. It doesn\'t change the odds, but it lets us fill in the slots',

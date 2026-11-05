@@ -4,10 +4,13 @@ import { EquipmentSingleSelect } from '@/components/oracle/EquipmentSingleSelect
 import { COMPACT_FIELD_BREAKPOINT } from '@/components/oracle/FieldSwap';
 import { FilterField } from '@/components/oracle/FilterField';
 import { useStrings } from '@/i18n/LanguageProvider';
-import { Paper, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Button, Group, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
+import { IconRotate } from '@tabler/icons-react';
 
 import { CurrentLevelField } from './CurrentLevelField';
-import { EnhancementFormState, normalizeTargetLevel, targetLevelOptions } from './enhancement.logic';
+import {
+    EnhancementFormState, isFormUntouched, normalizeTargetLevel, targetLevelOptions
+} from './enhancement.logic';
 import { GradeSelect } from './GradeSelect';
 import { QualitySelect } from './QualitySelect';
 import { TargetLevelField } from './TargetLevelField';
@@ -40,20 +43,46 @@ interface PieceFormProps {
    * have, not one junk could produce.
    */
   equipmentList: EquipmentListItem[] | null,
+  /** Puts the whole form back to a first visit's — the slots below included. */
+  onReset: () => void,
 }
 
-/** Equipment, quality, initial grade, and the two enhancement-level fields. */
-export function PieceForm({ state, onChange, equipmentList }: PieceFormProps) {
+/**
+ * Equipment, quality, initial grade, and the two enhancement-level fields,
+ * under a heading that carries the form's one Reset. No field has a reset of
+ * its own: each holds a single answer, changed by picking another, and the
+ * equipment's own Reset sat where it read as the whole form's anyway.
+ */
+export function PieceForm({
+  state,
+  onChange,
+  equipmentList,
+  onReset,
+}: PieceFormProps) {
   const strings = useStrings();
 
   return (
     <Paper withBorder p="lg" radius="md">
       <Stack gap="lg">
+        <Group justify="space-between" wrap="nowrap">
+          <Text fw={600}>{strings.enhancement.pieceHeading}</Text>
+          {!isFormUntouched(state) && (
+            <Button
+              variant="subtle"
+              color="gray"
+              size="compact-sm"
+              leftSection={<IconRotate size={14} />}
+              aria-label={strings.enhancement.resetFormAriaLabel}
+              onClick={onReset}
+            >
+              {strings.common.clear}
+            </Button>
+          )}
+        </Group>
+
         <FilterField
           label={strings.enhancement.equipmentLabel}
           description={strings.enhancement.equipmentDescription}
-          onClear={() => onChange({ equipment: null })}
-          canClear={state.equipment !== null}
         >
           <EquipmentSingleSelect
             data={equipmentList ?? []}

@@ -82,6 +82,8 @@ export interface WizdaLines {
      * rows themselves says the wishes are only hidden — see `setAsideWishSlots`.
      */
     readonly wishesSetAside: (slots: string) => string,
+    /** The whole form was just reset — offered with an undo rather than asked first. */
+    readonly formReset: string,
     readonly undoLabel: string,
     readonly keepChangeLabel: string,
   },

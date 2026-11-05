@@ -98,6 +98,7 @@ export const wizdaLinesEn = {
       `Oops — that tucked away what you were hoping for on ${slots}.`,
       "I kept it safe, though, if you want it back!",
     ]),
+    formReset: "All cleared — a fresh start! Changed your mind?",
     undoLabel: "Undo",
     keepChangeLabel: "Keep the change",
   },

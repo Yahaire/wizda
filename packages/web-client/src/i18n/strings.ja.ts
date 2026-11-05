@@ -349,6 +349,8 @@ export const uiStringsJa = {
     qualityLabel: JA_QUALITY,
     qualityDescription: `アイテム画面に表示されている、この${JA_EQUIPMENT}の星の数です。`,
     qualitySelectPlaceholder: `${JA_QUALITY}を選択…`,
+    pieceHeading: `強化する${JA_EQUIPMENT}`,
+    resetFormAriaLabel: '入力内容をすべてリセット',
     initialGradeLabel: `入手時の${JA_GRADE}`,
     initialGradeDescription: [
       `入手した時点でのこの${JA_EQUIPMENT}の色です。確率には影響しません。`,
