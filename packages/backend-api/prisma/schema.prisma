@@ -506,6 +506,25 @@ model PopularJunkOracleQuery {
   firstSeenAt DateTime                     @default(now())
   lastSeenAt  DateTime                     @updatedAt
   terms       PopularJunkOracleQueryTerm[]
+  days        PopularJunkOracleQueryDay[]
+}
+
+/// How many times a `PopularJunkOracleQuery` was searched on one calendar day
+/// (UTC). `count` above is the all-time tally; this is its time axis, so the
+/// "most searched" ranking can be a *recent* one (see `GET /popular`). Day
+/// granularity, never timestamps — the stored data stays an aggregate, not a
+/// per-visit history (see docs/analytics.md). Rows older than the retention
+/// window are pruned on write.
+model PopularJunkOracleQueryDay {
+  id      String   @id @default(cuid())
+  queryId String
+  day     DateTime @db.Date
+  count   Int      @default(1)
+
+  query PopularJunkOracleQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  @@unique([queryId, day])
+  @@index([day]) // powers the recent window + pruning
 }
 
 /// One accepted-outcome axis-value of a `PopularJunkOracleQuery` — the

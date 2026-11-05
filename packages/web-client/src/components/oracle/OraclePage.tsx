@@ -144,6 +144,10 @@ function OracleContent() {
   // Scroll the results into view after a fresh calculation (not on "show more").
   const resultsRef = useRef<HTMLDivElement>(null);
   const pendingScrollRef = useRef(false);
+  // Combos this tab has already counted toward "most searched" (see `calculate`).
+  // Memory only: it dies with the tab, which is the whole point — nothing is
+  // written anywhere to remember a player between visits.
+  const countedSearchesRef = useRef(new Set<string>());
   // Where Back sends you. See `clearResult` for why it's the filters and not the top.
   const filtersRef = useRef<HTMLDivElement>(null);
 
@@ -327,13 +331,19 @@ function OracleContent() {
    */
   const calculate = async (
     target: OracleFilters = filters,
-    options: { push?: boolean } = {},
+    options: { push?: boolean, countAsSearch?: boolean } = {},
   ): Promise<JunkToGuaranteeResult | undefined> => {
     const { push = true } = options;
     if (!hasAnyFilter(target)) {
       wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark });
       return undefined;
     }
+    // Counted only when the player pressed Calculate for a combo this tab hasn't
+    // sent yet (see `JunkToGuaranteeQuery.countAsSearch`). Certainty is left out
+    // of the key on purpose: nudging the slider and recalculating is the same
+    // hunt, not a new one — the same line the backend draws in `canonicalizeFilters`.
+    const searchKey = JSON.stringify(activeFilters(target));
+    const countAsSearch = options.countAsSearch === true && !countedSearchesRef.current.has(searchKey);
     setLoading(true);
     setResult(null);
     // A fresh calculation invalidates whatever the modal was showing — it
@@ -343,7 +353,10 @@ function OracleContent() {
     setResultVersion((version) => version + 1);
     pendingScrollRef.current = true;
     try {
-      const fresh = await api.junkToGuarantee(buildQuery(target, 0));
+      const fresh = await api.junkToGuarantee({ ...buildQuery(target, 0), countAsSearch });
+      if (countAsSearch) {
+        countedSearchesRef.current.add(searchKey);
+      }
       setQueryFilters(target);
       setResult(fresh);
       if (push) {
@@ -754,7 +767,9 @@ function OracleContent() {
           color="crimson"
           loading={loading}
           leftSection={<IconSparkles size={18} />}
-          onClick={() => (canCalculate ? calculate() : wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark }))}
+          onClick={() => (canCalculate
+            ? calculate(filters, { countAsSearch: true })
+            : wizdaSay(wizda.oracle.snark, { glyph: WizdaGlyph.snark }))}
           className={canCalculate ? undefined : 'wizda-blocked-button'}
           aria-disabled={!canCalculate}
         >

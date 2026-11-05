@@ -52,6 +52,7 @@ const junkToGuaranteeSchema = z.object({
   certainty: z.number().gt(0).lt(1).optional(),
   limit: z.number().int().min(1).optional(),
   offset: z.number().int().min(0).optional(),
+  countAsSearch: z.boolean().optional(),
   ...filterShape,
 });
 
@@ -361,6 +362,7 @@ async function handleJunkToGuarantee(
     certainty = DEFAULT_CERTAINTY,
     limit,
     offset,
+    countAsSearch,
     equipment,
     quality,
     grade,
@@ -481,7 +483,19 @@ async function handleJunkToGuarantee(
     certainty,
     total,
   });
-  recordPopularQuery({ equipment, quality, grade, blessings: blessingCodes, rank, category });
+  // Only a search the player just asked for feeds the "most searched" ranking
+  // (see `JunkToGuaranteeQuery.countAsSearch`). The offset check is belt and
+  // braces: a page past the first is the same search again by definition.
+  if (countAsSearch && effectiveOffset === 0) {
+    recordPopularQuery(req, {
+      equipment,
+      quality,
+      grade,
+      blessings: blessingCodes,
+      rank,
+      category,
+    });
+  }
 
   res.status(HttpStatusCode.OK).json(body);
 }

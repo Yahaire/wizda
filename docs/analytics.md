@@ -12,12 +12,14 @@ something to identify or follow you: dropping a tracking cookie, tying your
 visits together, building a profile. Wizda doesn't do any of that.
 
 Everything below runs without accounts and without storing your IP on our side.
-It never links one visit to the next, never follows you across sites, and never
-builds a profile of you — it only keeps **anonymous, aggregate counts**: how
-many people used a feature, which items came up often. There's simply nothing
-here for a consent banner to gate, so we don't put one in front of you. If
-that's ever untrue of something we add, we'll add a banner and say so plainly —
-but nothing here today needs one.
+It never follows you across sites and never builds a profile of you — it only
+keeps **anonymous, aggregate counts**: how many people used a feature, which
+items came up often. The one thing it can tell apart is a search you *repeat*
+today from a new one, and it does that through a hash it cannot reverse and
+forgets at midnight (see "Most searched" below). There's simply nothing here
+for a consent banner to gate, so we don't put one in front of you. If that's
+ever untrue of something we add, we'll add a banner and say so plainly — but
+nothing here today needs one.
 
 ### The one cookie, and why it needs no banner
 
@@ -75,11 +77,29 @@ Postgres tables, `PopularJunkOracleQuery` and `PopularJunkOracleQueryTerm` (see
 
 Concretely: identical searches collapse into one counted row rather than
 logging every request forever, so what's stored is "this combination of
-filters has been searched N times" — not a per-visit history, and nothing
-that identifies who searched it. This powers `GET /popular`, which the app can
-use to surface or preload popular searches. As of this writing nothing in the
-UI consumes it yet — the endpoint is groundwork, landed ahead of the feature
-that will read it.
+filters has been searched N times" — an all-time tally, plus how many of
+those fell on each calendar day (`PopularJunkOracleQueryDay`, kept for 90
+days). Day granularity, never timestamps: not a per-visit history, and nothing
+that identifies who searched it. This powers `GET /popular`, which ranks by
+the **last 30 days** (falling back to all-time while the window is too thin
+to rank) and feeds the "borrow someone else's picks" rows on the Junk Oracle's
+empty state.
+
+Two rules keep the tally honest, and neither stores anything about you:
+
+- **Only a search you asked for counts.** The page flags a request as a fresh
+  search only when you press Calculate on a combo that tab hasn't sent yet
+  (`countAsSearch` in the request body). Paging through results, Back/Forward,
+  opening a shared link, or replaying one of the popular rows answers the
+  question without touching the tally — otherwise the list would simply feed
+  itself.
+- **One count per visitor per combo per day.** To tell a repeat from a new
+  search without a cookie, the server hashes your IP and browser together with
+  a random secret it draws fresh each day and never writes down, and keeps the
+  hashes in memory until the day rolls over (`searchDedup.ts`). The hash can't
+  be reversed, nothing is written to disk or database, and when the secret
+  changes at midnight the day's hashes are discarded with it. It's the same
+  technique cookieless analytics tools use to count "unique visitors".
 
 ## Summary
 
@@ -87,7 +107,7 @@ that will read it.
 |---|---|---|---|---|
 | Page views | visit/path counts | none | no | env var |
 | `guarantee_query` | filter-count/certainty stats | none | no | env var |
-| Most-searched | searched filter combos (aggregate) | none | no | always on (own DB) |
+| Most-searched | searched filter combos (aggregate, all-time + per day) | none stored; a per-day hash in memory, gone at midnight | no | always on (own DB) |
 | Language choice | `en` or `ja`, on your device only | none | `wizda.lang` | only if you pick one |
 
 All three are **self-hosted or self-owned** — Umami runs on our own server

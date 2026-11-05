@@ -82,6 +82,21 @@ export interface JunkToGuaranteeQuery extends GuaranteeFilters {
   limit?: number,
   /** Results to skip before the page (for "show more"). Defaults to 0. */
   offset?: number,
+  /**
+   * Whether this request is a search the player just asked for, as opposed to
+   * a replay of one they (or someone else) already asked. Only `true` is
+   * counted toward the "most searched" ranking (`GET /popular`); omitted or
+   * `false` is answered exactly the same but leaves the tally alone.
+   *
+   * The client is the only party that knows the difference, so it carries the
+   * flag: a web page sets it on a fresh Calculate for a combo it hasn't sent in
+   * this tab, and leaves it off for paging, Back/Forward restores, opened share
+   * links, replays of a popular query and re-runs of the same combo. A
+   * requester that omits it is simply not counted, which is the right default
+   * for a popularity signal — the worst a dishonest client can do is add one
+   * count per request, which is what every request did before the flag.
+   */
+  countAsSearch?: boolean,
 }
 
 /** One junk's answer: how much of it to farm to reach the target confidence. */

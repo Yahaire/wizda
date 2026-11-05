@@ -21,9 +21,23 @@ export interface PopularQueryEntry {
 /** The filter axes a popular term can belong to (mirrors `GuaranteeFilters`). */
 export type PopularTermKind = 'equipment' | 'blessing' | 'rank' | 'category' | 'quality' | 'grade';
 
+/**
+ * Which tally ranked a `PopularResult`: the recent window (the normal case), or
+ * the all-time counts when the window holds too little to rank — right after
+ * the window started filling, or after a quiet month.
+ */
+export type PopularPeriod = 'recent' | 'allTime';
+
 /** Response of `GET /popular`. */
 export interface PopularResult {
-  /** Top whole-query combos, most-searched first. */
+  /** What ranked the lists below — see {@link PopularPeriod}. */
+  period: PopularPeriod,
+  /**
+   * Top whole-query combos, most-searched first. Only combos with a *subject* —
+   * at least one equipment, category or rank — are listed: a combo that only
+   * says "quality 4–5" is a search, but not a search *for* anything, and the
+   * list exists to show what players are hunting.
+   */
   queries: PopularQueryEntry[],
   /**
    * Top items per axis, most-searched first within each axis — each a stable public

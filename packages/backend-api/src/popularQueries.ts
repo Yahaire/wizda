@@ -1,15 +1,39 @@
+import express from 'express';
+
 import { getPrisma } from '@app/prisma';
+import { isFirstSearchToday } from '@app/searchDedup';
+import { Prisma } from '@local-prisma/generated/client';
 import { GuaranteeFilters } from '@shared/api/endpoints/junkToGuarantee.models';
 import { EquipmentRankKind } from '@shared/domain/rank';
 
 /**
  * Records the accepted-outcome filters of a Junk Oracle query for the "most
- * searched" feature (see `PopularJunkOracleQuery`/`Term` in schema.prisma and
- * docs/analytics.md). Distinct from `trackGuaranteeQuery` in `analytics.ts`,
+ * searched" feature (see `PopularJunkOracleQuery`/`Term`/`Day` in schema.prisma
+ * and docs/analytics.md). Distinct from `trackGuaranteeQuery` in `analytics.ts`,
  * which sends only counts to Umami for human dashboards — this stores *which*
  * items were picked, in our own DB, so the app can read popularity back at
  * runtime (e.g. to preload suggestions).
  */
+
+/**
+ * How far back `GET /popular`'s "recent" ranking looks. At Wizda's traffic
+ * (~30 searches a day as of 2026-11) a month holds several hundred searches —
+ * enough to rank a top five without the list reshuffling day to day.
+ */
+export const POPULAR_WINDOW_DAYS = 30;
+
+/**
+ * How long per-day counts are kept before `recordPopularQuery` prunes them.
+ * Longer than the window on purpose, so the window can be widened later
+ * without a gap; the all-time `count` is never pruned.
+ */
+const POPULAR_RETENTION_DAYS = 90;
+
+/** Midnight UTC, `daysAgo` days before today — a `@db.Date` boundary. */
+export function utcDayStart(daysAgo: number): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysAgo));
+}
 
 /**
  * The resolved, already-validated filter axes to record. Plain `string[]`
@@ -67,18 +91,44 @@ function canonicalizeFilters(filters: PopularQueryFilters): CanonicalQuery | nul
 }
 
 /**
- * Fire-and-forget: upserts the query's combo (incrementing `count` if it's
- * been seen before, creating it with its `terms` if not) and its per-axis term
- * rows. Never awaited by the caller and never fails the response — mirrors
+ * Fire-and-forget: counts one search of this combo, both all-time and for today.
+ * Never awaited by the caller and never fails the response — mirrors
  * `trackGuaranteeQuery`'s fire-and-forget shape in `analytics.ts`.
+ *
+ * Skipped when the same visitor already sent this combo today (see
+ * `searchDedup.ts`) — the second line of defence behind the client's
+ * `countAsSearch` flag, which the route checks before calling this.
  */
-export function recordPopularQuery(filters: PopularQueryFilters): void {
+export function recordPopularQuery(
+  req: express.Request,
+  filters: PopularQueryFilters,
+): void {
   const canonical = canonicalizeFilters(filters);
   if (!canonical) {
     return;
   }
+  if (!isFirstSearchToday(req, canonical.signature)) {
+    return;
+  }
 
-  getPrisma().popularJunkOracleQuery.upsert({
+  recordCanonicalQuery(canonical)
+    .catch((error) => console.error('[popularQueries] record failed:', error));
+}
+
+/**
+ * Upserts the combo (incrementing its all-time `count`, or creating it with its
+ * `terms`), then today's bucket for it, then drops buckets past retention. Three
+ * statements rather than one nested write because the day upsert needs the
+ * combo's id, which only the first statement knows.
+ *
+ * The prune runs on every recorded search. That's a few dozen tiny deletes a
+ * day, and it keeps the table self-tending with no cron to forget.
+ */
+async function recordCanonicalQuery(canonical: CanonicalQuery): Promise<void> {
+  const prisma = getPrisma();
+  const today = utcDayStart(0);
+
+  const upsertQuery = () => prisma.popularJunkOracleQuery.upsert({
     where: { signature: canonical.signature },
     create: {
       signature: canonical.signature,
@@ -87,7 +137,28 @@ export function recordPopularQuery(filters: PopularQueryFilters): void {
     update: {
       count: { increment: 1 },
     },
-  }).catch((error) => console.error('[popularQueries] record failed:', error));
+    select: { id: true },
+  });
+  // The nested `terms` create keeps Prisma off its atomic ON CONFLICT path, so
+  // two visitors sending the same brand-new combo in the same instant can both
+  // try to create it — the loser hits the unique signature. On that one error,
+  // go again: the row exists now, so the retry takes the increment branch.
+  const query = await upsertQuery().catch((error: unknown) => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return upsertQuery();
+    }
+    throw error;
+  });
+
+  await prisma.popularJunkOracleQueryDay.upsert({
+    where: { queryId_day: { queryId: query.id, day: today } },
+    create: { queryId: query.id, day: today },
+    update: { count: { increment: 1 } },
+  });
+
+  await prisma.popularJunkOracleQueryDay.deleteMany({
+    where: { day: { lt: utcDayStart(POPULAR_RETENTION_DAYS) } },
+  });
 }
 
 /**
