@@ -351,10 +351,11 @@ export const uiStringsJa = {
     qualitySelectPlaceholder: `${JA_QUALITY}を選択…`,
     initialGradeLabel: `入手時の${JA_GRADE}`,
     initialGradeDescription: [
-      `入手した時点でのこの${JA_EQUIPMENT}の色です。任意項目で、確率には影響しません。`,
+      `入手した時点でのこの${JA_EQUIPMENT}の色です。確率には影響しません。`,
       '答えると、入手時から付いているスロットをこちらで埋めます。',
       '「わからない」でも問題ありません。その場合はスロットをご自身で指定してください。',
     ].join(''),
+    initialGradePlaceholder: `${JA_GRADE}を選択…`,
     notSure: 'わからない',
     noMatchesLabel: '一致する項目がありません',
     currentLevelLabel: '現在の強化レベル',

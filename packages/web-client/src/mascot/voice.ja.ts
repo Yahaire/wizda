@@ -108,6 +108,12 @@ export const wizdaLinesJa = {
       "これは、目標の強化レベルに着いたときに、すべてのスロットがあなた様の希望どおりになっている確率よ。",
       "途中のマイルストーンを全部試して、うまくいく場合を数えてるの。",
     ]),
+    wishesSetAside: (slots) => stringJoin([
+      `あら、今の変更で${slots}の目標が隠れちゃったわ。`,
+      "ちゃんと預かってるから、戻したかったら言ってね。",
+    ]),
+    undoLabel: "元に戻す",
+    keepChangeLabel: "このままにする",
   },
   errors: {
     unknownEquipment: `あれ…？その${JA_EQUIPMENT}、私の手帳から消えちゃってるみたい。もう1回選び直してみて！`,

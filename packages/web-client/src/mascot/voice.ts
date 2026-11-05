@@ -76,6 +76,14 @@ export interface WizdaLines {
      * voice (`strings.enhancement.notes`), and only when they apply.
      */
     readonly howItWorks: string,
+    /**
+     * A change to the grade or a level just hid the wishes on these slots — the
+     * slot labels, already joined. Offered with an undo, since nothing on the
+     * rows themselves says the wishes are only hidden — see `setAsideWishSlots`.
+     */
+    readonly wishesSetAside: (slots: string) => string,
+    readonly undoLabel: string,
+    readonly keepChangeLabel: string,
   },
   readonly errors: {
     readonly unknownEquipment: string,

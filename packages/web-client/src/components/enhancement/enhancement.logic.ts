@@ -91,8 +91,16 @@ export interface SlotFormState {
    * this is what becomes one `EnhancementTarget`; see {@link wishedTargets}.
    */
   wishBlessingCode: string | null,
-  /** The value the player hopes this slot reaches, inclusive. null = "any". */
+  /** The value {@link wishBlessingCode} is hoped to land at, inclusive. null = "any". */
   wishMinValue: number | null,
+  /**
+   * The value the blessing this slot *already holds* is hoped to reach,
+   * inclusive. null = "any". Kept apart from {@link wishMinValue} because the
+   * two floors are about different blessings: a grade or level that turns an
+   * empty slot occupied must not quietly re-aim "ATK ≥ 16" at whatever the
+   * slot shows — each mode keeps its own number, and gets it back on return.
+   */
+  heldWishMinValue: number | null,
   /** Whether the "plan a Refinement Stone" sub-panel is open for this slot. */
   planRefine: boolean,
   /** Required once `planRefine` is true; null means unanswered. */
@@ -104,10 +112,19 @@ export interface EnhancementFormState {
   equipment: string | null,
   quality: number | null,
   /**
-   * null = "not sure" — a real, first-class answer, not just unanswered. Any
-   * other value settles the piece's whole slot shape; see {@link SlotShape}.
+   * null = "not sure" — a real, first-class answer, not just unanswered (that's
+   * {@link gradeAnswered}). Any other value settles the piece's whole slot
+   * shape; see {@link SlotShape}.
    */
   initialGrade: number | null,
+  /**
+   * Whether the player has picked anything for {@link initialGrade} yet,
+   * "Not sure" included. The slots stay hidden until they have: a grade
+   * defaulting to "Not sure" read as answered, so a player could describe
+   * every slot before noticing it — and then picking the real grade
+   * reshuffled the rows they'd just filled in.
+   */
+  gradeAnswered: boolean,
   enhancementLevel: number,
   targetEnhancementLevel: number,
   /** Only slots the player has touched need a key; a missing key reads as empty. */
@@ -120,6 +137,7 @@ export const EMPTY_SLOT_FORM_STATE: SlotFormState = {
   value: null,
   wishBlessingCode: null,
   wishMinValue: null,
+  heldWishMinValue: null,
   planRefine: false,
   isRefined: null,
   planRefineStoneQuality: null,
@@ -129,14 +147,17 @@ export const DEFAULT_ENHANCEMENT_FORM_STATE: EnhancementFormState = {
   equipment: null,
   quality: null,
   initialGrade: null,
+  gradeAnswered: false,
   enhancementLevel: MIN_ENHANCEMENT_LEVEL,
   targetEnhancementLevel: DEFAULT_TARGET_ENHANCEMENT_LEVEL,
   slots: {},
 };
 
 /** Whether the piece section is filled in enough to reveal the rest of the form. */
-export function isPieceReady(state: Pick<EnhancementFormState, 'equipment' | 'quality'>): boolean {
-  return state.equipment !== null && state.quality !== null;
+export function isPieceReady(
+  state: Pick<EnhancementFormState, 'equipment' | 'quality' | 'gradeAnswered'>,
+): boolean {
+  return state.equipment !== null && state.quality !== null && state.gradeAnswered;
 }
 
 /**
@@ -334,7 +355,9 @@ export function slotWishState(
  * - A wish on a slot whose row isn't asking for one (a lowered target level
  *   hid it, say) is ignored rather than cleared. Nothing invisible reaches the
  *   query, and raising the level again brings the wish back — the same stance
- *   {@link isSlotOccupied} takes on `filled` under a stated grade.
+ *   {@link isSlotOccupied} takes on `filled` under a stated grade. Each kind of
+ *   row reads its own floor (`wishMinValue` / `heldWishMinValue`), so a slot
+ *   changing kind never carries one blessing's number over to another.
  * - An "any value" wish on an *occupied* slot emits nothing. It names a
  *   blessing the piece already carries with no floor on it, so it is satisfied
  *   by its own slot unconditionally and can never block the matching.
@@ -355,8 +378,8 @@ export function wishedTargets(state: SlotShape & Pick<EnhancementFormState, 'slo
     }
     const wishState = slotWishState(slot, state.slots, state);
     if (wishState === SlotWishState.VALUE_ONLY) {
-      if (slotState.blessingCode !== null && slotState.wishMinValue !== null) {
-        targets.push({ blessingCode: slotState.blessingCode, minValue: slotState.wishMinValue });
+      if (slotState.blessingCode !== null && slotState.heldWishMinValue !== null) {
+        targets.push({ blessingCode: slotState.blessingCode, minValue: slotState.heldWishMinValue });
       }
       continue;
     }
@@ -382,7 +405,7 @@ export function isFillAhead(slots: Record<number, SlotFormState>, shape: SlotSha
 /** Whether slot `slot` has a value floor wished on it — the one wish on an occupied slot that sends anything. */
 function hasValueWish(slot: number, slots: Record<number, SlotFormState>, shape: SlotShape): boolean {
   return slotWishState(slot, slots, shape) === SlotWishState.VALUE_ONLY
-    && (slots[slot]?.wishMinValue ?? null) !== null;
+    && (slots[slot]?.heldWishMinValue ?? null) !== null;
 }
 
 /**
@@ -502,6 +525,31 @@ export function reconcileFormState(state: EnhancementFormState): EnhancementForm
 }
 
 /**
+ * Whether slot `slot` carries a wish the player can see on its row: a hoped-for
+ * blessing on a slot a milestone will fill, or a floor on what an occupied slot
+ * already holds.
+ */
+function hasVisibleWish(slot: number, slots: Record<number, SlotFormState>, shape: SlotShape): boolean {
+  return (
+    slotWishState(slot, slots, shape) === SlotWishState.BLESSING_AND_VALUE
+    && (slots[slot]?.wishBlessingCode ?? null) !== null
+  ) || hasValueWish(slot, slots, shape);
+}
+
+/**
+ * The slots whose wish was on screen in `before` and isn't in `after`, in slot
+ * order — what a change to the grade or a level just put out of sight. Mostly
+ * the wish is only hidden (see {@link wishedTargets}) and comes back with the
+ * answer that hid it, but nothing on the row says so, which is why the page
+ * offers the undo itself.
+ */
+export function setAsideWishSlots(before: EnhancementFormState, after: EnhancementFormState): number[] {
+  return Array.from({ length: MAX_BLESSING_SLOTS }, (_unused, index) => index + 1).filter(
+    (slot) => hasVisibleWish(slot, before.slots, before) && !hasVisibleWish(slot, after.slots, after),
+  );
+}
+
+/**
  * localStorage key for the form as it stood at the last successful Calculate
  * (bump on an incompatible shape change).
  */
@@ -517,25 +565,51 @@ export const LAST_CALCULATED_STORAGE_KEY = 'wizda.enhancement.lastCalculated.v1'
  * the same normalization every edit gets ({@link normalizeTargetLevel},
  * {@link reconcileFormState}), in case those rules moved since it was saved.
  * A piece that wasn't even chosen is nothing to restore.
+ *
+ * Only a form that calculated is ever stored, so its grade was answered —
+ * which an older build, predating {@link EnhancementFormState.gradeAnswered},
+ * never wrote down. That build also kept both of a slot's floors in
+ * `wishMinValue`; one sitting on a slot that only takes a floor on what it
+ * already holds is moved to {@link SlotFormState.heldWishMinValue}, where it
+ * belongs now.
  */
 export function restoreFormState(stored: unknown): EnhancementFormState | null {
   if (typeof stored !== 'object' || stored === null) {
     return null;
   }
-  const merged: EnhancementFormState = { ...DEFAULT_ENHANCEMENT_FORM_STATE, ...stored };
+  const merged: EnhancementFormState = {
+    ...DEFAULT_ENHANCEMENT_FORM_STATE,
+    ...stored,
+    gradeAnswered: true,
+  };
   if (!isPieceReady(merged)) {
     return null;
   }
   const slots: Record<number, SlotFormState> = {};
+  const predatesHeldFloor: number[] = [];
   for (let slot = 1; slot <= MAX_BLESSING_SLOTS; slot++) {
     const slotState = merged.slots?.[slot];
-    if (slotState) {
-      slots[slot] = { ...EMPTY_SLOT_FORM_STATE, ...slotState };
+    if (!slotState) {
+      continue;
     }
+    slots[slot] = { ...EMPTY_SLOT_FORM_STATE, ...slotState };
+    if (!('heldWishMinValue' in slotState)) {
+      predatesHeldFloor.push(slot);
+    }
+  }
+  const shape: SlotShape = {
+    ...merged,
+    targetEnhancementLevel: normalizeTargetLevel(merged.targetEnhancementLevel, merged.enhancementLevel),
+  };
+  for (const slot of predatesHeldFloor) {
+    if (slotWishState(slot, slots, shape) !== SlotWishState.VALUE_ONLY) {
+      continue;
+    }
+    slots[slot] = { ...slots[slot], heldWishMinValue: slots[slot].wishMinValue, wishMinValue: null };
   }
   return reconcileFormState({
     ...merged,
-    targetEnhancementLevel: normalizeTargetLevel(merged.targetEnhancementLevel, merged.enhancementLevel),
+    targetEnhancementLevel: shape.targetEnhancementLevel,
     slots,
   });
 }
@@ -868,10 +942,13 @@ export function rolledSlotOdds(
 export function buildReferenceParams(
   state: EnhancementFormState,
 ): { equipment: string, quality: number } | null {
-  if (!isPieceReady(state)) {
+  // Not `isPieceReady`: the rates don't depend on the grade, and the page only
+  // refetches when this pair moves — so answering the grade can't be what
+  // fetches them.
+  if (state.equipment === null || state.quality === null) {
     return null;
   }
-  return { equipment: state.equipment!, quality: state.quality! };
+  return { equipment: state.equipment, quality: state.quality };
 }
 
 /**
@@ -986,7 +1063,7 @@ function previewBlessingSlot(
     value: slotState.value,
     boostedAt,
     // A floor only means something where a milestone can still move the number.
-    minValue: boostedAt !== null ? slotState.wishMinValue : null,
+    minValue: boostedAt !== null ? slotState.heldWishMinValue : null,
     // A stone is applied on the way to the target, so it belongs to that face —
     // and unlike a wish it doesn't wait for a milestone.
     refineStoneQuality: face === PreviewFace.WANT ? plannedRefineStoneQuality(slotState) : null,

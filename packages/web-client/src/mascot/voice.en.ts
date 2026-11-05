@@ -94,6 +94,12 @@ export const wizdaLinesEn = {
       "That's the chance every slot turns out the way you asked by the time you reach your target level.",
       "I play out every milestone roll on the way there and count all the ways it goes right for you.",
     ]),
+    wishesSetAside: (slots) => TsUtilities.stringJoin([
+      `Oops — that tucked away what you were hoping for on ${slots}.`,
+      "I kept it safe, though, if you want it back!",
+    ]),
+    undoLabel: "Undo",
+    keepChangeLabel: "Keep the change",
   },
   errors: {
     unknownEquipment: "Some of that gear isn't in my notes anymore — try reselecting it.",

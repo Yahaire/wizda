@@ -257,6 +257,8 @@ export interface UiStrings {
     readonly qualitySelectPlaceholder: string,
     readonly initialGradeLabel: string,
     readonly initialGradeDescription: string,
+    /** Shown until the grade is answered — "Not sure" included — which is what reveals the slots. */
+    readonly initialGradePlaceholder: string,
     /** The tri-state initial-grade picker's "I don't know" option. */
     readonly notSure: string,
     /** Empty-search footer for the quality/initial-grade dropdowns. */

@@ -81,7 +81,8 @@ export function PieceForm({ state, onChange, equipmentList }: PieceFormProps) {
           >
             <GradeSelect
               value={state.initialGrade}
-              onChange={(initialGrade) => onChange({ initialGrade })}
+              answered={state.gradeAnswered}
+              onChange={(initialGrade) => onChange({ initialGrade, gradeAnswered: true })}
             />
           </FilterField>
         </SimpleGrid>

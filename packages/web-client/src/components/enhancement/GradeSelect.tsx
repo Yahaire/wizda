@@ -13,6 +13,8 @@ import type { SelectOptionIcon } from '@/components/select/selectOptions';
 interface GradeSelectProps {
   /** null = "Not sure" — a first-class answer, distinct from White (grade 1). */
   value: number | null,
+  /** False until the player has picked anything, "Not sure" included — the field then shows its placeholder. */
+  answered: boolean,
   onChange: (value: number | null) => void,
   disabled?: boolean,
 }
@@ -44,10 +46,16 @@ function gradeIcon(option: GradeOption): SelectOptionIcon {
  * exact grade at drop — and, unlike quality, leaving it unanswered is a real,
  * costless option (see `docs/calculation/enhancement.md` — `initialGrade` never
  * moves the odds), so "Not sure" is an option in the list rather than the
- * absence of one. The field is therefore never empty and never needs a
- * placeholder.
+ * absence of one. It still has to be *picked*, though: the field starts empty,
+ * since a preselected "Not sure" looked answered and let a player fill in every
+ * slot before noticing it (`EnhancementFormState.gradeAnswered`).
  */
-export function GradeSelect({ value, onChange, disabled }: GradeSelectProps) {
+export function GradeSelect({
+  value,
+  answered,
+  onChange,
+  disabled,
+}: GradeSelectProps) {
   const strings = useStrings();
 
   const data: GradeOption[] = [
@@ -58,15 +66,19 @@ export function GradeSelect({ value, onChange, disabled }: GradeSelectProps) {
     })),
   ];
 
+  const answer = value !== null ? String(value) : NOT_SURE;
+  const selected = answered ? answer : null;
+
   return (
     <IconSingleSelect
       data={data}
-      value={value !== null ? String(value) : NOT_SURE}
+      value={selected}
       onChange={(next) => onChange(next === NOT_SURE ? null : Number(next))}
       getValue={getGradeValue}
       getLabel={getGradeLabel}
       getIcon={gradeIcon}
       disabled={disabled}
+      placeholder={strings.enhancement.initialGradePlaceholder}
       emptyMessage={strings.enhancement.noMatchesLabel}
       ariaLabel={strings.enhancement.initialGradeLabel}
     />

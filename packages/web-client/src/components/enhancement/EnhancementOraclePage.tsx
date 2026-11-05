@@ -6,7 +6,8 @@ import { ENHANCEMENT_ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { PageTitle } from '@/components/PageTitle';
 import { PreparingVeil } from '@/components/PreparingVeil';
-import { useStrings } from '@/i18n/LanguageProvider';
+import { useStrings, useWizda } from '@/i18n/LanguageProvider';
+import { wizdaConfirm } from '@/mascot/wizda';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import { Box, Grid, Paper, Stack, Text } from '@mantine/core';
 
@@ -14,8 +15,8 @@ import { CalculateButton } from './CalculateButton';
 import {
     blockerField, buildEnhancementQuery, buildReferenceParams, calculateBlockers, canCalculate,
     DEFAULT_ENHANCEMENT_FORM_STATE, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
-    isInitialGradeUnknown, isPieceReady, readLastCalculated, reconcileFormState, SlotFormState,
-    storeLastCalculated
+    isInitialGradeUnknown, isPieceReady, readLastCalculated, reconcileFormState, setAsideWishSlots,
+    SlotFormState, storeLastCalculated
 } from './enhancement.logic';
 import { EnhancementResult } from './EnhancementResult';
 import { revealSlotField } from './missingFields';
@@ -42,6 +43,7 @@ interface ComputedResult {
 
 export function EnhancementOraclePage() {
   const strings = useStrings();
+  const wizda = useWizda();
   const { equipment: equipmentList, status: listStatus } = useDetail();
 
   const [state, setState] = useState<EnhancementFormState>(DEFAULT_ENHANCEMENT_FORM_STATE);
@@ -58,12 +60,47 @@ export function EnhancementOraclePage() {
   // follow the form live — each clears as its field is filled.
   const [revealMissing, setRevealMissing] = useState(false);
   const slotsRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  // Set by a press of Calculate only — the mount restore answers a piece the
+  // player hasn't asked about yet this visit, so it leaves the page where it is.
+  const pendingScrollRef = useRef(false);
 
   // Every write goes through `reconcileFormState`: grade, level and a slot's own
   // fields all move which blessings the piece displays, and any of them can turn
   // an empty slot's wish into one no milestone can grant.
+  //
+  // The piece section's writes can also hide wishes filled in below it — a
+  // stated grade fills a slot, a lowered target puts one out of reach. Those are
+  // kept, not cleared, but nothing on the rows says so; Wizda does, and offers
+  // the way back.
   const patch = (change: Partial<EnhancementFormState>) => {
-    setState((current) => reconcileFormState({ ...current, ...change }));
+    const before = state;
+    const after = reconcileFormState({ ...before, ...change });
+    setState(after);
+    const setAside = setAsideWishSlots(before, after);
+    if (setAside.length === 0) {
+      return;
+    }
+    const undo = () => setState((current) => {
+      // Untouched since: the whole form goes back, any wish `reconcileFormState`
+      // cleared included. Otherwise only what this change moved, so later edits stay.
+      if (current === after) {
+        return before;
+      }
+      const reverted = Object.fromEntries(
+        Object.keys(change).map((key) => [key, before[key as keyof EnhancementFormState]]),
+      );
+      return reconcileFormState({ ...current, ...reverted });
+    });
+    const slotNames = strings.common.joinList(setAside.map(strings.enhancement.slotLabel), 'and');
+    wizdaConfirm(
+      wizda.enhancement.wishesSetAside(slotNames),
+      undo,
+      {
+        confirmLabel: wizda.enhancement.undoLabel,
+        dismissLabel: wizda.enhancement.keepChangeLabel,
+      },
+    );
   };
 
   const setSlot = (slot: number, change: Partial<SlotFormState>) => {
@@ -130,6 +167,20 @@ export function EnhancementOraclePage() {
       setLoading(false);
     }
   };
+
+  // Scroll to the answer once a pressed Calculate settles, on the Junk Oracle's
+  // terms (its `pendingScrollRef`). An error is an answer too — it's drawn in the
+  // same panel — while a maintenance bounce leaves nothing there to look at.
+  useEffect(() => {
+    if (loading || !pendingScrollRef.current) {
+      return;
+    }
+    pendingScrollRef.current = false;
+    if (computed === null && error === null) {
+      return;
+    }
+    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [loading, computed, error]);
 
   // Bring back the piece this player last calculated, answer and all — most
   // visits re-ask about the same piece after enhancing it a little further.
@@ -214,7 +265,10 @@ export function EnhancementOraclePage() {
                       blockers={blockers}
                       explain={revealMissing}
                       loading={loading}
-                      onCalculate={() => calculate(state)}
+                      onCalculate={() => {
+                        pendingScrollRef.current = true;
+                        void calculate(state);
+                      }}
                       onBlocked={showBlocked}
                     />
                   </Stack>
@@ -231,7 +285,7 @@ export function EnhancementOraclePage() {
                 <PiecePreview state={state} item={item} outcome={outcome} slotRates={reference?.slots} />
               </Box>
 
-              <Paper withBorder p="lg" radius="md">
+              <Paper ref={resultsRef} withBorder p="lg" radius="md" className="wizda-scroll-clear-header">
                 <EnhancementResult
                   loading={loading}
                   error={error}

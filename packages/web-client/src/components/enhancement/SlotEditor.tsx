@@ -317,8 +317,8 @@ function SlotRow({
                 {wishState === SlotWishState.VALUE_ONLY ? (
                   <WishValueInput
                     label={strings.enhancement.wishLabel}
-                    value={slotState.wishMinValue}
-                    onChange={(wishMinValue) => onChange({ wishMinValue })}
+                    value={slotState.heldWishMinValue}
+                    onChange={(heldWishMinValue) => onChange({ heldWishMinValue })}
                     ariaLabel={strings.enhancement.wishValueAriaLabel(slot)}
                     marks={fieldMarks(SlotField.WISH, missing)}
                   />

@@ -8,7 +8,7 @@ import {
     isSlotValueRequired, LAST_CALCULATED_STORAGE_KEY, MAX_ENHANCEMENT_LEVEL,
     missingSlotFields, normalizeTargetLevel, occupiedSlotsOf, pinBlessingFirst, plannedRefineStoneQuality,
     PreviewFace, previewGrade, previewSlots, readLastCalculated, reconcileFormState, restoreFormState,
-    rolledSlotOdds, SlotDisplayState,
+    rolledSlotOdds, setAsideWishSlots, SlotDisplayState,
     slotDisplayState, SlotField,
     slotBlessingOptions, slotStateProblem, SlotWishState, slotWishState, targetLevelOptions,
     wishBlessingOptions, wishedTargets
@@ -18,8 +18,9 @@ import { BLESSINGS } from '@shared/domain/stats';
 import type { EnhancementReference } from '@shared/api/endpoints/enhancementOdds.models';
 import type { SlotFormState, SlotShape } from './enhancement.logic';
 
+/** A form whose grade has been answered — "Not sure" unless overridden — as every slot test needs. */
 function state(overrides: Partial<EnhancementFormState> = {}): EnhancementFormState {
-  return { ...DEFAULT_ENHANCEMENT_FORM_STATE, ...overrides };
+  return { ...DEFAULT_ENHANCEMENT_FORM_STATE, gradeAnswered: true, ...overrides };
 }
 
 function filledSlot(overrides: Partial<SlotFormState> = {}): SlotFormState {
@@ -49,11 +50,16 @@ function shape(
 }
 
 describe('isPieceReady', () => {
-  it('is false until both equipment and quality are set', () => {
-    expect(isPieceReady({ equipment: null, quality: null })).toBe(false);
-    expect(isPieceReady({ equipment: 'Ebonsteel Dagger', quality: null })).toBe(false);
-    expect(isPieceReady({ equipment: null, quality: 4 })).toBe(false);
-    expect(isPieceReady({ equipment: 'Ebonsteel Dagger', quality: 4 })).toBe(true);
+  it('is false until equipment, quality and the grade are all answered', () => {
+    const answered = { gradeAnswered: true };
+    expect(isPieceReady({ ...answered, equipment: null, quality: null })).toBe(false);
+    expect(isPieceReady({ ...answered, equipment: 'Ebonsteel Dagger', quality: null })).toBe(false);
+    expect(isPieceReady({ ...answered, equipment: null, quality: 4 })).toBe(false);
+    expect(isPieceReady({ ...answered, equipment: 'Ebonsteel Dagger', quality: 4 })).toBe(true);
+  });
+
+  it('waits on the grade even with the piece chosen — "Not sure" has to be picked too', () => {
+    expect(isPieceReady({ equipment: 'Ebonsteel Dagger', quality: 4, gradeAnswered: false })).toBe(false);
   });
 });
 
@@ -255,11 +261,64 @@ describe('reconcileFormState', () => {
     expect(reconcileFormState(before)).toBe(before);
   });
 
+  it('never carries a hoped-for blessing\'s floor onto the blessing a slot turns out to hold', () => {
+    // "ATK ≥ 16" on empty slot 1, then the player states Blue: slot 1 came with
+    // the piece, holding SUR. The 16 was about ATK, so SUR must not inherit it.
+    const notSure = state({
+      equipment: 'Longsword',
+      quality: 3,
+      slots: {
+        1: {
+          ...EMPTY_SLOT_FORM_STATE,
+          blessingCode: 'SUR',
+          value: 4,
+          wishBlessingCode: 'ATK',
+          wishMinValue: 16,
+        },
+      },
+    });
+    const blue = reconcileFormState({ ...notSure, initialGrade: 3 });
+    expect(wishedTargets(blue)).toEqual([]);
+    expect(previewSlots(PreviewFace.WANT, blue.slots, blue)[0]).toMatchObject({ kind: 'BLESSING', minValue: null });
+    // And the wish is only hidden: back to "Not sure", it's whole again.
+    expect(wishedTargets({ ...blue, initialGrade: null })).toEqual([{ blessingCode: 'ATK', minValue: 16 }]);
+  });
+
   it('leaves an occupied slot\'s own wish alone even though it names a displayed blessing', () => {
     // An occupied slot's wish is value-only and refers to the blessing it
     // already holds — that's not a duplicate, it's the slot itself.
-    const before = state({ slots: { 1: filledSlot({ wishBlessingCode: 'ATK', wishMinValue: 16 }) } });
+    const before = state({ slots: { 1: filledSlot({ wishBlessingCode: 'ATK', heldWishMinValue: 16 }) } });
     expect(reconcileFormState(before)).toBe(before);
+  });
+});
+
+describe('setAsideWishSlots', () => {
+  const notSure = state({
+    slots: {
+      1: wishSlot({ wishBlessingCode: 'DIV' }),
+      2: wishSlot({ wishBlessingCode: 'ATK' }),
+      3: wishSlot({ wishBlessingCode: 'MAG' }),
+    },
+  });
+
+  it('names the slots a stated grade just filled out from under their wishes', () => {
+    // Blue came with two blessings, so slots 1-2 stop asking which one lands there.
+    expect(setAsideWishSlots(notSure, { ...notSure, initialGrade: 3 })).toEqual([1, 2]);
+  });
+
+  it('names the slots a lowered target level put out of reach', () => {
+    expect(setAsideWishSlots(notSure, { ...notSure, targetEnhancementLevel: 5 })).toEqual([2, 3]);
+  });
+
+  it('names a held floor whose slot stopped being occupied', () => {
+    // Never marked Filled by hand — Blue filled it — so "Not sure" leaves it Empty.
+    const blue = state({ initialGrade: 3, slots: { 1: filledSlot({ filled: false, heldWishMinValue: 16 }) } });
+    expect(setAsideWishSlots(blue, { ...blue, initialGrade: null })).toEqual([1]);
+  });
+
+  it('is empty when the change hides nothing', () => {
+    expect(setAsideWishSlots(notSure, { ...notSure, initialGrade: 1 })).toEqual([]);
+    expect(setAsideWishSlots(notSure, notSure)).toEqual([]);
   });
 });
 
@@ -304,7 +363,7 @@ describe('canCalculate', () => {
 
   it('demands a description for every slot a stated grade implies', () => {
     const graded = { ...base, initialGrade: 3 };
-    const wished = filledSlot({ wishMinValue: 16 });
+    const wished = filledSlot({ heldWishMinValue: 16 });
     expect(canCalculate(state({ ...graded, slots: { 1: wished } }))).toBe(false);
     expect(canCalculate(state({ ...graded, slots: { 1: wished, 2: filledSlot() } }))).toBe(true);
   });
@@ -312,7 +371,7 @@ describe('canCalculate', () => {
   it('rejects an incomplete or blocked refinement plan', () => {
     const planning = (overrides: Partial<SlotFormState>) => state({
       ...base,
-      slots: { 1: filledSlot({ wishMinValue: 16, planRefine: true, ...overrides }) },
+      slots: { 1: filledSlot({ heldWishMinValue: 16, planRefine: true, ...overrides }) },
     });
     expect(canCalculate(planning({ isRefined: null }))).toBe(false);
     expect(canCalculate(planning({ isRefined: true, planRefineStoneQuality: 3 }))).toBe(false);
@@ -337,7 +396,7 @@ describe('calculateBlockers', () => {
     expect(kindsOf(state({
       ...base,
       initialGrade: 3,
-      slots: { 1: { ...EMPTY_SLOT_FORM_STATE, wishMinValue: 16 } },
+      slots: { 1: { ...EMPTY_SLOT_FORM_STATE, heldWishMinValue: 16 } },
     }))).toEqual([
       [CalculateBlockerKind.SLOT_BLESSING, 1],
       [CalculateBlockerKind.SLOT_VALUE, 1],
@@ -364,7 +423,7 @@ describe('calculateBlockers', () => {
   it('names which part of a refinement plan is missing', () => {
     const planning = (overrides: Partial<SlotFormState>) => state({
       ...base,
-      slots: { 1: filledSlot({ wishMinValue: 16, planRefine: true, ...overrides }) },
+      slots: { 1: filledSlot({ heldWishMinValue: 16, planRefine: true, ...overrides }) },
     });
     expect(kindsOf(planning({ isRefined: null }))).toEqual([[CalculateBlockerKind.REFINE_ANSWER, 1]]);
     expect(kindsOf(planning({ isRefined: true }))).toEqual([[CalculateBlockerKind.REFINE_UNSUPPORTED, 1]]);
@@ -373,7 +432,7 @@ describe('calculateBlockers', () => {
 
   it('reports an impossible slot shape as form-wide', () => {
     // Slot 3 marked Filled with slot 1 left empty: a gap the game can't produce.
-    expect(kindsOf(state({ ...base, slots: { 3: filledSlot({ wishMinValue: 16 }) } })))
+    expect(kindsOf(state({ ...base, slots: { 3: filledSlot({ heldWishMinValue: 16 }) } })))
       .toEqual([[CalculateBlockerKind.SLOT_SHAPE, null]]);
   });
 });
@@ -386,7 +445,7 @@ describe('isSlotBlessingRequired / isSlotValueRequired', () => {
 
   it('asks nothing of an occupied slot no answer depends on', () => {
     // A Red piece: nothing left to fill, and slot 2 isn't wished on.
-    const slots = { 1: filledSlot({ wishMinValue: 16 }) };
+    const slots = { 1: filledSlot({ heldWishMinValue: 16 }) };
     expect(required(2, slots, shape(5, 0))).toEqual({ blessing: false, value: false });
   });
 
@@ -397,7 +456,7 @@ describe('isSlotBlessingRequired / isSlotValueRequired', () => {
   });
 
   it("needs both halves for a slot's own floor or refinement plan", () => {
-    expect(required(1, { 1: filledSlot({ wishMinValue: 16 }) }, shape(5, 0)))
+    expect(required(1, { 1: filledSlot({ heldWishMinValue: 16 }) }, shape(5, 0)))
       .toEqual({ blessing: true, value: true });
     expect(required(1, { 1: filledSlot({ planRefine: true }) }, shape(5, 0)))
       .toEqual({ blessing: true, value: true });
@@ -407,7 +466,7 @@ describe('isSlotBlessingRequired / isSlotValueRequired', () => {
     // Two ATK slots (an altered duplicate): a floor on slot 1 can be met by
     // slot 2, so slot 2's number is in play too.
     const slots = {
-      1: filledSlot({ wishMinValue: 16 }),
+      1: filledSlot({ heldWishMinValue: 16 }),
       2: filledSlot({ value: null }),
     };
     expect(isSlotValueRequired(2, slots, shape(5, 0))).toBe(true);
@@ -468,7 +527,7 @@ describe('buildEnhancementQuery', () => {
       equipment: 'Ebonsteel Dagger',
       quality: 4,
       slots: {
-        1: filledSlot({ wishMinValue: 16 }),
+        1: filledSlot({ heldWishMinValue: 16 }),
         2: { ...EMPTY_SLOT_FORM_STATE, filled: false },
       },
     }));
@@ -502,7 +561,7 @@ describe('buildEnhancementQuery', () => {
       quality: 4,
       initialGrade: 5,
       slots: {
-        1: filledSlot({ wishMinValue: 16 }),
+        1: filledSlot({ heldWishMinValue: 16 }),
         2: filledSlot({ blessingCode: 'DEF', value: null }),
         4: filledSlot({ blessingCode: null, value: 9 }),
       },
@@ -535,7 +594,7 @@ describe('buildEnhancementQuery', () => {
     const query = buildEnhancementQuery(state({
       equipment: 'Ebonsteel Dagger',
       quality: 4,
-      slots: { 1: filledSlot({ wishMinValue: 16 }) },
+      slots: { 1: filledSlot({ heldWishMinValue: 16 }) },
     }));
     expect(Object.keys(query ?? {}).sort()).toEqual([
       'enhancementLevel',
@@ -581,7 +640,7 @@ describe('wishedTargets', () => {
   });
 
   it('reads an occupied slot\'s wish against the blessing it already holds', () => {
-    expect(wishedTargets(state({ ...base, slots: { 1: filledSlot({ wishMinValue: 16 }) } })))
+    expect(wishedTargets(state({ ...base, slots: { 1: filledSlot({ heldWishMinValue: 16 }) } })))
       .toEqual([{ blessingCode: 'ATK', minValue: 16 }]);
   });
 
@@ -596,7 +655,7 @@ describe('wishedTargets', () => {
     expect(wishedTargets(state({
       ...base,
       slots: {
-        1: filledSlot({ wishMinValue: 16 }),
+        1: filledSlot({ heldWishMinValue: 16 }),
         2: wishSlot({ wishMinValue: 8 }),
       },
     }))).toEqual([
@@ -672,7 +731,7 @@ describe('plannedRefineStoneQuality', () => {
 
 describe('previewSlots', () => {
   it('transcribes the HAVE face as typed, with the rest empty', () => {
-    const slots = { 1: filledSlot({ wishMinValue: 16 }), 2: filledSlot({ blessingCode: null, value: null }) };
+    const slots = { 1: filledSlot({ heldWishMinValue: 16 }), 2: filledSlot({ blessingCode: null, value: null }) };
     expect(previewSlots(PreviewFace.HAVE, slots, shape(null, 0))).toEqual([
       { kind: 'BLESSING', slot: 1, blessingCode: 'ATK', value: 8, boostedAt: null, minValue: null, refineStoneQuality: null },
       { kind: 'BLESSING', slot: 2, blessingCode: null, value: null, boostedAt: null, minValue: null, refineStoneQuality: null },
@@ -687,7 +746,7 @@ describe('previewSlots', () => {
   });
 
   it('carries an occupied slot forward with the milestone that boosts it and the floor wished', () => {
-    const slots = { 1: filledSlot({ wishMinValue: 16 }) };
+    const slots = { 1: filledSlot({ heldWishMinValue: 16 }) };
     const [first] = previewSlots(PreviewFace.WANT, slots, shape(null, 0, 20));
     expect(first).toEqual({
       kind: 'BLESSING', slot: 1, blessingCode: 'ATK', value: 8, boostedAt: 5, minValue: 16, refineStoneQuality: null,
@@ -695,7 +754,7 @@ describe('previewSlots', () => {
   });
 
   it('leaves an occupied slot no milestone will touch as it is, floor and all dropped', () => {
-    const slots = { 1: filledSlot({ wishMinValue: 16 }) };
+    const slots = { 1: filledSlot({ heldWishMinValue: 16 }) };
     const [first] = previewSlots(PreviewFace.WANT, slots, shape(null, 5, 20));
     expect(first).toMatchObject({ kind: 'BLESSING', boostedAt: null, minValue: null });
   });
@@ -815,6 +874,25 @@ describe('restoreFormState', () => {
     const restored = restoreFormState({ ...piece, slots: { 1: { filled: true, blessingCode: 'ATK' } } });
     expect(restored?.enhancementLevel).toBe(DEFAULT_ENHANCEMENT_FORM_STATE.enhancementLevel);
     expect(restored?.slots[1]).toEqual({ ...EMPTY_SLOT_FORM_STATE, filled: true, blessingCode: 'ATK' });
+  });
+
+  it('counts a stored form\'s grade as answered — only a calculated form is ever stored', () => {
+    expect(restoreFormState({ ...piece })?.gradeAnswered).toBe(true);
+  });
+
+  it('moves an older build\'s floor on an occupied slot over to the held floor', () => {
+    // Back then one `wishMinValue` served both kinds of row. Slot 1 is occupied
+    // and still due (VALUE_ONLY), so its floor was about the blessing it holds;
+    // slot 2 is empty, so its floor stays with the hoped-for blessing.
+    const restored = restoreFormState({
+      ...piece,
+      slots: {
+        1: { filled: true, blessingCode: 'ATK', value: 8, wishMinValue: 16 },
+        2: { wishBlessingCode: 'SUR', wishMinValue: 5 },
+      },
+    });
+    expect(restored?.slots[1]).toMatchObject({ heldWishMinValue: 16, wishMinValue: null });
+    expect(restored?.slots[2]).toMatchObject({ heldWishMinValue: null, wishMinValue: 5 });
   });
 
   it('drops slots outside 1..4', () => {

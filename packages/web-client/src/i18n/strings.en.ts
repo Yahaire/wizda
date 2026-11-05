@@ -288,10 +288,10 @@ export const uiStringsEn = {
     qualitySelectPlaceholder: 'Select quality…',
     initialGradeLabel: 'Initial grade',
     initialGradeDescription: [
-      'The piece\'s colour when you first got it — optional, and it doesn\'t change the odds.',
-      'Answer it and we\'ll fill in the slots the piece came with. "Not sure" is a fine answer —',
-      'you\'ll just mark those slots yourself.',
+      'The piece\'s colour when you first got it. It doesn\'t change the odds, but it lets us fill in the slots',
+      'the piece came with. "Not sure" is a fine answer — you\'ll just mark those slots yourself.',
     ].join(' '),
+    initialGradePlaceholder: 'Select grade…',
     notSure: 'Not sure',
     noMatchesLabel: 'No matches',
     currentLevelLabel: 'Current enhancement level',
