@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ENHANCEMENT_ORACLE_NAME } from '@/app/app.constants';
 import { useDetail } from '@/components/detail/DetailProvider';
 import { PageTitle } from '@/components/PageTitle';
+import { PreparingVeil } from '@/components/PreparingVeil';
 import { useStrings } from '@/i18n/LanguageProvider';
 import { api, ApiError, MaintenanceError } from '@/services/api';
 import { Box, Grid, Paper, Stack, Text } from '@mantine/core';
@@ -13,7 +14,8 @@ import { CalculateButton } from './CalculateButton';
 import {
     blockerField, buildEnhancementQuery, buildReferenceParams, calculateBlockers, canCalculate,
     DEFAULT_ENHANCEMENT_FORM_STATE, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
-    isInitialGradeUnknown, isPieceReady, reconcileFormState, SlotFormState
+    isInitialGradeUnknown, isPieceReady, readLastCalculated, reconcileFormState, SlotFormState,
+    storeLastCalculated
 } from './enhancement.logic';
 import { EnhancementResult } from './EnhancementResult';
 import { revealSlotField } from './missingFields';
@@ -40,9 +42,13 @@ interface ComputedResult {
 
 export function EnhancementOraclePage() {
   const strings = useStrings();
-  const { equipment: equipmentList } = useDetail();
+  const { equipment: equipmentList, status: listStatus } = useDetail();
 
   const [state, setState] = useState<EnhancementFormState>(DEFAULT_ENHANCEMENT_FORM_STATE);
+  // False until the mount effect below has had its chance to restore the last
+  // calculated piece — storage can't be read during the prerender, so the
+  // first render always shows the empty form.
+  const [seeded, setSeeded] = useState(false);
   const [reference, setReference] = useState<EnhancementReference | null>(null);
   const [computed, setComputed] = useState<ComputedResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,9 +104,11 @@ export function EnhancementOraclePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.equipment, state.quality]);
 
-  const calculate = async () => {
-    const query = buildEnhancementQuery(state);
-    if (!query || !canCalculate(state)) {
+  // Takes the form to ask about rather than reading `state`, so the mount
+  // effect can run it on a just-restored form its own closure can't see yet.
+  const calculate = async (asked: EnhancementFormState) => {
+    const query = buildEnhancementQuery(asked);
+    if (!query || !canCalculate(asked)) {
       return;
     }
     // A clean run starts the "tried it" clock over, so a field the next edit
@@ -112,6 +120,7 @@ export function EnhancementOraclePage() {
     try {
       const fresh = await api.enhancementOdds(query);
       setComputed({ query: JSON.stringify(query), result: fresh });
+      storeLastCalculated(asked);
     } catch (thrown) {
       if (thrown instanceof MaintenanceError) {
         return; // the global MaintenanceGate already covers this
@@ -121,6 +130,21 @@ export function EnhancementOraclePage() {
       setLoading(false);
     }
   };
+
+  // Bring back the piece this player last calculated, answer and all — most
+  // visits re-ask about the same piece after enhancing it a little further.
+  // Recalculated rather than stored with its result, so a reseed's rates or a
+  // deploy's result shape can never be replayed stale.
+  useEffect(() => {
+    const restored = readLastCalculated();
+    setSeeded(true);
+    if (!restored) {
+      return;
+    }
+    setState(restored);
+    void calculate(restored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The piece behind the form's English key, for the previews' name, icon and
   // tint. A linear scan of the catalogue per change is cheap next to the
@@ -149,6 +173,19 @@ export function EnhancementOraclePage() {
   const stale = computed !== null && computed.query !== JSON.stringify(buildEnhancementQuery(state));
   const outcome = computed !== null && !stale ? computed.result.slots : undefined;
 
+  // The "still filling in" scrim, on the Junk Oracle's terms (see its
+  // `preparedRef`): the restore above, then — only if it named a piece — the
+  // catalogue that turns its English key into the name the player picked.
+  // Latched, so a language switch re-pulling the lists doesn't bring it back.
+  const preparedRef = useRef(false);
+  if (
+    !preparedRef.current
+    && seeded
+    && (state.equipment === null || listStatus === 'ready' || listStatus === 'error')
+  ) {
+    preparedRef.current = true;
+  }
+
   return (
     <Stack gap="lg">
       <div>
@@ -156,60 +193,62 @@ export function EnhancementOraclePage() {
         <Text c="dimmed">{strings.enhancement.tagline}</Text>
       </div>
 
-      <Grid gutter="lg">
-        <Grid.Col span={{ base: 12, [PREVIEW_BREAKPOINT]: 5 }}>
-          <Stack gap="lg">
-            <PieceForm state={state} onChange={patch} equipmentList={equipmentList} />
+      <PreparingVeil preparing={!preparedRef.current}>
+        <Grid gutter="lg">
+          <Grid.Col span={{ base: 12, [PREVIEW_BREAKPOINT]: 5 }}>
+            <Stack gap="lg">
+              <PieceForm state={state} onChange={patch} equipmentList={equipmentList} />
 
-            {ready && (
-              <Paper ref={slotsRef} withBorder p="lg" radius="md">
-                <Stack gap="lg">
-                  <SlotEditor
-                    slots={state.slots}
-                    shape={state}
-                    reference={reference}
-                    missingBlockers={revealMissing ? blockers : []}
-                    onSlotChange={setSlot}
-                  />
+              {ready && (
+                <Paper ref={slotsRef} withBorder p="lg" radius="md">
+                  <Stack gap="lg">
+                    <SlotEditor
+                      slots={state.slots}
+                      shape={state}
+                      reference={reference}
+                      missingBlockers={revealMissing ? blockers : []}
+                      onSlotChange={setSlot}
+                    />
 
-                  <CalculateButton
-                    blockers={blockers}
-                    explain={revealMissing}
-                    loading={loading}
-                    onCalculate={calculate}
-                    onBlocked={showBlocked}
-                  />
-                </Stack>
+                    <CalculateButton
+                      blockers={blockers}
+                      explain={revealMissing}
+                      loading={loading}
+                      onCalculate={() => calculate(state)}
+                      onBlocked={showBlocked}
+                    />
+                  </Stack>
+                </Paper>
+              )}
+            </Stack>
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, [PREVIEW_BREAKPOINT]: 7 }}>
+            <Stack gap="lg">
+              {/* Beside the form only — see PREVIEW_BREAKPOINT for why a narrow
+                  screen gets the WANT face inside the result instead. */}
+              <Box visibleFrom={PREVIEW_BREAKPOINT}>
+                <PiecePreview state={state} item={item} outcome={outcome} slotRates={reference?.slots} />
+              </Box>
+
+              <Paper withBorder p="lg" radius="md">
+                <EnhancementResult
+                  loading={loading}
+                  error={error}
+                  result={computed?.result ?? null}
+                  gradeUnknown={gradeUnknown}
+                  stale={stale}
+                  narrowPreview={ready && item !== null && (
+                    <Box hiddenFrom={PREVIEW_BREAKPOINT}>
+                      <WantCard state={state} item={item} outcome={outcome} slotRates={reference?.slots} />
+                    </Box>
+                  )}
+                />
               </Paper>
-            )}
-          </Stack>
-        </Grid.Col>
-
-        <Grid.Col span={{ base: 12, [PREVIEW_BREAKPOINT]: 7 }}>
-          <Stack gap="lg">
-            {/* Beside the form only — see PREVIEW_BREAKPOINT for why a narrow
-                screen gets the WANT face inside the result instead. */}
-            <Box visibleFrom={PREVIEW_BREAKPOINT}>
-              <PiecePreview state={state} item={item} outcome={outcome} slotRates={reference?.slots} />
-            </Box>
-
-            <Paper withBorder p="lg" radius="md">
-              <EnhancementResult
-                loading={loading}
-                error={error}
-                result={computed?.result ?? null}
-                gradeUnknown={gradeUnknown}
-                stale={stale}
-                narrowPreview={ready && item !== null && (
-                  <Box hiddenFrom={PREVIEW_BREAKPOINT}>
-                    <WantCard state={state} item={item} outcome={outcome} slotRates={reference?.slots} />
-                  </Box>
-                )}
-              />
-            </Paper>
-          </Stack>
-        </Grid.Col>
-      </Grid>
+            </Stack>
+          </Grid.Col>
+        </Grid>
+      </PreparingVeil>
     </Stack>
   );
 }

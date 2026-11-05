@@ -502,6 +502,79 @@ export function reconcileFormState(state: EnhancementFormState): EnhancementForm
 }
 
 /**
+ * localStorage key for the form as it stood at the last successful Calculate
+ * (bump on an incompatible shape change).
+ */
+export const LAST_CALCULATED_STORAGE_KEY = 'wizda.enhancement.lastCalculated.v1';
+
+/**
+ * Turns whatever was stored under {@link LAST_CALCULATED_STORAGE_KEY} back into
+ * a form state, or null when there's nothing worth restoring.
+ *
+ * Stored by an older build is the case to survive: every field is merged over
+ * its default, so one added since comes back at its starting value rather than
+ * `undefined`; slots outside 1..4 are dropped; and the result is run through
+ * the same normalization every edit gets ({@link normalizeTargetLevel},
+ * {@link reconcileFormState}), in case those rules moved since it was saved.
+ * A piece that wasn't even chosen is nothing to restore.
+ */
+export function restoreFormState(stored: unknown): EnhancementFormState | null {
+  if (typeof stored !== 'object' || stored === null) {
+    return null;
+  }
+  const merged: EnhancementFormState = { ...DEFAULT_ENHANCEMENT_FORM_STATE, ...stored };
+  if (!isPieceReady(merged)) {
+    return null;
+  }
+  const slots: Record<number, SlotFormState> = {};
+  for (let slot = 1; slot <= MAX_BLESSING_SLOTS; slot++) {
+    const slotState = merged.slots?.[slot];
+    if (slotState) {
+      slots[slot] = { ...EMPTY_SLOT_FORM_STATE, ...slotState };
+    }
+  }
+  return reconcileFormState({
+    ...merged,
+    targetEnhancementLevel: normalizeTargetLevel(merged.targetEnhancementLevel, merged.enhancementLevel),
+    slots,
+  });
+}
+
+/**
+ * The form as it stood at this player's last successful Calculate — most come
+ * back to re-ask about the same piece after enhancing it a little further.
+ *
+ * Falls back to null on everything unreadable: no `window` (prerender), storage
+ * that throws (privacy-locked browsers), unparseable JSON, or a stored shape
+ * {@link restoreFormState} can't use.
+ */
+export function readLastCalculated(): EnhancementFormState | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(LAST_CALCULATED_STORAGE_KEY);
+    return raw ? restoreFormState(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remembers `state` for {@link readLastCalculated}. Saved on a successful
+ * Calculate only, never per edit: a form abandoned halfway is not what the
+ * player wants handed back, and only a form that calculated once is known to
+ * pass {@link canCalculate}.
+ */
+export function storeLastCalculated(state: EnhancementFormState): void {
+  try {
+    window.localStorage.setItem(LAST_CALCULATED_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Quota or a privacy lock — remembering is a convenience, never worth an error.
+  }
+}
+
+/**
  * The Refinement Stone a slot's plan will actually send: its quality, or null
  * while the plan is closed, incomplete, or blocked (`isRefined: true` is
  * explained in the UI and never reaches a request — see `ALREADY_REFINED`).

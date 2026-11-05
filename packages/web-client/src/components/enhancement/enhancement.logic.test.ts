@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
     buildEnhancementQuery, CalculateBlockerKind, calculateBlockers, canCalculate, canSlotBeEmpty,
     DEFAULT_ENHANCEMENT_FORM_STATE, displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
     guaranteedFilledCount, hasMilestoneAhead, isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop,
     isSlotBlessingRequired, isSlotGuaranteedEmpty, isSlotMandatory, isSlotOccupied, isSlotShapeKnown,
-    isSlotValueRequired, MAX_ENHANCEMENT_LEVEL,
+    isSlotValueRequired, LAST_CALCULATED_STORAGE_KEY, MAX_ENHANCEMENT_LEVEL,
     missingSlotFields, normalizeTargetLevel, occupiedSlotsOf, pinBlessingFirst, plannedRefineStoneQuality,
-    PreviewFace, previewGrade, previewSlots, reconcileFormState, rolledSlotOdds, SlotDisplayState,
+    PreviewFace, previewGrade, previewSlots, readLastCalculated, reconcileFormState, restoreFormState,
+    rolledSlotOdds, SlotDisplayState,
     slotDisplayState, SlotField,
     slotBlessingOptions, slotStateProblem, SlotWishState, slotWishState, targetLevelOptions,
     wishBlessingOptions, wishedTargets
@@ -786,5 +787,87 @@ describe('hasMilestoneAhead', () => {
     expect(hasMilestoneAhead(shape(null, 5, 5))).toBe(false);
     expect(hasMilestoneAhead(shape(null, 14, 14))).toBe(false);
     expect(hasMilestoneAhead(shape(null, 20, 20))).toBe(false);
+  });
+});
+
+describe('restoreFormState', () => {
+  const piece = { equipment: 'Longsword', quality: 3 };
+
+  it('hands back a form exactly as it was saved', () => {
+    const saved = state({
+      ...piece,
+      initialGrade: 2,
+      slots: {
+        1: filledSlot(),
+        2: wishSlot({ wishBlessingCode: 'SUR' }),
+      },
+    });
+    expect(restoreFormState(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+  });
+
+  it('restores nothing when no piece was chosen, or the stored value is not an object', () => {
+    expect(restoreFormState({ quality: 3 })).toBeNull();
+    expect(restoreFormState(null)).toBeNull();
+    expect(restoreFormState('Longsword')).toBeNull();
+  });
+
+  it('backfills fields an older build did not store, on the form and on each slot', () => {
+    const restored = restoreFormState({ ...piece, slots: { 1: { filled: true, blessingCode: 'ATK' } } });
+    expect(restored?.enhancementLevel).toBe(DEFAULT_ENHANCEMENT_FORM_STATE.enhancementLevel);
+    expect(restored?.slots[1]).toEqual({ ...EMPTY_SLOT_FORM_STATE, filled: true, blessingCode: 'ATK' });
+  });
+
+  it('drops slots outside 1..4', () => {
+    const restored = restoreFormState({
+      ...piece,
+      slots: {
+        0: wishSlot(),
+        5: wishSlot(),
+        2: wishSlot(),
+      },
+    });
+    expect(Object.keys(restored?.slots ?? {})).toEqual(['2']);
+  });
+
+  it('runs the same normalization every edit gets', () => {
+    const restored = restoreFormState({
+      ...piece,
+      enhancementLevel: 14,
+      targetEnhancementLevel: 17,
+      slots: { 1: filledSlot({ blessingCode: 'ATK' }), 4: wishSlot({ wishBlessingCode: 'ATK' }) },
+    });
+    expect(restored?.targetEnhancementLevel).toBe(15);
+    expect(restored?.slots[4].wishBlessingCode).toBeNull();
+  });
+});
+
+describe('readLastCalculated', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function withStorage(getItem: (key: string) => string | null): void {
+    vi.stubGlobal('window', { localStorage: { getItem } });
+  }
+
+  it('reads the form saved under its key', () => {
+    const saved = state({ equipment: 'Longsword', quality: 3, slots: { 1: wishSlot() } });
+    withStorage((key) => (key === LAST_CALCULATED_STORAGE_KEY ? JSON.stringify(saved) : null));
+    expect(readLastCalculated()).toEqual(saved);
+  });
+
+  it('is null during prerender, when there is no window to read', () => {
+    expect(readLastCalculated()).toBeNull();
+  });
+
+  it('is null when nothing has been stored, storage throws, or the JSON is broken', () => {
+    withStorage(() => null);
+    expect(readLastCalculated()).toBeNull();
+    withStorage(() => {
+      throw new Error('SecurityError');
+    });
+    expect(readLastCalculated()).toBeNull();
+    withStorage(() => '{not json');
+    expect(readLastCalculated()).toBeNull();
   });
 });
