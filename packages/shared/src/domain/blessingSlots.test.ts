@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    checkBlessingSlotState, filledSlotCount, forEachSlotAssignment, milestoneForSlot,
-    SlotStateProblemKind
+    checkBlessingSlotState, filledSlotCount, forEachSlotAssignment, isMilestoneAhead,
+    milestoneForSlot, SlotStateProblemKind, willFillAnySlot
 } from './blessingSlots';
 
 /** A slot's published row, written as a plain object for readability. */
@@ -237,5 +237,19 @@ describe('checkBlessingSlotState', () => {
     // both show three filled slots, and only the stated grade separates them.
     expect(checkBlessingSlotState([true, true, true, false], 15, 3)).toBeNull();
     expect(checkBlessingSlotState([true, true, true, false], 15, 1)).toBeNull();
+  });
+});
+
+describe('isMilestoneAhead / willFillAnySlot', () => {
+  it('counts a milestone strictly ahead of the level and at or below the target', () => {
+    expect(isMilestoneAhead(2, 5, 10)).toBe(true);
+    expect(isMilestoneAhead(2, 10, 20)).toBe(false); // already passed
+    expect(isMilestoneAhead(3, 0, 10)).toBe(false); // past where the piece is going
+  });
+
+  it('is true only when an empty slot has its milestone ahead', () => {
+    expect(willFillAnySlot([true, true, false, false], 0, 20)).toBe(true);
+    expect(willFillAnySlot([true, true, false, false], 0, 10)).toBe(false); // +15 never fires
+    expect(willFillAnySlot([true, true, true, true], 0, 20)).toBe(false); // nothing empty
   });
 });

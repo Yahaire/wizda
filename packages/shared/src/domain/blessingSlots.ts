@@ -31,6 +31,33 @@ export function milestoneForSlot(slot: number): number {
   return slot * ENHANCEMENT_MILESTONE_STEP;
 }
 
+/** Whether slot `slot`'s milestone lies ahead of `enhancementLevel` and within `targetEnhancementLevel`. */
+export function isMilestoneAhead(
+  slot: number,
+  enhancementLevel: number,
+  targetEnhancementLevel: number,
+): boolean {
+  const milestone = milestoneForSlot(slot);
+  return enhancementLevel < milestone && milestone <= targetEnhancementLevel;
+}
+
+/**
+ * Whether enhancing from `enhancementLevel` to `targetEnhancementLevel` puts a
+ * blessing into any slot that's empty now. When it does, every blessing the
+ * piece shows matters to the answer, since a fill never rolls one of them.
+ *
+ * `occupiedSlots[i]` is slot `i + 1`, as in {@link checkBlessingSlotState}.
+ */
+export function willFillAnySlot(
+  occupiedSlots: readonly boolean[],
+  enhancementLevel: number,
+  targetEnhancementLevel: number,
+): boolean {
+  return Array.from({ length: MAX_BLESSING_SLOTS }, (_unused, index) => index + 1).some(
+    (slot) => !occupiedSlots[slot - 1] && isMilestoneAhead(slot, enhancementLevel, targetEnhancementLevel),
+  );
+}
+
 /**
  * How many of a piece's slots hold a blessing: those occupied when it dropped
  * (slots `1 .. initialGrade − 1`, since grade counts blessings plus one) plus

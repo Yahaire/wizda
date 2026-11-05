@@ -56,6 +56,21 @@ A reported SUR of 9 answers `9 + Uniform(1, 2)`, which is exactly `drop ⊛ refi
 
 And because it is the one place history changes the answer, it is the one place we **ask** rather than infer: `planRefineStoneQuality` requires `isRefined` alongside it. The displayed value alone cannot always settle it — a past Full Alteration Stone raises what a slot can reach unrefined, and this query never asks about stones — so an unstated `isRefined` is rejected instead of assumed. A value above even the generous unrefined ceiling still overrides an `isRefined: false`: trust the number over the flag.
 
+### What has to be transcribed
+
+The item screen is the whole input, but not all of it reaches every answer, and copying out a slot nobody asked about is friction. So a slot listed in `slots` only says *it holds a blessing*; its `blessingCode` and `value` are each required exactly where the answer depends on them:
+
+| field | required when | why |
+|---|---|---|
+| `blessingCode` | a milestone will fill an empty slot by the target level | a fill never rolls a blessing the piece shows, so every shown one shapes the fill's odds — and the per-slot "what could roll here" lists the client draws |
+| `blessingCode` | the slot has its own value target or a planned refinement | that blessing *is* what's being asked about |
+| `value` | a target names the blessing the slot shows | targets are scored slot-agnostically, so any slot showing that blessing can meet it, and it needs a number to score |
+| `value` | the slot plans a refinement | the stone adds to that number, and the already-refined backstop checks it |
+
+A `value` without a `blessingCode` is rejected rather than ignored — alone it says nothing. In the math an untranscribed slot still occupies its place (it counts for the slot-shape checks and is never filled), but contributes no exclusion and no distribution; no bonus is looked up for a slot without a value, so missing bonus data for a blessing nobody is scoring can't null out the answer.
+
+The blessing rule is deliberately the strict one. A looser version — required only when some fill wish names a specific blessing — would keep the probability exact, but the candidate lists the client shows for each fill would then quietly include a blessing that can't roll there. We'd rather ask for one more pick, read off the same screen, than show a number computed on a gap.
+
 ### Grade: two of them, and only one is asked for
 
 The game has an **initial** grade (what the piece was when obtained) and a **current** grade. `alternations.html`'s stone conditions say "Initial equipment Grade `n`+1 or higher", and its footnote — *"This does not apply to Grade 1 equipment that has become Grade 2 after enhancement"* — exists precisely because milestone fills raise the displayed grade.
@@ -147,7 +162,7 @@ Every rejection is a state the game cannot produce, or an ask we can't answer ho
 |---|---|
 | `UNKNOWN_EQUIPMENT` / `UNKNOWN_BLESSING` | a name or code that isn't in the catalog — these come from selects, so it means a stale client |
 | `INVALID_SLOT_STATE` | a gap between filled slots; a slot left empty past its own milestone; an `initialGrade` disagreeing with the filled count |
-| `INVALID_QUERY` | a target level below the current one; a slot given twice; a blessing with no value |
+| `INVALID_QUERY` | a target level below the current one; a slot given twice; a value with no blessing; a blessing or value left out where the answer needs it (see "What has to be transcribed") |
 | `ALREADY_REFINED` | a planned refinement on a slot that already carries one (see above) |
 | `NO_QUERY` | no targets — there'd be nothing to compute |
 

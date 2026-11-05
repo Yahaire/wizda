@@ -20,24 +20,36 @@ import { TsUtilities } from '../../tsUtilities';
 export const DEFAULT_TARGET_ENHANCEMENT_LEVEL = 20;
 
 /**
- * One blessing slot exactly as the item screen shows it.
+ * One **occupied** blessing slot exactly as the item screen shows it — a slot
+ * that is listed holds a blessing, and an empty slot is simply left out.
  *
  * Deliberately *only* what the player can read off their gear. What produced the
  * number — the drop roll, an Alteration Stone, a Refinement Stone, a Full
  * Alteration Stone, a bonus already collected — is already summed into `value`,
  * and does not affect what enhancing will add. See
  * `docs/calculation/enhancement.md`, "Why history isn't asked for".
+ *
+ * Both halves of what's shown may be left out where the answer can't depend on
+ * them — see `docs/calculation/enhancement.md`, "What has to be transcribed".
  */
 export interface EnhancementSlotState {
   /** 1-4. Slots fill top-to-bottom; slot `n` is touched at +5`n`. */
   slot: number,
   /**
-   * The blessing in this slot, by code. Omit for a slot that is still empty.
+   * The blessing in this slot, by code, or omitted when the player didn't say.
+   * Required whenever a milestone will fill an empty slot by the target level
+   * (it never rolls a blessing the piece shows, so every one shown shapes those
+   * odds), and on a slot planning a refinement.
+   *
    * Two slots **may** carry the same blessing — an Alteration Stone can put a
    * duplicate on a piece. A milestone never does.
    */
   blessingCode?: string,
-  /** The number displayed for that blessing. Required whenever `blessingCode` is set. */
+  /**
+   * The number displayed for that blessing, or omitted when the player didn't
+   * say. Required when a target names this slot's blessing, and on a slot
+   * planning a refinement; meaningless, and rejected, without `blessingCode`.
+   */
   value?: number,
   /**
    * Whether this slot already carries a Refinement Stone. Ignored unless
@@ -102,7 +114,7 @@ export interface EnhancementOddsQuery {
    */
   initialGrade?: number,
   /**
-   * The piece's four slots. Omitted slots are treated as empty.
+   * The piece's occupied slots. Omitted slots are empty.
    *
    * Nothing about a slot's past is asked for — not whether it was altered, nor
    * what it held before. A milestone draws against what the piece *displays*

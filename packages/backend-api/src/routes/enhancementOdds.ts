@@ -12,7 +12,7 @@ import {
     EnhancementSlotReference, EnhancementWarningCode
 } from '@shared/api/endpoints/enhancementOdds.models';
 import {
-    checkBlessingSlotState, MAX_BLESSING_SLOTS, MAX_ENHANCEMENT_LEVEL
+    checkBlessingSlotState, MAX_BLESSING_SLOTS, MAX_ENHANCEMENT_LEVEL, willFillAnySlot
 } from '@shared/domain/blessingSlots';
 import {
     BLESSING_VALUE_SOURCE_CODES, BlessingValueSourceRole
@@ -270,25 +270,55 @@ function validateQuery(
     return false;
   }
 
-  const missingValue = slots.find((state) => state.blessingCode && state.value === undefined);
-  if (missingValue) {
+  const valueWithoutBlessing = slots.find((state) => !state.blessingCode && state.value !== undefined);
+  if (valueWithoutBlessing) {
     sendErrorResponse(
       res,
       HttpStatusCode.BAD_REQUEST,
       ErrorCode.INVALID_QUERY,
-      `Slot ${missingValue.slot} names a blessing but no value. `
-      + "Give the number the item screen shows for it.",
+      `Slot ${valueWithoutBlessing.slot} gives a value but no blessing. `
+      + "Name the blessing it belongs to, or leave both out.",
     );
     return false;
   }
 
+  // A listed slot holds a blessing, whether or not it's named.
   const occupiedSlots = Array.from(
     { length: MAX_BLESSING_SLOTS },
-    (_unused, index) => slots.some((state) => state.slot === index + 1 && Boolean(state.blessingCode)),
+    (_unused, index) => slots.some((state) => state.slot === index + 1),
   );
   const problem = checkBlessingSlotState(occupiedSlots, enhancementLevel, initialGrade ?? null);
   if (problem) {
     sendErrorResponse(res, HttpStatusCode.BAD_REQUEST, ErrorCode.INVALID_SLOT_STATE, problem.message);
+    return false;
+  }
+
+  // What may be left untranscribed is exactly what can't move the answer — see
+  // docs/calculation/enhancement.md, "What has to be transcribed".
+  const unnamed = slots.find((state) => !state.blessingCode);
+  if (unnamed && willFillAnySlot(occupiedSlots, enhancementLevel, targetEnhancementLevel)) {
+    sendErrorResponse(
+      res,
+      HttpStatusCode.BAD_REQUEST,
+      ErrorCode.INVALID_QUERY,
+      `Slot ${unnamed.slot}'s blessing is needed: a milestone will fill an empty slot, and it `
+      + 'never rolls a blessing the piece already shows.',
+    );
+    return false;
+  }
+
+  const targetedCodes = new Set(targets.map((target) => target.blessingCode));
+  const unvalued = slots.find(
+    (state) => state.blessingCode && state.value === undefined && targetedCodes.has(state.blessingCode),
+  );
+  if (unvalued) {
+    sendErrorResponse(
+      res,
+      HttpStatusCode.BAD_REQUEST,
+      ErrorCode.INVALID_QUERY,
+      `Slot ${unvalued.slot} shows ${unvalued.blessingCode} but no value, and a target asks `
+      + 'about that blessing. Give the number the item screen shows for it.',
+    );
     return false;
   }
 
@@ -300,13 +330,13 @@ function validateQuery(
       continue;
     }
 
-    if (!state.blessingCode) {
+    if (!state.blessingCode || state.value === undefined) {
       sendErrorResponse(
         res,
         HttpStatusCode.BAD_REQUEST,
         ErrorCode.INVALID_QUERY,
-        `Slot ${state.slot} is empty but plans a refinement. A Refinement Stone adds to a `
-        + 'blessing, so name the blessing a milestone will put there, or drop the plan.',
+        `Slot ${state.slot} plans a refinement, so give the blessing it shows and its value — `
+        + 'a Refinement Stone adds to that number.',
       );
       return false;
     }
@@ -412,6 +442,7 @@ async function handleEnhancementOdds(
       const state = query.slots.find((candidate) => candidate.slot === index + 1);
       return {
         slot: index + 1,
+        isOccupied: state !== undefined,
         blessingCode: state?.blessingCode ?? null,
         value: state?.value ?? null,
         planRefineStoneQuality: state?.planRefineStoneQuality ?? null,
@@ -434,27 +465,29 @@ async function handleEnhancementOdds(
     bonusByBlessing: bonuses,
   });
 
-  const willFillAnySlot = outcome.slots.some((slot) => slot.candidates !== null);
+  const fillsAnySlot = outcome.slots.some((slot) => slot.candidates !== null);
 
   const warnings: EnhancementWarningCode[] = [];
   if (!groupCode) {
     warnings.push(EnhancementWarningCode.NO_VALUE_GROUP);
   }
-  if (willFillAnySlot && slotBlessingRates.every((rates) => rates.size === 0)) {
+  if (fillsAnySlot && slotBlessingRates.every((rates) => rates.size === 0)) {
     warnings.push(EnhancementWarningCode.NO_BLESSING_RATES);
   }
   if (outcome.missingBlessingData.length > 0) {
     warnings.push(EnhancementWarningCode.MISSING_VALUE_DATA);
   }
+  // An occupied slot left without a value is scored with no bonus, so its
+  // blessing's bonus isn't in play however unverified it is.
   const bonusesInPlay = outcome.slots
-    .filter((slot) => !slot.isFinal && slot.blessingCode !== null)
+    .filter((slot) => !slot.isFinal && slot.blessingCode !== null && slot.valueDistribution !== null)
     .map((slot) => slot.blessingCode ?? '');
   if (bonusesInPlay.some((code) => bonuses.get(code)?.isVerified === false)) {
     warnings.push(EnhancementWarningCode.UNVERIFIED_BONUS);
   }
 
   const notes: EnhancementNoteCode[] = [];
-  if (willFillAnySlot) {
+  if (fillsAnySlot) {
     notes.push(EnhancementNoteCode.EMPTY_SLOT_RULE_EMPIRICAL);
     if (outcome.slots.some((slot) => slot.candidates !== null && slot.slot > 1)) {
       notes.push(EnhancementNoteCode.LATER_SLOTS_ASSUMED);
@@ -498,7 +531,7 @@ async function handleEnhancementOdds(
   };
 
   trackEnhancementQuery(req, {
-    slotCount: query.slots.filter((state) => Boolean(state.blessingCode)).length,
+    slotCount: query.slots.length,
     freeSlotCount: outcome.slots.filter((slot) => slot.candidates !== null).length,
     targetCount: query.targets.length,
     enhancementLevel: query.enhancementLevel,

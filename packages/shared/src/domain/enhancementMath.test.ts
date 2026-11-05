@@ -453,7 +453,24 @@ function slotState(
   value: number | null,
   planRefineStoneQuality: number | null = null,
 ): EnhancementSlotInput {
-  return { slot, blessingCode, value, planRefineStoneQuality };
+  return {
+    slot,
+    isOccupied: blessingCode !== null,
+    blessingCode,
+    value,
+    planRefineStoneQuality,
+  };
+}
+
+/** A slot that holds a blessing the player didn't transcribe — the name, the value, or both. */
+function untranscribedSlot(slot: number, blessingCode: string | null = null): EnhancementSlotInput {
+  return {
+    slot,
+    isOccupied: true,
+    blessingCode,
+    value: null,
+    planRefineStoneQuality: null,
+  };
 }
 
 /** The four slots of a piece whose occupied prefix is `occupied`. */
@@ -504,6 +521,44 @@ describe('enhancementOdds', () => {
     expect(valueRange(alreadyDone.slots[0]?.valueDistribution ?? pointMass(0)))
       .toEqual({ minValue: 8, maxValue: 8 });
     expect(alreadyDone.slots[0]?.isFinal).toBe(true);
+  });
+
+  it('leaves an untranscribed slot out of the scoring without touching the answer', () => {
+    // A Red piece at +0, only slot 1 written down. With nothing left to fill,
+    // the other three can't move ATK's odds, and needing no bonus for them means
+    // a blessing with no bonus data can't null the answer out either.
+    const result = oddsFor({
+      slots: [
+        slotState(1, 'ATK', 8),
+        untranscribedSlot(2),
+        untranscribedSlot(3, 'DEF'),
+        untranscribedSlot(4, 'NO_BONUS_DATA'),
+      ],
+      targets: [{ blessingCode: 'ATK', minValue: 16 }],
+    });
+
+    expect(result.probability).toBeCloseTo(0.375, 12);
+    expect(result.missingBlessingData).toEqual([]);
+    expect(result.slots[1]).toMatchObject({ blessingCode: null, valueDistribution: null, candidates: null });
+    expect(result.slots[2]).toMatchObject({ blessingCode: 'DEF', valueDistribution: null, candidates: null });
+  });
+
+  it('still excludes a named blessing from fills when only its value is missing', () => {
+    // MAG on slot 1 with no value, at +5 going to +10: slot 2 draws from the
+    // other four, so SUR lands there 1/4 of the time.
+    const result = oddsFor({
+      enhancementLevel: 5,
+      targetEnhancementLevel: 10,
+      slots: [
+        untranscribedSlot(1, 'MAG'),
+        slotState(2, null, null),
+        slotState(3, null, null),
+        slotState(4, null, null),
+      ],
+      targets: [{ blessingCode: 'SUR', minValue: null }],
+    });
+
+    expect(result.probability).toBeCloseTo(1 / 4, 12);
   });
 
   it('fills an empty slot from the plain drop band with no bonus on top', () => {

@@ -1,8 +1,8 @@
 import { blessingLabel } from '@/components/oracle/oracle.logic';
 import { DEFAULT_TARGET_ENHANCEMENT_LEVEL } from '@shared/api/endpoints/enhancementOdds.models';
 import {
-    checkBlessingSlotState, filledSlotCount, MAX_BLESSING_SLOTS, MAX_ENHANCEMENT_LEVEL,
-    milestoneForSlot
+    checkBlessingSlotState, filledSlotCount, isMilestoneAhead, MAX_BLESSING_SLOTS,
+    MAX_ENHANCEMENT_LEVEL, milestoneForSlot, willFillAnySlot
 } from '@shared/domain/blessingSlots';
 import { BLESSINGS } from '@shared/domain/stats';
 
@@ -224,9 +224,9 @@ export function isSlotFilledAtDrop(slot: number, shape: SlotShape): boolean {
 /**
  * Whether slot `slot` currently holds a blessing: either the rules already
  * guarantee it ({@link isSlotMandatory}) or — with the grade unknown — the
- * player has explicitly marked it Filled. A mandatory slot counts as occupied
- * here even before its blessing/value have been typed in — {@link canCalculate}
- * is what still requires that data before Calculate is allowed.
+ * player has explicitly marked it Filled. A slot counts as occupied here
+ * whether or not its blessing/value have been typed in — how much of that the
+ * answer needs is {@link isSlotBlessingRequired} / {@link isSlotValueRequired}.
  *
  * A stated grade settles every slot, so `filled` is *ignored* there rather than
  * cleared: a player who described their slots under "Not sure", then remembered
@@ -298,8 +298,7 @@ export enum SlotWishState {
  * makes a wish on it pointless rather than merely unlikely.
  */
 function isSlotStillDue(slot: number, shape: SlotShape): boolean {
-  const milestone = milestoneForSlot(slot);
-  return milestone > shape.enhancementLevel && milestone <= shape.targetEnhancementLevel;
+  return isMilestoneAhead(slot, shape.enhancementLevel, shape.targetEnhancementLevel);
 }
 
 /**
@@ -347,7 +346,7 @@ export function slotWishState(
  * shows — see `docs/milestone-blessings.md`); on an unaltered piece the
  * blessings are distinct and the per-slot reading is exact.
  */
-export function wishedTargets(state: EnhancementFormState): EnhancementTarget[] {
+export function wishedTargets(state: SlotShape & Pick<EnhancementFormState, 'slots'>): EnhancementTarget[] {
   const targets: EnhancementTarget[] = [];
   for (let slot = 1; slot <= MAX_BLESSING_SLOTS; slot++) {
     const slotState = state.slots[slot];
@@ -369,6 +368,66 @@ export function wishedTargets(state: EnhancementFormState): EnhancementTarget[] 
     }
   }
   return targets;
+}
+
+/**
+ * Whether a milestone will put a blessing into a slot that's empty now. Then
+ * every blessing the piece shows shapes the answer — a fill never rolls one —
+ * so each occupied slot has to say which it holds.
+ */
+export function isFillAhead(slots: Record<number, SlotFormState>, shape: SlotShape): boolean {
+  return willFillAnySlot(occupiedSlotsOf(slots, shape), shape.enhancementLevel, shape.targetEnhancementLevel);
+}
+
+/** Whether slot `slot` has a value floor wished on it — the one wish on an occupied slot that sends anything. */
+function hasValueWish(slot: number, slots: Record<number, SlotFormState>, shape: SlotShape): boolean {
+  return slotWishState(slot, slots, shape) === SlotWishState.VALUE_ONLY
+    && (slots[slot]?.wishMinValue ?? null) !== null;
+}
+
+/**
+ * Whether an occupied slot has to name its blessing before Calculate. Only
+ * where the answer depends on it (`docs/calculation/enhancement.md`, "What has
+ * to be transcribed"): a fill is ahead ({@link isFillAhead}), or the slot's own
+ * value wish or Refinement Stone plan is about that blessing.
+ *
+ * Otherwise it's left optional on purpose — on a piece with nothing left to
+ * fill, a slot nobody's asking about can't move the odds, and making the player
+ * copy it out anyway is just friction.
+ */
+export function isSlotBlessingRequired(
+  slot: number,
+  slots: Record<number, SlotFormState>,
+  shape: SlotShape,
+): boolean {
+  if (!isSlotOccupied(slot, slots, shape)) {
+    return false;
+  }
+  return isFillAhead(slots, shape)
+    || hasValueWish(slot, slots, shape)
+    || Boolean(slots[slot]?.planRefine);
+}
+
+/**
+ * Whether an occupied slot has to give its value before Calculate: its own
+ * value wish or Refinement Stone plan builds on that number, or another slot's
+ * wish names the blessing it shows — wishes are scored slot-agnostically (see
+ * {@link wishedTargets}), so any slot showing that blessing is in play.
+ */
+export function isSlotValueRequired(
+  slot: number,
+  slots: Record<number, SlotFormState>,
+  shape: SlotShape,
+): boolean {
+  if (!isSlotOccupied(slot, slots, shape)) {
+    return false;
+  }
+  if (hasValueWish(slot, slots, shape) || slots[slot]?.planRefine) {
+    return true;
+  }
+  const blessingCode = slots[slot]?.blessingCode ?? null;
+  return blessingCode !== null
+    && wishedTargets({ ...shape, slots }).some((target) => target.blessingCode === blessingCode);
 }
 
 /** The `occupiedSlots` boolean[4] `checkBlessingSlotState` expects, from form state. */
@@ -460,9 +519,9 @@ export function plannedRefineStoneQuality(slot: SlotFormState): number | null {
 export enum CalculateBlockerKind {
   /** The piece section isn't filled in — the slots aren't even on screen yet. */
   PIECE_INCOMPLETE = 'PIECE_INCOMPLETE',
-  /** An occupied slot (maybe only by the game's own rules) with no blessing picked. */
+  /** An occupied slot with no blessing picked, where the answer needs it — see {@link isSlotBlessingRequired}. */
   SLOT_BLESSING = 'SLOT_BLESSING',
-  /** An occupied slot with no value typed. */
+  /** An occupied slot with no value typed, where the answer needs it — see {@link isSlotValueRequired}. */
   SLOT_VALUE = 'SLOT_VALUE',
   /** Nothing hoped for anywhere, though some slot could be asked — there'd be nothing to compute. */
   NO_WISH = 'NO_WISH',
@@ -521,22 +580,24 @@ export function blockerField(blocker: CalculateBlocker): SlotField | null {
  * drawn: what the item shows now, then the wish, then the refinement plan.
  */
 function slotRowBlockers(
-  slotState: SlotFormState,
-  occupied: boolean,
+  slot: number,
+  slots: Record<number, SlotFormState>,
+  shape: SlotShape,
   owesWish: boolean,
 ): CalculateBlockerKind[] {
+  const slotState = slots[slot] ?? EMPTY_SLOT_FORM_STATE;
   const kinds: CalculateBlockerKind[] = [];
-  if (occupied && !slotState.blessingCode) {
+  if (!slotState.blessingCode && isSlotBlessingRequired(slot, slots, shape)) {
     kinds.push(CalculateBlockerKind.SLOT_BLESSING);
   }
-  if (occupied && slotState.value === null) {
+  if (slotState.value === null && isSlotValueRequired(slot, slots, shape)) {
     kinds.push(CalculateBlockerKind.SLOT_VALUE);
   }
   if (owesWish) {
     kinds.push(CalculateBlockerKind.NO_WISH);
   }
   // The plan's panel is only drawn on an occupied row.
-  if (!occupied || !slotState.planRefine) {
+  if (!isSlotOccupied(slot, slots, shape) || !slotState.planRefine) {
     return kinds;
   }
   if (slotState.isRefined === null) {
@@ -569,15 +630,19 @@ export function calculateBlockers(state: EnhancementFormState): CalculateBlocker
   }
 
   const slotNumbers = Array.from({ length: MAX_BLESSING_SLOTS }, (_unused, index) => index + 1);
-  const missingWish = wishedTargets(state).length === 0;
+  // A floor on a slot whose blessing isn't named yet is a wish all the same —
+  // the blessing it's waiting on is its own blocker.
+  const missingWish = wishedTargets(state).length === 0
+    && !slotNumbers.some((slot) => hasValueWish(slot, state.slots, state));
   // A row can take a wish exactly while its milestone is still due — see `slotWishState`.
   const wishSlot = missingWish
     ? (slotNumbers.find((slot) => isSlotStillDue(slot, state)) ?? null)
     : null;
 
   const blockers: CalculateBlocker[] = slotNumbers.flatMap((slot) => slotRowBlockers(
-    state.slots[slot] ?? EMPTY_SLOT_FORM_STATE,
-    isSlotOccupied(slot, state.slots, state),
+    slot,
+    state.slots,
+    state,
     slot === wishSlot,
   ).map((kind) => ({ kind, slot })));
 
@@ -741,6 +806,10 @@ export function buildReferenceParams(
  * when the piece section isn't filled in yet — callers should already be
  * gating on {@link canCalculate} before this ever matters.
  *
+ * Every occupied slot is sent — listing it is what says it holds a blessing —
+ * with whatever of it the player transcribed. A value goes only with its
+ * blessing, since alone it says nothing the API can use.
+ *
  * A slot's refinement plan is only carried across when it's actually ready
  * (see {@link plannedRefineStoneQuality}) — `isRefined: true` is blocked and explained
  * in the UI rather than ever reaching a request, per `ALREADY_REFINED`.
@@ -755,15 +824,16 @@ export function buildEnhancementQuery(state: EnhancementFormState): EnhancementO
     if (!isSlotOccupied(slot, state.slots, state)) {
       continue;
     }
-    const slotState = state.slots[slot];
-    if (!slotState?.blessingCode || slotState.value === null) {
-      continue; // occupied by rule but not yet described — canCalculate should have caught this
-    }
-    const refineStoneQuality = plannedRefineStoneQuality(slotState);
+    const slotState = state.slots[slot] ?? EMPTY_SLOT_FORM_STATE;
+    const { blessingCode, value } = slotState;
+    const transcribed = blessingCode !== null && value !== null;
+    // A plan needs both halves (`isSlotBlessingRequired`/`isSlotValueRequired`
+    // say so); this only keeps a half-filled row from sending one.
+    const refineStoneQuality = transcribed ? plannedRefineStoneQuality(slotState) : null;
     slots.push({
       slot,
-      blessingCode: slotState.blessingCode,
-      value: slotState.value,
+      ...(blessingCode !== null && { blessingCode }),
+      ...(transcribed && { value }),
       ...(refineStoneQuality !== null && {
         isRefined: false,
         planRefineStoneQuality: refineStoneQuality,

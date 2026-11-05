@@ -7,9 +7,10 @@ import {
 import { IconAlertTriangle } from '@tabler/icons-react';
 
 import {
-    EMPTY_SLOT_FORM_STATE, isSlotFilledAtDrop, MAX_BLESSING_SLOTS, milestoneForSlot,
-    missingSlotFields, slotBlessingOptions, SlotDisplayState, slotDisplayState, SlotField,
-    SlotFormState, SlotShape, slotStateProblem, SlotWishState, slotWishState, wishBlessingOptions
+    EMPTY_SLOT_FORM_STATE, isSlotBlessingRequired, isSlotFilledAtDrop, isSlotValueRequired,
+    MAX_BLESSING_SLOTS, milestoneForSlot, missingSlotFields, slotBlessingOptions, SlotDisplayState,
+    slotDisplayState, SlotField, SlotFormState, SlotShape, slotStateProblem, SlotWishState,
+    slotWishState, wishBlessingOptions
 } from './enhancement.logic';
 import { JoinedFields } from './JoinedFields';
 import { fieldMarks, slotRowMarks } from './missingFields';
@@ -222,6 +223,10 @@ function SlotRow({
 
   const mandatory = displayState === SlotDisplayState.MANDATORY;
   const occupied = mandatory || (displayState === SlotDisplayState.OPTIONAL && slotState.filled);
+  // Only what the answer depends on — the rest of the item screen can stay
+  // uncopied. Both move as the player adds or drops wishes.
+  const blessingRequired = isSlotBlessingRequired(slot, slots, shape);
+  const valueRequired = isSlotValueRequired(slot, slots, shape);
 
   // Both readings are true of a slot the piece came with that has *also* passed
   // its own milestone, but that milestone only boosted what was already there —
@@ -279,24 +284,25 @@ function SlotRow({
                 <JoinedFields
                   label={strings.enhancement.nowFieldLabel}
                   ratio={PAIR_RATIO}
-                  required
+                  required={blessingRequired || valueRequired}
                   left={(
                     <Select
                       {...fieldMarks(SlotField.BLESSING, missing)}
-                      required
+                      required={blessingRequired}
                       size="sm"
                       data={slotBlessingOptions(slot, reference)}
                       value={slotState.blessingCode}
                       onChange={(blessingCode) => onChange({ blessingCode })}
                       aria-label={strings.enhancement.slotBlessingAriaLabel(slot)}
                       searchable
-                      allowDeselect={false}
+                      // Optional on some pieces, so it has to be undoable too.
+                      clearable
                     />
                   )}
                   right={(
                     <NumberInput
                       {...fieldMarks(SlotField.VALUE, missing)}
-                      required
+                      required={valueRequired}
                       size="sm"
                       min={1}
                       value={slotState.value ?? ''}

@@ -4,7 +4,8 @@ import {
     buildEnhancementQuery, CalculateBlockerKind, calculateBlockers, canCalculate, canSlotBeEmpty,
     DEFAULT_ENHANCEMENT_FORM_STATE, displayedBlessings, EMPTY_SLOT_FORM_STATE, EnhancementFormState,
     guaranteedFilledCount, hasMilestoneAhead, isInitialGradeUnknown, isPieceReady, isSlotFilledAtDrop,
-    isSlotGuaranteedEmpty, isSlotMandatory, isSlotOccupied, isSlotShapeKnown, MAX_ENHANCEMENT_LEVEL,
+    isSlotBlessingRequired, isSlotGuaranteedEmpty, isSlotMandatory, isSlotOccupied, isSlotShapeKnown,
+    isSlotValueRequired, MAX_ENHANCEMENT_LEVEL,
     missingSlotFields, normalizeTargetLevel, occupiedSlotsOf, pinBlessingFirst, plannedRefineStoneQuality,
     PreviewFace, previewGrade, previewSlots, reconcileFormState, rolledSlotOdds, SlotDisplayState,
     slotDisplayState, SlotField,
@@ -330,12 +331,16 @@ describe('calculateBlockers', () => {
 
   it('lists gaps in screen order: slot by slot, each row top to bottom', () => {
     // Grade 3 at +0: slots 1-2 came with the piece and are still due a milestone.
-    expect(kindsOf(state({ ...base, initialGrade: 3 }))).toEqual([
+    // Slots 3-4 fill on the way, so both blessings are needed; a floor on slot 1
+    // makes its value needed too.
+    expect(kindsOf(state({
+      ...base,
+      initialGrade: 3,
+      slots: { 1: { ...EMPTY_SLOT_FORM_STATE, wishMinValue: 16 } },
+    }))).toEqual([
       [CalculateBlockerKind.SLOT_BLESSING, 1],
       [CalculateBlockerKind.SLOT_VALUE, 1],
-      [CalculateBlockerKind.NO_WISH, 1],
       [CalculateBlockerKind.SLOT_BLESSING, 2],
-      [CalculateBlockerKind.SLOT_VALUE, 2],
     ]);
   });
 
@@ -369,6 +374,46 @@ describe('calculateBlockers', () => {
     // Slot 3 marked Filled with slot 1 left empty: a gap the game can't produce.
     expect(kindsOf(state({ ...base, slots: { 3: filledSlot({ wishMinValue: 16 }) } })))
       .toEqual([[CalculateBlockerKind.SLOT_SHAPE, null]]);
+  });
+});
+
+describe('isSlotBlessingRequired / isSlotValueRequired', () => {
+  const required = (slot: number, slots: Record<number, SlotFormState>, slotShape: SlotShape) => ({
+    blessing: isSlotBlessingRequired(slot, slots, slotShape),
+    value: isSlotValueRequired(slot, slots, slotShape),
+  });
+
+  it('asks nothing of an occupied slot no answer depends on', () => {
+    // A Red piece: nothing left to fill, and slot 2 isn't wished on.
+    const slots = { 1: filledSlot({ wishMinValue: 16 }) };
+    expect(required(2, slots, shape(5, 0))).toEqual({ blessing: false, value: false });
+  });
+
+  it("needs every blessing the piece shows while a fill is ahead, but not their values", () => {
+    expect(required(1, {}, shape(3, 0))).toEqual({ blessing: true, value: false });
+    // The same piece stopping at +10 never reaches the slots that would fill.
+    expect(required(1, {}, shape(3, 0, 10))).toEqual({ blessing: false, value: false });
+  });
+
+  it("needs both halves for a slot's own floor or refinement plan", () => {
+    expect(required(1, { 1: filledSlot({ wishMinValue: 16 }) }, shape(5, 0)))
+      .toEqual({ blessing: true, value: true });
+    expect(required(1, { 1: filledSlot({ planRefine: true }) }, shape(5, 0)))
+      .toEqual({ blessing: true, value: true });
+  });
+
+  it("needs a slot's value when another slot's wish names the blessing it shows", () => {
+    // Two ATK slots (an altered duplicate): a floor on slot 1 can be met by
+    // slot 2, so slot 2's number is in play too.
+    const slots = {
+      1: filledSlot({ wishMinValue: 16 }),
+      2: filledSlot({ value: null }),
+    };
+    expect(isSlotValueRequired(2, slots, shape(5, 0))).toBe(true);
+  });
+
+  it('is never asked of an empty slot', () => {
+    expect(required(3, {}, shape(3, 0))).toEqual({ blessing: false, value: false });
   });
 });
 
@@ -446,6 +491,27 @@ describe('buildEnhancementQuery', () => {
     }));
     expect(query?.initialGrade).toBe(2);
     expect(query?.slots).toEqual([{ slot: 1, blessingCode: 'ATK', value: 8 }]);
+  });
+
+  it('lists every occupied slot with whatever of it was transcribed', () => {
+    // A Red piece: slot 2 named without a value, slots 3-4 left blank, and a
+    // value typed on slot 4 with no blessing to hang it on.
+    const query = buildEnhancementQuery(state({
+      equipment: 'Ebonsteel Dagger',
+      quality: 4,
+      initialGrade: 5,
+      slots: {
+        1: filledSlot({ wishMinValue: 16 }),
+        2: filledSlot({ blessingCode: 'DEF', value: null }),
+        4: filledSlot({ blessingCode: null, value: 9 }),
+      },
+    }));
+    expect(query?.slots).toEqual([
+      { slot: 1, blessingCode: 'ATK', value: 8 },
+      { slot: 2, blessingCode: 'DEF' },
+      { slot: 3 },
+      { slot: 4 },
+    ]);
   });
 
   it('carries a ready refinement plan but never a blocked one', () => {

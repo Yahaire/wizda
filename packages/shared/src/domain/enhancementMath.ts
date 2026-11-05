@@ -11,7 +11,9 @@
  * `a` and `b` drawn independently. That is exactly what {@link convolve} does.
  */
 
-import { forEachSlotAssignment, MAX_BLESSING_SLOTS, milestoneForSlot } from './blessingSlots';
+import {
+    forEachSlotAssignment, isMilestoneAhead, MAX_BLESSING_SLOTS, milestoneForSlot
+} from './blessingSlots';
 import { getStoneValueRange } from './stoneValues';
 
 /**
@@ -327,9 +329,19 @@ export function verifyBonus(
 export interface EnhancementSlotInput {
   /** 1–{@link MAX_BLESSING_SLOTS}. */
   slot: number,
-  /** The blessing in the slot, or null when the slot is still empty. */
+  /** Whether the slot holds a blessing — known or not. */
+  isOccupied: boolean,
+  /**
+   * The blessing in the slot, or null when the slot is empty or the player
+   * didn't say. An unnamed one excludes nothing from a fill, so the caller must
+   * only leave it out when no fill is ahead.
+   */
   blessingCode: string | null,
-  /** The number displayed, or null when the slot is empty. */
+  /**
+   * The number displayed, or null when the slot is empty or the player didn't
+   * say. An unknown value gives the slot no distribution, so it can't meet a
+   * target — the caller must only leave it out when no target needs it.
+   */
   value: number | null,
   /** ★1–5 of a Refinement Stone the player is considering for this slot, or null. */
   planRefineStoneQuality: number | null,
@@ -524,10 +536,9 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
   } = input;
 
   const missingBlessingData = new Set<string>();
-  const isMilestoneRemaining = (slot: number): boolean => {
-    const milestone = milestoneForSlot(slot);
-    return enhancementLevel < milestone && milestone <= targetEnhancementLevel;
-  };
+  const isMilestoneRemaining = (slot: number): boolean => (
+    isMilestoneAhead(slot, enhancementLevel, targetEnhancementLevel)
+  );
 
   const remainingMilestones: number[] = [];
   for (let slot = 1; slot <= MAX_BLESSING_SLOTS; slot++) {
@@ -552,9 +563,10 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
   for (let slot = 1; slot <= MAX_BLESSING_SLOTS; slot++) {
     const state = slots.find((candidate) => candidate.slot === slot);
     const blessingCode = state?.blessingCode ?? null;
+    const value = state?.value ?? null;
     const planRefineStoneQuality = state?.planRefineStoneQuality ?? null;
 
-    if (blessingCode === null) {
+    if (!state?.isOccupied) {
       const willBeFilled = isMilestoneRemaining(slot);
       plans.push({
         slot,
@@ -563,6 +575,21 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
         willBeFilled,
         isFinal: !willBeFilled,
         planRefineStoneQuality,
+      });
+      continue;
+    }
+
+    // Occupied, but not all of it transcribed: the slot still takes up its place
+    // in the piece, but has nothing to exclude or to score. No bonus is looked
+    // up for it, so data nobody needs can't null out the answer.
+    if (blessingCode === null || value === null) {
+      plans.push({
+        slot,
+        displayBlessing: blessingCode,
+        occupiedValue: null,
+        willBeFilled: false,
+        isFinal: !isMilestoneRemaining(slot),
+        planRefineStoneQuality: null,
       });
       continue;
     }
@@ -580,7 +607,7 @@ export function enhancementOdds(input: EnhancementOddsInput): EnhancementOddsRes
       slot,
       displayBlessing: blessingCode,
       occupiedValue: composeSlotValue({
-        base: pointMass(state?.value ?? 0),
+        base: pointMass(value),
         refine,
         bonus,
       }),
